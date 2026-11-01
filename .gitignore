@@ -1,0 +1,54 @@
+# Python environments and bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python tooling, tests, and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Packaging and build outputs
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Local settings, credentials, and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.*
+*_token*
+*_credentials*
+
+# Local application state and private/runtime data
+.sentinel/
+sentinel-data/
+runtime-data/
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.log
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store

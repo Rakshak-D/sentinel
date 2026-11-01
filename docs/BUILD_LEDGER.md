@@ -1,0 +1,167 @@
+# Sentinel build ledger
+
+Canonical project status. Statuses describe implementation evidence, not the blueprint's intended product scope. The authoritative source is the Master Blueprint dated 2026-11-01.
+
+## A. Project metadata
+
+| Field | Value |
+|---|---|
+| Authoritative blueprint | `docs/spec/Sentinel Master Blueprint.pdf` |
+| Blueprint SHA-256 | `92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7` |
+| Current release / active slice | CR0 / CR0-A — Repository foundation, governance, and installable CLI bootstrap |
+| Branch | `main` |
+| Commit | Pending initial local commit; record its SHA in the final ledger update |
+| Environment | Windows, pyenv-win 3.11.7, project-local `.venv` |
+| Selected interpreter | Python 3.11.7 (`.venv\Scripts\python.exe`) |
+| Dependency management | `pyproject.toml`, setuptools build backend, pip through explicit venv interpreter; no lockfile yet |
+| Environment inspection | Git 2.53.0.windows.2; Python initially resolved to 3.14.2; pyenv 3.14.2; installed versions 3.10.11, 3.11.7, 3.14.2; Node v24.14.0; npm 11.12.1. Python 3.11.7 was selected and verified. |
+| Installed runtime/dev packages | sentinel 0.1.0; typer 0.27.3; rich 15.0.0; pytest 8.4.2; ruff 0.17.3; mypy 1.20.2; build 1.6.1; packaging 26.3; pluggy 1.7.0; setuptools in isolated wheel build 84.2.1. Full resolved environment: annotated-doc 0.0.5, colorama 0.4.6, iniconfig 2.3.1, librt 0.16.0, markdown-it-py 4.2.0, mdurl 0.1.2, mypy_extensions 1.1.0, pathspec 1.1.1, pyproject_hooks 1.3.3, Pygments 2.21.0, shellingham 1.5.4, typing_extensions 4.16.0. Local pip 23.2.1 and setuptools 65.5.0 are present in the venv; build isolation selected setuptools 84.2.1. |
+
+The Master Blueprint does not define a one-to-one release assignment for every feature ID. The assignment column below is the ledger's dependency-based planning map; it does not claim a verbatim per-feature assignment from the blueprint. Names and scope states come from section 2.
+
+## B. Feature catalogue F01-F46
+
+| ID | Exact blueprint feature name | Blueprint target scope | Implementation status | Release assignment | Evidence reference | Open blocker |
+|---|---|---|---|---|---|---|
+| F01 | Gmail read-only OAuth | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | OAuth/read worker not implemented |
+| F02 | IMAP app-password alternative | GATED: owner choice | GATED | CR4 | Master Blueprint §2 | Owner decision and scope review |
+| F03 | GitHub selected repositories | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Read worker and credential scope |
+| F04 | GitHub notification mail | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Depends on F01 and GitHub reader |
+| F05 | Job-alert email parser | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Parser and synthetic accuracy suite |
+| F06 | Public Greenhouse feeds | GATED: per-board legal check | GATED | CR1 | Master Blueprint §2 | Per-board terms review |
+| F07 | Public Lever feeds | GATED: per-site legal check | GATED | CR1 | Master Blueprint §2 | Per-site terms review |
+| F08 | LinkedIn owner-export import | GATED: verify specific archive | GATED | CR1 | Master Blueprint §2 | Archive schema verification |
+| F09 | Google Calendar read | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | OAuth/read worker not implemented |
+| F10 | Allowlisted notes/files | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Path and symlink controls not implemented |
+| F11 | Local task store | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Durable store and idempotency absent |
+| F12 | Source normalization | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Typed source envelopes absent |
+| F13 | Triage and extraction | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | ModelGateway and evaluation absent |
+| F14 | Job/profile matching | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Retriever and ranking evaluation absent |
+| F15 | Structured daily briefing | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Citation-backed product flow absent |
+| F16 | Scheduler and daemon | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Durable scheduler absent |
+| F17 | Desktop/terminal notifications | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Notification adapters absent |
+| F18 | Persistent incremental sync | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | Cursor persistence/recovery absent |
+| F19 | Rate-limit/backoff | ACTIVE TARGET | NOT_STARTED | CR1 | Master Blueprint §2 | ToolGateway/retry controls absent |
+| F20 | Provenance envelopes | ACTIVE TARGET | NOT_STARTED | CR2 | Master Blueprint §2 | Provenance declarations absent |
+| F21 | Deterministic policy gate | ACTIVE TARGET | NOT_STARTED | CR2 | Master Blueprint §2 | Policy engine absent |
+| F22 | Human-verified approval inbox | GATED: valid human channel | GATED | CR2/CR7 | Master Blueprint §2, §6 | User-verifying channel not implemented |
+| F23 | Credential isolation | GATED: OS isolation verified | GATED | CR7 | Master Blueprint §2 | OS isolation evidence absent |
+| F24 | Gmail draft writer | GATED/OFF | GATED | CR7 | Master Blueprint §2 | Isolated credential, approval, and tests absent |
+| F25 | Gmail send writer | GATED/OFF | GATED | CR7 | Master Blueprint §2 | Send capability must remain OFF |
+| F26 | GitHub comments | GATED/OFF | GATED | CR7 | Master Blueprint §2 | Writer, isolated token, and approval absent |
+| F27 | GitHub labels | GATED/OFF | GATED | CR7 | Master Blueprint §2 | Writer, isolated token, and approval absent |
+| F28 | Idempotency/reconciliation | ACTIVE TARGET | NOT_STARTED | CR2 | Master Blueprint §2 | Transactional effect ledger absent |
+| F29 | Boundary record/replay | ACTIVE TARGET | NOT_STARTED | CR3 | Master Blueprint §2 | Replay harness absent |
+| F30 | Policy/prompt mutation suite | ACTIVE TARGET | NOT_STARTED | CR3 | Master Blueprint §2 | Mutation suite absent |
+| F31 | Audit hash chain | ACTIVE TARGET | NOT_STARTED | CR8 | Master Blueprint §2 | Audit chain/verifier absent |
+| F32 | Signed audit roots | ACTIVE TARGET | NOT_STARTED | CR8 | Master Blueprint §2 | Independent signing/root export absent |
+| F33 | Static privacy selector | ACTIVE TARGET | NOT_STARTED | CR5 | Master Blueprint §2 | Sensitivity enforcement absent |
+| F34 | Ollama/Gemini/OpenAI/OpenRouter | ACTIVE TARGET | NOT_STARTED | CR5 | Master Blueprint §2 | ModelGateway/adapters absent |
+| F35 | Learned routing gate | GATED; negative result acceptable | GATED | CR9 | Master Blueprint §2 | CR5 baseline and paired evaluation absent |
+| F36 | Governed memory | ACTIVE TARGET | NOT_STARTED | CR6 | Master Blueprint §2 | Memory lifecycle absent |
+| F37 | Pluggable hybrid RAG | ACTIVE TARGET; opt-in default | NOT_STARTED | CR6 | Master Blueprint §2 | Retriever and ablation absent |
+| F38 | Layered validated config | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Config schema/evaluation absent |
+| F39 | Signed/reviewed plugin registry | ACTIVE TARGET | NOT_STARTED | CR3 | Master Blueprint §2 | Manifest and sandbox absent |
+| F40 | Versioned prompt store | ACTIVE TARGET | NOT_STARTED | CR5 | Master Blueprint §2 | Prompt inventory/store absent |
+| F41 | Briefing/theme/schedule customization | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Config/UI absent |
+| F42 | Config-change quick eval | ACTIVE TARGET | NOT_STARTED | CR2 | Master Blueprint §2 | Evaluation gate absent |
+| F43 | CLI + optional Textual | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; later CR1-CR4 surfaces | `src/sentinel/cli.py`; `tests/test_cli.py`; CR0-A acceptance output | Only `--help` and `version` bootstrap; full command tree, golden output, approval negative tests remain |
+| F44 | React web control plane | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Frontend/API absent |
+| F45 | Sentinel-as-MCP server | ACTIVE TARGET | NOT_STARTED | CR3 | Master Blueprint §2 | MCP adapter absent; approval must never be exposed |
+| F46 | Diagnostic/backup/restore/migrations | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; CR4/CR8 capability | `pyproject.toml`; tests; CR0-A acceptance output | No diagnostics, database, migrations, backup/restore, or clean offline install |
+
+## C. Release table CR0-CR9
+
+| Release | Dependency | Status | Exit criteria | Verified evidence |
+|---|---|---|---|---|
+| CR0 — Package and trust skeleton | Initial foundation | IN_PROGRESS (CR0-A only) | Offline pinned install; wheel/CLI (`init`, `doctor`, `demo`); typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures | CR0-A packaging/CLI checks recorded below; offline install and remaining CR0 deliverables not verified |
+| CR1 — Daily read/product core | CR0 | NOT_STARTED | Source normalization/citation tests; missing credentials clear; one-shot CLI restart behavior | None |
+| CR2 — Deterministic authorization | CR1 | NOT_STARTED | P00-P17 hard cases, no direct tool bypass, task idempotency/outbox crash matrix | None |
+| CR3 — MCP and regression platform | CR2 | NOT_STARTED | MCP conformance, no approve tools, replay without network, seeded mutations caught, manifest hashing | None |
+| CR4 — Continuous operation + all local UX | CR3 | NOT_STARTED | Daemon restart/cursor repair, six keyboard scripts, restore/import/export, scope review, localhost CSRF/session tests | None |
+| CR5 — Four-model privacy gateway | CR4 | NOT_STARTED | Sensitivity egress oracles, provider contract/unsupported state, sealed paired report | None |
+| CR6 — Governed memory and retrieval | CR5 | NOT_STARTED | Longitudinal suite, BM25/hybrid comparison, negative ablation if needed | None |
+| CR7 — Optional credential-isolated writes | CR2-CR6 plus verified OS user channel | GATED | AB01-AB18, eval quick, isolation, reconciled throwaway effects; failure leaves writes OFF; live activation after CR8 | None; writes remain unavailable |
+| CR8 — Signed audit and operational assurance | CR2-CR7 | NOT_STARTED | Adversarial alteration suite, independent root verifies after restore, no unsigned privileged effect | None |
+| CR9 — Learned-router evidence gate | CR5 + full static baseline | NOT_STARTED | Activate only with pre-registered paired benefit; otherwise preserve static routing and report negative result | None |
+
+## D. Policy P00-P17
+
+Initial status for every rule is NOT_STARTED. Blueprint wording below is a short identifier, not an implementation claim.
+
+| Rule | Blueprint rule | Status | Test/evidence reference |
+|---|---|---|---|
+| P00 | Hard malformed/unregistered/mismatch/invalid principal/engine error deny | NOT_STARTED | None |
+| P01 | Hard replay/live effect and gateway bypass deny | NOT_STARTED | None |
+| P02 | Hard C4/C5 disabled or missing isolated worker/scope deny | NOT_STARTED | None |
+| P03 | Hard SECRET/raw PRIVATE/unknown sensitivity model egress deny | NOT_STARTED | None |
+| P04 | Scoped C0 allowlisted GET | NOT_STARTED | None |
+| P05 | Owner-authorized C1 private read | NOT_STARTED | None |
+| P06 | Bounded sanitized C2 suggestion to proposal only | NOT_STARTED | None |
+| P07 | Exact pre-authorized C3 local task action | NOT_STARTED | None |
+| P08 | Derived/external C3 task action pending human | NOT_STARTED | None |
+| P09 | Missing/forged lineage, stale intent/config/hash, unsafe target deny | NOT_STARTED | None |
+| P10 | Pending action with verified one-use owner proof | NOT_STARTED | None |
+| P11 | Rejected/expired/revoked/consumed/wrong approval deny | NOT_STARTED | None |
+| P12 | Catch-all deny | NOT_STARTED | None |
+| P13 | Gmail draft always pending with isolated write credential | NOT_STARTED | None |
+| P14 | Gmail send always pending with isolated credential and recipient allowlist | NOT_STARTED | None |
+| P15 | GitHub comments/labels always pending with isolated credential | NOT_STARTED | None |
+| P16 | CLI flag/stdin/PTY/session token alone cannot approve | NOT_STARTED | None |
+| P17 | Model/front end/external source secret retrieval deny | NOT_STARTED | None |
+
+## E. Bypass suite AB01-AB18
+
+Every case remains NOT_STARTED; the CLI bootstrap is not bypass-test evidence.
+
+| Test | Status | Evidence reference |
+|---|---|---|
+| AB01 | NOT_STARTED | None |
+| AB02 | NOT_STARTED | None |
+| AB03 | NOT_STARTED | None |
+| AB04 | NOT_STARTED | None |
+| AB05 | NOT_STARTED | None |
+| AB06 | NOT_STARTED | None |
+| AB07 | NOT_STARTED | None |
+| AB08 | NOT_STARTED | None |
+| AB09 | NOT_STARTED | None |
+| AB10 | NOT_STARTED | None |
+| AB11 | NOT_STARTED | None |
+| AB12 | NOT_STARTED | None |
+| AB13 | NOT_STARTED | None |
+| AB14 | NOT_STARTED | None |
+| AB15 | NOT_STARTED | None |
+| AB16 | NOT_STARTED | None |
+| AB17 | NOT_STARTED | None |
+| AB18 | NOT_STARTED | None |
+
+## F. Decisions and ADR index
+
+| ADR | Decision | Status |
+|---|---|---|
+| [ADR-0001](adr/0001-python-environment-and-packaging.md) | pyenv-win + pip + local venv; pip/setuptools package bootstrap without requiring uv in CR0-A | Accepted |
+
+## G. Deviations and unresolved ambiguities
+
+- The Master Blueprint presents uv as a candidate tool for installation/locking, with its exact pin unverified. CR0-A uses the owner's requested pyenv + pip workflow and records the deviation from the table's `SQLite/uv tools` alternative for F46 in ADR-0001. Locking/offline requirements remain CR0 exit gates.
+- The blueprint assigns capability dependencies and release exits but does not give a one-to-one release label for every F01-F46 row. The feature release column is a dependency-based planning map, not a quoted blueprint assignment.
+- The blueprint requests the broader CR0 skeleton. CR0-A implements only package governance and two real CLI commands; remaining CR0 work is intentionally incomplete.
+
+## H. Open issues and verification blockers
+
+- Verify the selected dependency graph in a fresh clean install; capture exact dependency versions and solver output.
+- Create and verify a deterministic hash-pinned lock and local wheelhouse; pass an offline clean install before CR0 exit.
+- Complete CR0 typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures, and `init`, `doctor`, `demo` commands.
+- Decide supported Python/OS matrix and verify each selected interpreter/platform combination.
+- Later policy, provenance, approval, credential isolation, model/tool gateway, and external-write gates are entirely unimplemented. Keep external writes disabled.
+- Credential-pattern scan of the proposed tracked files and supplied reference text found no matches; email-address scan of the references found no matches; Master Blueprint PDF metadata contains title/creator/producer only and no author field. References are preserved and safe for this initial commit review.
+- Package metadata is intentionally restricted to Python 3.11 (`>=3.11,<3.12`); Python 3.12 support is not claimed because it was not verified in this slice.
+
+Dependency resolution used the live PyPI registry through the project venv and completed without a solver error. No lockfile, hash pinning, wheelhouse, clean-environment installation, or offline installation has been verified. The selected package versions are current install evidence only, not a reproducible lock.
+
+## I. Step history
+
+| Step | Commit | Tests/checks | Outcome |
+|---|---|---|---|
+| CR0-A implementation and first acceptance pass | Pending initial commit | `pip install -e ".[dev]"`: success; `pip check`: “No broken requirements found.”; `pytest -q`: 6 passed; `ruff check .`: “All checks passed!”; `mypy src/sentinel`: “Success: no issues found in 2 source files”; `build --wheel`: built `sentinel-0.1.0-py3-none-any.whl`; `sentinel --help`: exit 0 and lists `version`; `sentinel version`: exit 0 and prints `0.1.0`. | All mandatory local acceptance commands passed after fixing the first test run's real Typer/test assertion failures. Build and registry install succeeded. No later security capability claimed. |
+| Governance/data review | Pending initial commit | Governance test confirms required IDs/files; credential-pattern scan returned no matches; `.venv`, caches, build, dist, and egg-info are ignored; no runtime DB exists. | Reference documents are preserved and included only after this review. |

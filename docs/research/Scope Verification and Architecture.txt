@@ -1,0 +1,551 @@
+# Verification, scope decision, architecture, and build plan for a defensible personal automation agent
+
+## Verification and decision gate
+
+**FACT:** The attached report itself was not retrievable through the available file interface in this conversation, so I could not inspect its bibliography, wording, or every exact numerical claim. The verification below therefore covers every named source or claim family explicitly identified in your prompt—CaMeL, Task Shield, WASP, routing, LangGraph/LangChain MCP capabilities, MCP security guidance—and then checks 2026 work that materially changes the likely conclusions. Any statement about what *the report itself* said beyond what you quoted is therefore **UNVERIFIABLE**, not assumed true.
+
+### Primary-source verification
+
+| Claim/source | Type | Verification | Primary source and result |
+|---|---|---|---|
+| CaMeL protects agents by separating trusted control flow from untrusted data and adding capability-based information-flow restrictions | FACT | **CONFIRMED** | Debenedetti et al., *Defeating Prompt Injections by Design*. The paper describes extracting control/data flow from the trusted query and enforcing capabilities on tool calls. It reports **77% task success with security guarantees versus 84% undefended** on AgentDojo. citeturn975895search0turn975895search1 |
+| CaMeL is a production-ready reusable security layer | FACT | **CORRECTED** if the report implied this | The authors' repository explicitly describes the code as a **research artifact**, says it likely contains bugs, may not be fully secure, and is not planned as a supported Google product. citeturn975895search4 |
+| Task Shield reduces prompt-injection attack success to roughly 2% while preserving roughly 70% utility | FACT | **CONFIRMED** | The ACL 2025 paper reports **2.07% attack success rate and 69.79% task utility on GPT-4o** on AgentDojo. citeturn975895search2turn975895search8 |
+| Task Shield is a deterministic authorization system | FACT | **CORRECTED** if stated that way | Task Shield verifies whether directives/tool calls contribute to the user's task; its contribution is task-alignment checking rather than a capability/security-policy boundary comparable to conventional authorization. citeturn975895search2turn975895search8 |
+| WASP shows attacks partly succeed in up to roughly 86% of cases | FACT | **CONFIRMED** | The NeurIPS 2025 WASP paper reports agents begin executing attacker instructions **16–86%** of the time, while attackers fully achieve their goals only **0–17%** of the time. The paper calls this “security by incompetence”: weak end-to-end attack completion partly reflects agents failing to finish tasks. citeturn975895search3turn975895academia9 |
+| WASP directly benchmarks email/GitHub personal-agent tool APIs | FACT | **CORRECTED** if stated that way | WASP targets web/UI agents such as VisualWebArena, Claude Computer Use, and Operator-style systems, not specifically LangGraph/MCP email/GitHub agents. citeturn975895academia9turn975895search5 |
+| Model routing is sufficiently mature that a learned router should be a default architectural component | FACT | **CORRECTED** | LLMRouterBench 2026 evaluates more than 400,000 instances, 21 datasets, 33 models and 10 routing baselines, and reports that several recent and commercial routing approaches fail to reliably beat simple baselines; it also finds diminishing returns from adding more candidate models. citeturn791140academia7 |
+| Cost-aware learned routing can produce meaningful gains in particular controlled settings | FACT | **CONFIRMED** | BEST-Route reports up to **60% lower cost for <1% performance loss** in its experiments; FLARE reports substantial latency/cost reductions under its tested workloads. Those are benchmark-specific results, not evidence that a learned router is worth building for a small personal-agent workload. citeturn791140search1turn791140search4 |
+| Routing research now treats latency as a first-class consideration | FACT | **CONFIRMED** | RouterWorld, published in October 2026, introduces 371k single-turn responses and 76k multi-turn agent trajectories and explicitly evaluates routing under latency and partial-observability constraints. citeturn791140academia8 |
+| LangGraph supports durable interruption/resumption for human approval | FACT | **CONFIRMED** | LangGraph interrupts persist state through a checkpointer and resume using a thread identifier and `Command`; its docs warn that the interrupted node restarts from its beginning, which matters for side-effect idempotency. citeturn173458search3turn173458search5 |
+| LangChain's current MCP integration exposes MCP tool provenance/metadata and can combine it with human approval | FACT | **CONFIRMED** | Current LangChain MCP documentation propagates MCP server/tool metadata, including server identity and `read_only`/`destructive` annotations, and shows approval predicates using those annotations plus tool arguments. citeturn610442search6 |
+| LangGraph itself prevents indirect prompt injection from causing dangerous tool arguments | FACT | **CORRECTED** if the report implied this | LangGraph's own threat model explicitly places indirect prompt injection and dangerous tool arguments outside the framework's protection boundary; application/tool code remains responsible for semantic argument safety and authorization. citeturn610442search5 |
+| MCP authorization has become substantially more explicit by late 2026 | FACT | **CONFIRMED** | MCP specification 2026-07-28 adds authorization hardening including issuer validation and moves away from Dynamic Client Registration toward Client ID Metadata Documents; the official guidance also forbids token passthrough and requires audience/resource validation. citeturn173458search0turn610442search0turn610442search1 |
+| OAuth alone solves agent-level authorization | FACT | **CORRECTED** | Official MCP guidance primarily authenticates clients/resources and restricts OAuth scopes. It does not establish that an LLM's proposed action is causally authorized by the human's instruction; that remains an application-level problem. MCP discussions in 2026 explicitly identify delegated/per-call agent authority as an unresolved protocol area. citeturn610442search1turn174677search8 |
+
+**FACT:** I could not verify which specific “routing papers” the inaccessible report cited. The sources above are the current relevant primary literature I could identify; therefore any exact routing result attributed specifically to the missing report is **UNVERIFIABLE**.
+
+### Material 2026 developments that change the picture
+
+**FACT:** The strongest change since early 2025 is that provenance-aware authorization can no longer reasonably be presented as an open, unimplemented idea. At least three current open-source projects implement closely related mechanisms. AgentLock explicitly provides provenance-based pre-action gating, parameter lineage, deferred commit, deny-by-default permissions and signed/auditable receipts. Agent_Sudo advertises provenance-based enforcement, scoped delegation and hash-chained audit records. LangGraph-SecureAgents implements deterministic authorization around LangGraph callables/tools and optional MCP server handlers. citeturn174677search6turn174677search7turn174677search2
+
+**FACT:** LangGraph-SecureAgents is particularly damaging to any novelty claim framed as “authorization middleware for LangGraph/MCP.” Its PyPI releases in October 2026 provide RBAC/ABAC policy evaluation, MCP handler protection, approval support, audit events and LangGraph integration. citeturn174677search0turn174677search1turn174677search2
+
+**FACT:** AgentLock is even closer to a provenance-firewall proposal: it records whether context is authoritative, derived or untrusted; blocks consequential writes when tainted; optionally traces tool parameters to untrusted values; and supports deferred commit. Its repository describes evaluations against AgentDojo. citeturn174677search6
+
+**FACT:** Academic work has also moved toward provenance/causal authorization. ARGUS, released in 2026, constructs an influence-provenance graph and requires a benign causal justification before releasing actions; its reported AgentLure results reduce attack success from **28.8% to 3.8% while preserving 87.5% clean utility**. citeturn724356search2
+
+**FACT:** Evaluation has also advanced. Chronicle, published in 2026, records non-deterministic boundaries and performs cut-point replay so prior agent incidents can become CI regression tests; its small benchmark reports bit-stable replay and mutation detection on six recorded failures. citeturn724356search6
+
+**FACT:** Personal-agent evaluation is becoming less toy-like. ASTRA-bench contains 2,413 scenarios combining changing personal context, tools and multi-step intents; StreamMemBench evaluates streaming observation, feedback incorporation and later reuse; PraxisMemBench, published in October 2026, jointly evaluates personal and procedural memory over evolving trajectories. citeturn173458academia9turn724356search4turn724356search8
+
+**FACT:** MCP-specific attack research has also expanded. A 2026 confused-deputy study reports tool-selection hijacking rates up to **90.89%** and malicious payload execution up to **86.46%** under its tested setup, while MCP's own 2026 security documentation now explicitly treats server-originated instructional content as untrusted. citeturn610442search9turn610442search2
+
+### Decision gate
+
+**INFERENCE — B) “A material problem was found.”** A project whose resume-level differentiator is “provenance-based LangGraph/MCP authorization” is no longer defensibly novel in November 2026 because multiple open-source implementations and a 2026 provenance-auditing defense already occupy that space. citeturn174677search6turn174677search7turn174677search2turn724356search2
+
+**INFERENCE:** This does **not** mean you should omit authorization. Prompt injection remains an experimentally demonstrated risk, LangGraph explicitly does not solve it at the framework layer, and current benchmarks continue to expose security/utility tradeoffs. The correction is to treat deterministic authorization as required infrastructure and move the resume-worthy contribution to **reproducible security regression/replay plus privacy-aware model selection**, both evaluated on your personal-agent workload. citeturn610442search5turn173458academia11turn724356academia9
+
+### Updated gap analysis
+
+| Gap | Type | Evidence that the gap remains | Confidence |
+|---|---|---|---:|
+| Security regression for a stateful personal agent is difficult to reproduce across model/prompt/policy changes | FACT + INFERENCE | Chronicle argues current tracing systems record runs primarily for inspection/scoring rather than cut-point regression, and demonstrates a replay design. Existing agent-evaluation platforms provide datasets and traces, but this does not make deterministic incident replay ubiquitous. citeturn724356search6turn453031search8turn453031search20 | **High, 90%** |
+| Security evaluation often confounds “the agent refused the attack” with “the agent failed to complete anything” | FACT | WASP explicitly identifies low full attacker success despite high partial hijacking and calls attention to security by incompetence; AgentDyn reports over-defense as a major failure mode. citeturn975895academia9turn173458academia11 | **High, 95%** |
+| Provenance authorization itself is an open implementation gap | FACT | **Rejected gap.** AgentLock, Agent_Sudo, LangGraph-SecureAgents and ARGUS substantially address it. citeturn174677search6turn174677search7turn174677search2turn724356search2 | **Low, 10%** |
+| MCP authentication does not by itself express whether a model-generated action is authorized by the user's causal intent | FACT + INFERENCE | MCP OAuth guidance binds clients/tokens/resources, while agent delegation/per-call authority is still being proposed separately. citeturn610442search1turn174677search8 | **High, 90%** |
+| Learned routing is likely unjustified for a small personal workload | FACT + INFERENCE | LLMRouterBench finds simple baselines remain competitive with many recent routers; RouterWorld shows real routing is affected by partial observability and latency. citeturn791140academia7turn791140academia8 | **High, 90%** |
+| Privacy-aware model selection remains distinct from conventional quality/cost routing | FACT + INFERENCE | PPRoute specifically identifies privacy risks introduced by routing layers, whereas much routing work optimizes quality/cost/latency. citeturn791140search5turn791140search3 | **Medium-high, 80%** |
+| Personal-memory correctness includes staleness, correction and evolving relationships, not only retrieval accuracy | FACT | StreamMemBench finds systems may store feedback yet fail to reuse it; PraxisMemBench reports degradation as histories grow and personal/procedural memories interact. citeturn724356search4turn724356search8 | **High, 90%** |
+| Advanced memory is too large a second research problem for this project | INFERENCE | Current personal-memory benchmarks expose write/manage/read and evolving-state problems substantial enough to constitute a project of their own. citeturn724356search4turn724356search5turn724356search8 | **High, 90%** |
+| Human approval alone is insufficient as the principal security mechanism | FACT + INFERENCE | LangGraph supports approval interrupts, but provenance and authorization projects exist specifically because deciding *which* calls should require approval is separate from implementing the pause itself. citeturn173458search3turn174677search6turn174677search2 | **High, 90%** |
+| Prompt/model regressions need systematic offline tests rather than manual prompt tweaking | FACT | LangSmith, Langfuse, Braintrust and Phoenix all expose dataset-based evaluations/experiments, and Langfuse/LangSmith support CI-oriented regression workflows. citeturn453031search8turn453031search20turn453031search40turn453031search0 | **High, 95%** |
+
+## Chosen scope and architecture
+
+### Scope selection
+
+**INFERENCE:** The strongest 80–120-hour scope is:
+
+1. **Thin personal-agent core:** email ingestion/triage, GitHub monitoring, job collection, local tasks and daily briefing.
+2. **Deep feature A — Security Regression Control Plane:** deterministic pre-action authorization plus replayable attack/benign/fault fixtures, approval queues and trace-diff regression.
+3. **Deep feature B — Privacy-Aware Static Model Selector:** rule-based selection among Ollama, Gemini, OpenAI and OpenRouter based on task class, sensitivity, latency/cost budget and measured quality.
+
+**INFERENCE:** I would **cut** a learned router, advanced long-term memory, cryptographic audit chaining and broad remote-write automation. The learned router lacks a convincing benefit at your likely data scale; memory is a separate research problem; cryptographic log chaining duplicates current projects such as AgentLock/Agent_Sudo; and broad write capability increases the security/evaluation surface without helping the core thesis. citeturn791140academia7turn724356search4turn174677search6turn174677search7
+
+### Threat model
+
+| Element | Type | Design |
+|---|---|---|
+| Assets | INFERENCE | Email contents, OAuth tokens, GitHub private-repo metadata if enabled, saved job/task data, model-provider credentials, action authorization state, traces and evaluations. |
+| Attacker capability | FACT + INFERENCE | Attacker can control text in an email, job page, GitHub issue/PR body or MCP tool output; indirect prompt injection through external content is a documented agent threat. citeturn975895search2turn724356academia9 |
+| Attacker capability | INFERENCE | Attacker cannot modify trusted application code, policy configuration, local credential files or approval decisions. Compromise of those is a non-goal. |
+| Trust boundary | INFERENCE | Human request and local configuration = trusted; authenticated provider metadata = trusted-for-identity but not trusted-for-instructions; email bodies, GitHub content and job-page content = untrusted. |
+| Trust boundary | FACT + INFERENCE | MCP server/tool metadata is not automatically authoritative; MCP's current security model explicitly recognizes server-originated instruction/tool surfaces as potentially hostile. citeturn610442search2turn610442search9 |
+| Non-goal | INFERENCE | Defending against compromised Python dependencies, malicious OS processes, stolen OAuth refresh tokens or arbitrary local RCE. |
+| Non-goal | INFERENCE | Proving mathematical non-interference like CaMeL. Your project should claim measured enforcement under an explicit threat model, not provable security. CaMeL's own design is considerably stronger and more formal. citeturn975895search0 |
+| Non-goal | INFERENCE | Autonomous sending of email or destructive GitHub changes. Draft creation is sufficient to demonstrate a consequential write and approval workflow. |
+
+### Component architecture
+
+**INFERENCE:** The simplest architecture that still demonstrates meaningful boundaries is:
+
+```mermaid
+flowchart LR
+    UI[React Control Plane]
+    API[FastAPI]
+    LG[LangGraph Orchestrator]
+    SEL[Static Model Selector]
+    POL[Policy Gate]
+    EVAL[Replay / Eval Runner]
+
+    OLL[Ollama]
+    GEM[Gemini]
+    OAI[OpenAI]
+    OR[OpenRouter]
+
+    MR[Mail Read MCP]
+    MW[Mail Draft MCP]
+    GH[GitHub Read MCP]
+    JB[Jobs MCP]
+    TK[Local Tasks MCP]
+
+    PG[(SQLite/Postgres)]
+    CH[(ChromaDB)]
+
+    UI --> API
+    API --> LG
+    LG --> SEL
+    SEL --> OLL
+    SEL --> GEM
+    SEL --> OAI
+    SEL --> OR
+
+    LG --> POL
+    POL --> MR
+    POL --> MW
+    POL --> GH
+    POL --> JB
+    POL --> TK
+
+    LG --> PG
+    LG --> CH
+    EVAL --> LG
+    EVAL --> PG
+```
+
+**INFERENCE:** SQLite is preferable initially to Postgres because this is a single-user, single-developer system and LangGraph supplies a lightweight SQLite checkpointer; move to Postgres only if concurrent workers or deployment requirements create a measured need. LangGraph documents both SQLite and Postgres checkpoint implementations. citeturn173458search5
+
+### LangGraph state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Collect
+    Collect --> Normalize
+    Normalize --> ClassifySensitivity
+    ClassifySensitivity --> SelectModel
+    SelectModel --> Analyze
+    Analyze --> RetrieveContext
+    RetrieveContext --> Plan
+
+    Plan --> PolicyCheck
+    PolicyCheck --> ExecuteRead: allow read
+    PolicyCheck --> Approval: approval required
+    PolicyCheck --> Denied: deny
+
+    Approval --> ExecuteWrite: approve
+    Approval --> Denied: reject
+
+    ExecuteRead --> PersistTrace
+    ExecuteWrite --> PersistTrace
+    Denied --> PersistTrace
+
+    PersistTrace --> BuildBriefing
+    BuildBriefing --> [*]
+```
+
+**FACT:** LangGraph interrupts are suitable for the `Approval` state, but any side effect before `interrupt()` must be idempotent because the containing node restarts when resumed. citeturn173458search3
+
+### State schema
+
+| Pydantic model | Type | Fields |
+|---|---|---|
+| `AgentState` | INFERENCE | `run_id`, `thread_id`, `user_intent`, `items`, `proposals`, `approval_requests`, `tool_results`, `trace_events`, `briefing`, `errors` |
+| `SourceItem` | INFERENCE | `item_id`, `source_type`, `source_uri`, `source_account`, `received_at`, `raw_text_ref`, `trust_label`, `sensitivity`, `content_hash` |
+| `ActionProposal` | INFERENCE | `proposal_id`, `tool_name`, `mcp_server`, `arguments`, `capability`, `reason`, `source_item_ids`, `sensitivity`, `model_route`, `prompt_version` |
+| `PolicyDecision` | INFERENCE | `decision_id`, `proposal_id`, `decision`, `rule_id`, `requires_approval`, `explanation_code`, `evaluated_at` |
+| `ApprovalRequest` | INFERENCE | `approval_id`, `proposal_id`, `summary`, `risk_reasons`, `created_at`, `expires_at`, `status`, `reviewer_decision` |
+| `ModelRoute` | INFERENCE | `provider`, `model`, `task_class`, `sensitivity`, `route_reason`, `estimated_cost`, `latency_budget_ms` |
+| `TraceEvent` | INFERENCE | `event_id`, `run_id`, `sequence`, `node`, `event_type`, `input_hash`, `output_ref`, `model`, `prompt_version`, `started_at`, `duration_ms`, `error_code` |
+| `EvalCase` | INFERENCE | `case_id`, `split`, `category`, `fixture_version`, `expected_policy`, `expected_actions`, `allowed_output_properties`, `attack_family` |
+
+### MCP permission boundaries
+
+**FACT:** MCP currently supports OAuth resource authorization and per-operation scope challenges, but using separate servers can still provide a meaningful credential/process boundary when each server owns different provider credentials. citeturn173458search2turn610442search4
+
+| Server | Type | Tools | Credential / scope | Rationale |
+|---|---|---|---|---|
+| `mail_read` | INFERENCE | `list_messages`, `get_message`, `search_messages` | Gmail `gmail.readonly` | Read-only external content boundary. Google's scope documentation says `gmail.readonly` can view messages/settings. citeturn725457search0 |
+| `mail_draft` | INFERENCE | `create_draft`, optionally `update_draft` | Gmail `gmail.compose` | Separate write credential; Google documents `gmail.compose` as managing drafts **and sending**, so your tool implementation must expose drafts only despite the broader provider scope. citeturn725457search0 |
+| `github_read` | INFERENCE | notifications, PR/issue/repo metadata | Fine-grained token limited to selected repos and read permissions where possible | GitHub fine-grained tokens permit resource-specific permission configuration. citeturn725457search11turn725457search27 |
+| `jobs` | INFERENCE | fetch allowed career feeds/pages; parse stored alerts | No broad credential where public; per-source HTTP allowlist | Untrusted-web-content boundary. |
+| `local_tasks` | INFERENCE | `list_tasks`, `create_task`, `complete_task` | Local process only | Local writes should not share Gmail/GitHub credentials. |
+
+**INFERENCE:** Use **stdio transport locally**. It avoids creating an unnecessary network-authentication problem and still satisfies MCP client/server integration. If you later expose servers remotely, move those servers to Streamable HTTP with MCP's current OAuth resource/audience validation requirements. citeturn610442search0turn610442search1
+
+### Policy model
+
+**INFERENCE:** Do not attempt semantic “malicious prompt detection” as the primary enforcement layer. Make policy depend on tool capability, source provenance, sensitivity and explicit approval state; use content classifiers only as auxiliary signals. This follows the structural lesson of CaMeL, AgentLock and MCP security guidance without claiming the mechanism as novel. citeturn975895search0turn174677search6turn610442search2
+
+**INFERENCE:** Capability classes:
+
+`READ_EXTERNAL`, `READ_PRIVATE`, `WRITE_LOCAL_REVERSIBLE`, `WRITE_EXTERNAL_REVERSIBLE`, `WRITE_EXTERNAL_CONSEQUENTIAL`, `SECRET_ACCESS`.
+
+**INFERENCE:** Trust labels:
+
+`USER_AUTHORITY`, `SYSTEM_POLICY`, `AUTHENTICATED_METADATA`, `DERIVED`, `UNTRUSTED_EXTERNAL`.
+
+| Condition | Type | Decision |
+|---|---|---|
+| Read public job/GitHub content | INFERENCE | Allow |
+| Read private mail through authenticated user session | INFERENCE | Allow, audit |
+| Local task creation derived from user instruction or benign classifier result | INFERENCE | Allow; make operation idempotent by stable key |
+| External write generated solely from explicit user's request | INFERENCE | Require approval in v1 |
+| External write whose arguments materially originate from untrusted content | INFERENCE | Require approval or deny depending on action class |
+| Secret access requested because of email/web/tool-output instruction | INFERENCE | Deny |
+| Tool not registered in capability map | INFERENCE | Deny by default |
+| MCP metadata claims a tool is safe but local registration says consequential | INFERENCE | Local policy wins |
+| Approval missing, expired or proposal hash changed | INFERENCE | Deny |
+| Retry of previously committed idempotency key | INFERENCE | Return previous result; do not re-execute |
+
+### Model layer
+
+**FACT:** Current routing literature does not justify building a learned router before establishing a strong static baseline; LLMRouterBench specifically reports that multiple newer approaches fail to reliably beat simple baselines. citeturn791140academia7
+
+**INFERENCE:** Use one provider interface:
+
+`generate(request) -> StructuredResponse`
+
+with adapters for `OllamaAdapter`, `GeminiAdapter`, `OpenAIAdapter`, and `OpenRouterAdapter`.
+
+**INFERENCE:** Configuration should specify per model: `provider`, `model_id`, `local`, `supports_structured_output`, `supports_tools`, `max_context`, `price_input`, `price_output`, `privacy_class`, `timeout_ms`.
+
+**INFERENCE:** Routing order should be deterministic:
+
+1. If `sensitivity >= PRIVATE_RAW`, route local unless a specific policy explicitly permits redacted cloud use.
+2. If task has a known local-quality pass rate above the configured threshold, use local.
+3. Otherwise select the cheapest measured cloud model meeting the quality and latency threshold.
+4. Never allow the model itself to override privacy classification.
+
+**INFERENCE:** The experiment is not “can I invent a smarter router?” It is “how much cloud exposure and cost can a deterministic privacy policy remove at an acceptable measured quality/latency loss?” That is easier to defend technically and aligns with evidence that routing must account for quality, cost and latency while privacy introduces another orthogonal constraint. citeturn791140search3turn791140search5turn791140academia8
+
+### Prompt inventory
+
+| Prompt | Type | Purpose | Structured output |
+|---|---|---|---|
+| `triage_email` | INFERENCE | urgency/category/actionability | `EmailTriage` |
+| `github_relevance` | INFERENCE | determine relevance/actionability of notifications/activity | `GitHubTriage` |
+| `job_extract` | INFERENCE | normalize role/company/location/requirements from untrusted text | `JobPosting` |
+| `job_match` | INFERENCE | score job against explicit preferences/profile | `JobMatch` |
+| `task_extract` | INFERENCE | propose local tasks without executing them | `TaskProposal[]` |
+| `briefing_synthesis` | INFERENCE | combine already-structured facts into daily briefing | `Briefing` |
+| `action_plan` | INFERENCE | emit proposed tool operations, never execute directly | `ActionProposal[]` |
+| `sensitivity_classify` | INFERENCE | classify data for routing; conservative fallback | `SensitivityResult` |
+| `eval_judge_optional` | INFERENCE | judge only qualities not deterministically testable | `JudgeResult` |
+
+**INFERENCE:** Store each prompt as a versioned text file plus metadata: `prompt_id`, semantic version, SHA-256, input schema version, output schema version, supported task set and changelog. Every pull request changing a prompt runs the frozen eval suite. This follows the dataset/experiment regression pattern supported by current LangSmith, Langfuse and Braintrust tooling, although you need not depend on those hosted products. citeturn453031search8turn453031search20turn453031search40
+
+### Data model
+
+| Table/collection | Type | Important fields |
+|---|---|---|
+| `source_items` | INFERENCE | `id`, `source`, `external_id`, `received_at`, `trust_label`, `sensitivity`, `content_hash`, `body_ref` |
+| `runs` | INFERENCE | `run_id`, `thread_id`, `started_at`, `graph_version`, `model_config_version`, `status` |
+| `trace_events` | INFERENCE | `run_id`, `seq`, `node`, `input_hash`, `output_ref`, `duration_ms`, `model`, `prompt_version`, `error_code` |
+| `action_proposals` | INFERENCE | `id`, `run_id`, `tool`, `arguments_json`, `capability`, `proposal_hash` |
+| `policy_decisions` | INFERENCE | `proposal_id`, `decision`, `rule_id`, `reason_code`, `policy_version` |
+| `approvals` | INFERENCE | `proposal_hash`, `decision`, `created_at`, `expires_at`, `reviewer` |
+| `tool_executions` | INFERENCE | `idempotency_key`, `proposal_id`, `started_at`, `result_ref`, `status` |
+| `eval_cases` | INFERENCE | `case_id`, `split`, `fixture_version`, `category`, `expected_json` |
+| `eval_runs` | INFERENCE | `commit_sha`, `model_config`, `prompt_set`, `metrics_json`, `seed` |
+| Chroma collection `personal_context` | INFERENCE | reusable profile/preferences plus explicit source and update timestamp |
+
+**INFERENCE:** Do **not** build a cryptographically hash-chained ledger in this version. A conventional append-oriented audit table is sufficient for debugging/evaluation; signed/hash-chained receipts are already a differentiator of AgentLock and Agent_Sudo and would consume time without improving your primary experimental question. citeturn174677search6turn174677search7
+
+### Evaluation design
+
+**FACT:** Security evaluation must measure both unsafe-action suppression and clean-task utility because contemporary benchmarks show that trivial blocking can look secure while destroying usefulness. AgentDyn and WASP make that tradeoff explicit. citeturn173458academia11turn975895academia9
+
+**INFERENCE:** Build **120 fixtures**:
+
+| Category | Type | Cases |
+|---|---|---:|
+| Benign email/GitHub/job workflows | INFERENCE | 30 |
+| Indirect prompt injection | INFERENCE | 30 |
+| Provenance/parameter-confusion cases | INFERENCE | 15 |
+| Approval/policy edge cases | INFERENCE | 15 |
+| Tool failures/timeouts/malformed responses | INFERENCE | 15 |
+| Idempotency/retry/partial-failure cases | INFERENCE | 15 |
+
+**INFERENCE:** Keep **80 development cases / 40 sealed test cases**. Do not inspect test attack wording while changing prompts/policies.
+
+**INFERENCE:** For stochastic model components, run each relevant case at least **5 times**; report the mean and a bootstrap 95% confidence interval for unsafe-action rate, clean task success, routing quality and latency. Deterministic policy checks need only one run per fixture unless model output feeds their inputs.
+
+**INFERENCE:** Required security metrics:
+
+- `UnsafeActionRate = executed_unauthorized_actions / attack_runs`
+- `AttackBlockRate`
+- `CleanTaskSuccess`
+- `OverblockRate`
+- `ApprovalPrecision = genuinely_risky_approvals / all_approval_requests`
+- `DuplicateSideEffectRate`
+- `ReplayReproductionRate`
+- `MeanRecoverySteps`
+- `P50/P95 latency`
+- provider cost and cloud-sensitive-token exposure.
+
+**INFERENCE:** Baselines:
+
+`B0`: no policy gate; prompt says “ignore malicious instructions.”
+
+`B1`: approval for every external write.
+
+`B2`: capability + trust-label deterministic policy.
+
+`B3`: B2 + replay-derived regression cases.
+
+For routing:
+
+`R0`: strongest cloud model for everything.
+
+`R1`: fixed cheap cloud model.
+
+`R2`: local-first.
+
+`R3`: privacy/cost/quality policy selector.
+
+**FACT:** Chronicle demonstrates the value of recording non-deterministic boundaries and selectively replaying them in CI, but its reported benchmark contains only six recorded failures; that makes it useful design evidence, not a definitive large-scale result. citeturn724356search6
+
+**INFERENCE:** Your replay system can be simpler than Chronicle: record normalized MCP responses and model structured outputs as immutable JSON fixture envelopes; in replay mode replace selected boundaries with recorded envelopes. The measurable claim is then whether a known incident remains reproducible after prompt/policy/model changes.
+
+### Repository structure
+
+| Path | Type | Justification |
+|---|---|---|
+| `apps/api/` | INFERENCE | FastAPI HTTP/control-plane API |
+| `apps/web/` | INFERENCE | React UI |
+| `agent/graph/` | INFERENCE | LangGraph topology/state |
+| `agent/models/` | INFERENCE | provider adapters and selector |
+| `agent/policy/` | INFERENCE | deterministic capability/trust rules |
+| `agent/prompts/` | INFERENCE | prompt text, schema/version metadata |
+| `mcp_servers/mail_read/` | INFERENCE | Gmail read boundary |
+| `mcp_servers/mail_draft/` | INFERENCE | write boundary |
+| `mcp_servers/github_read/` | INFERENCE | GitHub read boundary |
+| `mcp_servers/jobs/` | INFERENCE | untrusted web ingestion |
+| `mcp_servers/tasks/` | INFERENCE | local task operations |
+| `evals/fixtures/` | INFERENCE | frozen benign/attack/fault fixtures |
+| `evals/replay/` | INFERENCE | boundary recording/replay |
+| `tests/` | INFERENCE | unit/integration tests |
+| `infra/` | INFERENCE | local Compose/config only if needed |
+
+## UI research and design
+
+### Reference audit
+
+| Product/design reference | Type | Specific pattern worth borrowing |
+|---|---|---|
+| LangSmith | FACT + INFERENCE | Trace tree + dataset/evaluation linkage. Borrow “select run → inspect nested steps → convert failure into regression case,” not its branding. LangSmith supports trace inspection and dataset-based eval workflows. citeturn453031search6turn453031search8 |
+| Langfuse | FACT + INFERENCE | Dense trace/evaluation tables and turning production observations into dataset cases. Useful for your “incident → fixture” flow. citeturn453031search11turn453031search20 |
+| Arize Phoenix | FACT + INFERENCE | OpenTelemetry-style trace inspection plus datasets/experiments. Borrow the trace-first debugging model. citeturn453031search0turn453031search1 |
+| Braintrust | FACT + INFERENCE | Treat production logs and evals as the same data shape; compare experiments rather than showing vanity metrics. citeturn453031search39turn453031search40 |
+| Temporal Web UI | FACT + INFERENCE | Ordered execution history as source of truth; expand an event to inspect inputs/results/errors. This maps directly to graph replay. citeturn803002search0turn803002search7 |
+| GitHub Actions | FACT + INFERENCE | Workflow graph + per-step status + searchable logs; borrow compact run status and failure drill-down. citeturn803002search8turn803002search2 |
+| Sentry Trace Explorer | FACT + INFERENCE | Waterfall/trace exploration and correlating failure context with spans; useful for model/tool latency and error analysis. citeturn803002search45turn803002search46 |
+| Grafana Explore | FACT + INFERENCE | Split-view correlation between logs/traces and drill-through links. Borrow linked provenance/trace panes rather than multiple isolated dashboards. citeturn236878search0turn236878search6 |
+| Jaeger | FACT + INFERENCE | Timeline-oriented nested spans and important-attribute prioritization. Useful for graph-node/tool-call timing. citeturn236878search27turn236878search35 |
+| Linear | FACT + INFERENCE | Dense inbox/list interactions and keyboard-first selection/actions. Linear's inbox and command workflows support rapid triage. citeturn803002search33turn803002search14 |
+| Raycast | FACT + INFERENCE | Keyboard-first command search plus contextual action panels. Borrow command execution and shortcut discoverability, not a launcher-style overall layout. citeturn236878search1turn236878search8 |
+| VS Code | FACT + INFERENCE | Command palette + history/timeline + contextual detail panes. Borrow predictable keyboard navigation and history inspection. citeturn236878search5turn236878search9 |
+
+### UI hypothesis
+
+**INFERENCE:** Your hypothesis is correct: **the primary UI should be a control plane, not a chat window**. The strongest comparable developer products expose traces, histories, evaluations, inboxes and actions as inspectable structured objects; chat can exist as a secondary command entry, but making it the central surface would hide exactly the policy, provenance and replay artifacts that make this project technically defensible. citeturn453031search6turn803002search0turn236878search3
+
+**INFERENCE:** The home screen should therefore answer four questions: **What needs my approval? What happened? Why was it allowed/denied? Did this version regress?**
+
+### Anti-slop rules
+
+**INFERENCE:** For this project, “AI slop UI” means a surface dominated by generic visual conventions that communicate little system state: gradient hero backgrounds, glowing purple/blue cards, glass panels, oversized chat bubbles, decorative “AI” icons, unexplained KPI cards, excessive rounded containers, emoji substituting for functional icons, and cloned component-library defaults.
+
+**INFERENCE:** Rules:
+
+- No hero section; application opens directly into operational state.
+- No gradient backgrounds or decorative glow.
+- No chat bubble as the dominant information container.
+- Every card/panel must correspond to a real entity: run, approval, policy decision, eval case or source.
+- Use border, spacing and typography hierarchy before shadows.
+- Use color primarily for state: success, warning, denial/error, selected/focus.
+- One icon family only.
+- Every chart must answer a comparison question; no “total runs” vanity card without diagnostic purpose.
+- Tables default compact.
+- Keyboard navigation must cover the approval inbox, trace list and command palette.
+- Raw JSON is always accessible from structured views.
+- Library primitives are restyled through project-owned tokens rather than shipping recognizable defaults.
+
+### Frontend alternatives
+
+| Option | Type | FastAPI fit | React familiarity | Accessible primitives | Dense-data control | Effort | Verdict |
+|---|---|---:|---:|---:|---:|---:|---|
+| React + Vite + React Aria + Tailwind | INFERENCE | 5/5 | 5/5 | 5/5 | 5/5 | 4/5 | **Winner** |
+| React + Vite + Radix + Tailwind/shadcn-derived components | INFERENCE | 5/5 | 5/5 | 4.5/5 | 5/5 | 5/5 | Strong alternative, but easier to end up visually generic |
+| Next.js + React + Radix | INFERENCE | 3.5/5 | 4.5/5 | 4.5/5 | 5/5 | 3/5 | Adds server/runtime concepts with no clear benefit because FastAPI already owns the backend |
+
+**FACT:** React Aria Components 1.22.1 was published in October 2026 and provides style-free accessible primitives with keyboard, screen-reader and internationalization behavior. citeturn871138search0
+
+**FACT:** Radix's `react-dialog` package was at 1.3.1 with a release in October 2026, so Radix remains actively maintained. citeturn871138search1
+
+**FACT:** Vite 8.3.5 was current in late October 2026. React 19.3.1 was current at the time of research. citeturn299726search1turn299726search0
+
+**INFERENCE:** Winner: **React + TypeScript + Vite + React Aria Components + Tailwind CSS variables/utilities**. React Aria's style-free approach is particularly useful here because it gives accessibility behavior without imposing a recognizable product aesthetic. citeturn871138search0
+
+### Specific UI libraries
+
+| Need | Choice | Type | Maintenance evidence |
+|---|---|---|---|
+| Accessible primitives | `react-aria-components` | INFERENCE | v1.22.1, published ~October 2026. citeturn871138search0 |
+| Styling | Tailwind CSS + project CSS variables | INFERENCE | Tailwind 4.3.3 is current in the retrieved npm metadata and has active insiders builds. citeturn871138search2 |
+| Server state | TanStack Query | INFERENCE | `@tanstack/react-query` 5.105.x published around Nov. 1, 2026. citeturn342417search0turn342417search4 |
+| Data tables | TanStack Table | INFERENCE | v9.3.1 published Oct. 12, 2026; headless and virtualizable. citeturn342417search1turn342417search5 |
+| Graph/provenance | React Flow / `@xyflow/react` | INFERENCE | v12.12.0 published about one month before the research date; supports custom nodes/edges and keyboard interaction. citeturn342417search2 |
+| Charts | Recharts | INFERENCE | npm lists 3.10.1 as current with newer 3.11 canary releases in October 2026. citeturn299726search5 |
+| Command palette | Build on React Aria collection/dialog primitives rather than `cmdk` | INFERENCE | `cmdk` remains popular but its latest stable 1.1.1 is roughly two years old, while React Aria is actively shipping. citeturn342417search3turn871138search0 |
+| Icons | Lucide React | INFERENCE | npm shows active releases through late October/Nov. 2026. citeturn299726search3turn299726search9 |
+| Fonts | Inter + JetBrains Mono | INFERENCE | Use one neutral UI sans and one monospace family; no library dependency is required. |
+
+### Design brief
+
+**INFERENCE:** Use four primary screens.
+
+**INFERENCE — Control Inbox:** left navigation; center dense list of pending approvals, failed runs and high-priority triage items; right inspection pane showing action, arguments, policy reason, provenance chain and Approve/Reject. Default keyboard sequence: `j/k` select, `Enter` inspect, `a` approve, `r` reject only when focus is not in an input.
+
+**INFERENCE — Run Explorer:** top filter bar; left run list; center LangGraph node timeline; lower/side detail pane for selected node showing prompt version, model route, structured input/output, MCP call and duration. Provide “Create regression fixture” directly from a failed event.
+
+**INFERENCE — Policy/Provenance View:** compact graph showing user intent, source items, derived proposals and tool action; selecting an edge explains which data contributed to an argument. A textual decision explanation is mandatory; the graph is secondary, because graphs become unreadable faster than tables.
+
+**INFERENCE — Eval Lab:** experiment selector, baseline comparison table, metric distributions, failed-case list and case-level replay. Default comparison should be “current commit vs baseline,” not aggregate totals.
+
+**INFERENCE:** Information hierarchy: **decision requiring action → reason → evidence/provenance → raw trace**. Do not make the user inspect a graph before seeing a plain-language decision reason.
+
+**INFERENCE:** Type scale: 12 px metadata, 14 px table/body, 16 px emphasized body, 20 px section title, 28 px page title. Use Inter for UI and JetBrains Mono for IDs, hashes, JSON and trace metadata.
+
+**INFERENCE:** Spacing scale: 4, 8, 12, 16, 24, 32 px. Dense tables use 32–36 px rows; detail panels can use 40–44 px control heights.
+
+**INFERENCE:** Color system should be token-based and restrained. In light mode use neutral near-white surfaces, dark neutral text, a single muted accent for selection/focus, amber for approval/warning, red for denial/error and green only for successful completion. In dark mode invert neutral luminance while preserving semantic hue roles. Verify every text/background pair with automated WCAG contrast checks in CI rather than relying on hand-picked hex values.
+
+**INFERENCE:** Motion: 120–180 ms for disclosure/panel transitions, none for trace timeline updates except small opacity changes, and honor `prefers-reduced-motion`.
+
+**INFERENCE:** Loading state: skeleton only where layout is known; otherwise explicit “loading trace” text with cancellation for long operations. Empty states state *why* the collection is empty and the next relevant action. Error states show error code, retry action and raw details. Never replace actionable errors with “Something went wrong.”
+
+### UI build order
+
+**INFERENCE:** UI work should consume no more than roughly **20–25%** of the project effort and should follow backend capability rather than precede it.
+
+1. After thin-core API exists: basic navigation, briefing, source-item list.
+2. After policy/approval endpoint exists: approval inbox.
+3. After trace persistence exists: run explorer.
+4. After replay/eval runner exists: eval lab.
+5. Only after all metrics work: provenance graph and cosmetic polish.
+
+## Build plan, risks, and final claims
+
+### Milestones
+
+**INFERENCE:** Hour figures below are **estimates**, not promises. The total recommended scope is approximately **102 hours**, inside your requested 80–120-hour envelope.
+
+| Milestone | Type | Deliverable | Testable exit criterion | Est. hours |
+|---|---|---|---|---:|
+| Thin end-to-end core | INFERENCE | Gmail read, GitHub read, job ingestion, local tasks, daily briefing; one selectable model | A single command/run ingests fixture/live sources, produces structured normalized items and a briefing, and stores a trace; no novel feature required | **22** |
+| MCP boundaries + deterministic execution | INFERENCE | Separate read/write MCP servers, capability registry, idempotency keys | Integration tests prove unregistered tools cannot execute; duplicate write request produces one side effect | **13** |
+| Security policy + approval | INFERENCE | trust labels, policy decision table, approval interrupt | 30 initial attack/benign fixtures execute with zero policy-engine crashes and all policy decisions produce a reason code | **14** |
+| Replay/eval control plane | INFERENCE | record/replay envelopes, 120-case suite, baselines, CI | Full deterministic replay reproduces expected tool/policy results; sealed test suite runs from clean checkout | **20** |
+| Privacy-aware model selector | INFERENCE | local/cloud rules + benchmark harness | All four provider adapters pass same contract; routing benchmark reports quality, latency, cost and sensitive-cloud-exposure metrics | **12** |
+| Control-plane UI | INFERENCE | approvals, traces, eval comparison, minimal provenance | User can approve/reject, inspect a failed run and launch/review a replay without opening server logs | **16** |
+| Documentation and reproducibility | INFERENCE | architecture ADRs, threat model, evaluation report, demo fixtures | New machine can run fixture demo and reproduce published tables using documented commands | **5** |
+
+### Risk register
+
+| Risk | Type | Mitigation | Tripwire |
+|---|---|---|---|
+| Gmail OAuth setup consumes excessive time | INFERENCE | Start with fixture-backed MCP tool, then live OAuth | If live Gmail read is not working by end of thin-core milestone, use exported `.eml` fixtures for eval and defer write scope |
+| Job collectors become scraping project | INFERENCE | Restrict to 2–3 sources with stable public feeds/pages plus email alerts | If one source needs >4 h of special parsing, cut it |
+| Local model quality is too low | INFERENCE | Treat that as an experimental result; route difficult tasks cloud | If local structured-output validity <90% on dev fixtures, restrict local use to classification/extraction tasks |
+| Security policy overblocks | INFERENCE | Report clean utility and overblock rate, not only attack blocking | If overblock >20% after milestone 3, simplify rules before adding attack families |
+| Replay becomes a framework project | INFERENCE | Record only model and MCP boundaries; no general process snapshotting | If replay exceeds 20 h, drop cut-point replay and retain full boundary replay |
+| Provenance graph consumes UI time | INFERENCE | Textual explanation first; graph last | If UI exceeds 16 h before eval screen exists, cut graph visualization |
+| Learned routing temptation expands scope | INFERENCE | Explicitly prohibit training a router in v1 | If static routing has not been benchmarked, no learned router work is allowed |
+| Memory expansion derails project | INFERENCE | Only explicit profile/preferences + existing RAG retrieval | If memory correction/staleness needs new evaluation infrastructure, move it to future work |
+
+### What to learn at each milestone
+
+**INFERENCE:** Topics only, in build order:
+
+- LangGraph state/reducers/checkpointing/interrupt semantics
+- MCP tool discovery, transports and OAuth/resource authorization
+- OAuth least privilege and token audience boundaries
+- Idempotency and distributed side-effect semantics
+- Indirect prompt injection and information-flow security
+- AgentDojo/WASP/AgentDyn-style security evaluation
+- Experiment design, repeated stochastic trials and bootstrap confidence intervals
+- Record/replay and mutation/regression testing
+- Multi-model routing tradeoffs and calibration
+- OpenTelemetry trace/span concepts
+- Accessible keyboard-driven dense interfaces
+
+### Scope alternatives
+
+| Scope | Type | Deep features | Resume impact | Risk | Effort |
+|---|---|---|---|---|---|
+| Security-first minimal | INFERENCE | replay/eval security only | High: very coherent systems/security story | Low | ~80–90 h |
+| **Balanced recommended** | INFERENCE | security replay + privacy-aware static routing | **Highest:** security, evals, routing and systems tradeoffs without research sprawl | Medium | **~100–110 h** |
+| Broad personal-agent platform | INFERENCE | security + routing + advanced memory + ledger | Lower per-feature credibility because evaluation depth suffers | High | >140 h likely |
+
+**INFERENCE:** Choose the **balanced recommended scope**. The second feature is justified because provider flexibility is already mandatory and routing can be made a measurable systems experiment without introducing training infrastructure. Advanced memory and cryptographic ledger do not pass that same scope test.
+
+### Future work that should explicitly remain out of scope
+
+**INFERENCE — Memory:** Add a memory lifecycle with candidate extraction, user-confirmed corrections, `valid_from`/`valid_until`, supersession links and retrieval penalties for stale facts. Evaluate it using temporal fixtures resembling StreamMemBench/PraxisMemBench: changed preferences, contradictory corrections and later tasks that depend on the corrected version. This is worth a follow-on project because recent benchmarks show that storing information and successfully reusing evolving information are distinct problems. citeturn724356search4turn724356search8
+
+**INFERENCE — Learned routing:** Once several hundred or thousand labeled executions exist, compare the static router to a lightweight predictive router trained on task features and measured model outcomes. Do this only if the static policy leaves a meaningful oracle gap; LLMRouterBench's results are a warning against assuming learned complexity will help. citeturn791140academia7
+
+**INFERENCE — Tamper-evident audit:** Replace the normal audit table with signed or hash-chained decision receipts if you later need to demonstrate post-hoc integrity. This is explicitly future work because AgentLock and Agent_Sudo already show the concept, and reproducing it now would add implementation rather than differentiated learning. citeturn174677search6turn174677search7
+
+### Interview-ready claims you should only make after measuring them
+
+**INFERENCE:** Claim 1: “I built a LangGraph personal agent with deterministic pre-action authorization and evaluated it on **N benign and adversarial fixtures**; the policy reduced unauthorized tool execution from **X% to Y%** while clean-task success changed from **A% to B%**.”
+
+**INFERENCE:** Honest limitation to volunteer: the security guarantee applies only to registered MCP/tool boundaries under your stated trust assumptions; it is not a proof of prompt-injection immunity and does not defend a compromised host or tool implementation. LangGraph itself similarly separates framework routing from application-level argument safety. citeturn610442search5
+
+**INFERENCE:** Claim 2: “I implemented record/replay around model and MCP boundaries so production-like failures become CI regressions; **R%** of recorded incidents reproduced deterministically and the suite caught **M/N** injected policy regressions.”
+
+**INFERENCE:** Honest limitation to volunteer: full replay proves repeatability only for captured boundaries; it does not reproduce behavior of external systems that were intentionally left live. Chronicle demonstrates a more general cut-point approach, but its own published evaluation is small. citeturn724356search6
+
+**INFERENCE:** Claim 3: “I compared local-first, all-cloud and policy-based routing across the same fixture set; the selected policy reduced cloud-sensitive-data exposure by **X%** and cost by **Y%** while keeping task success within **Z percentage points** of the strongest-cloud baseline.”
+
+**INFERENCE:** Honest limitation to volunteer: the route is intentionally rule-based rather than learned because the dataset is small and 2026 routing benchmarks show complex routers do not consistently beat simple baselines. citeturn791140academia7
+
+**INFERENCE:** Claim 4: “Every prompt in the system is schema-bound, versioned and regression-tested; prompt changes fail CI when security, task-success or structured-output thresholds regress.”
+
+**FACT:** Dataset-driven prompt/eval regression is established practice in current tooling such as LangSmith, Langfuse and Braintrust, so this should be presented as disciplined engineering rather than a novel invention. citeturn453031search8turn453031search20turn453031search40
+
+**INFERENCE:** Claim 5: “I designed the UI as an operational control plane rather than a chat interface: approvals, policy explanations, provenance, trace replay and eval comparison are first-class objects.”
+
+**FACT:** That design is consistent with current observability and workflow systems, which center structured traces, event histories and evaluation datasets rather than chat transcripts. citeturn453031search6turn803002search0turn236878search3
+
+### What could not be verified
+
+**FACT:** The exact contents and citations of “A Defensible Personal Automation Agent” could not be retrieved in this conversation, so I could not certify that I opened **every** primary source used by that document. The verification status for report-specific claims not explicitly named in your prompt is therefore **UNVERIFIABLE**.
+
+**FACT:** I could verify that current open-source projects implement deterministic or provenance-sensitive authorization around LangGraph/MCP, but I did not find evidence that any one of them already combines **your exact package** of personal-email/GitHub/job workflow, provenance-sensitive policy, replayable CI security regression, runtime-selectable local/cloud models and privacy-routing evaluation. That absence is **not proof of novelty**; search coverage cannot establish nonexistence.
+
+**INFERENCE:** Confidence that “provenance authorization” by itself is no longer a defensible novelty claim: **95%**. Confidence that “replayable security evaluation for this specific personal-agent setting” remains a defensible project differentiator: **85%**. Confidence that the recommended balanced scope fits **80–120 hours** for someone already familiar with your stated stack: **75%**, with OAuth integration and replay infrastructure being the largest uncertainty sources.

@@ -1,0 +1,263 @@
+# Research Report: A Defensible Personal Automation Agent for a Six-to-Eight-Week Build
+
+## Landscape audit
+
+### Method and scope
+
+**Fact.** I searched current first-party project repositories, vendor documentation, official protocol documentation, and primary research sources, with emphasis on work published or materially updated in 2025–2026. The audit focused on systems relevant to personal agents, persistent memory, LangGraph/MCP integration, model routing, evaluation, prompt-injection security, human approval, and agent reliability. citeturn899900search5turn970653search1turn585785academia11turn613524academia1
+
+**Fact.** Several things that might initially sound novel in your project are already commodity capabilities: email-triggered agents, GitHub actions, scheduled automations, local/cloud model choice, long-term agent memory, human-in-the-loop interruptions, prompt/version evaluation, and MCP tool connectivity all exist in mature open-source or commercial tooling. citeturn631440search25turn631440search0turn193056search0turn193056search37turn899900search3turn970653search3
+
+**Inference.** Therefore, “personal agent that monitors email, GitHub, jobs and creates a briefing” is not a defensible technical contribution by itself. The interview-worthy part has to be an engineering mechanism around **security, routing, reliability, evaluation, or memory correctness**, demonstrated quantitatively.
+
+### Audited systems and research
+
+| Project / paper | What it does | What it does **not** do, based on the cited material | Source |
+|---|---|---|---|
+| **Khoj** | Open-source, self-hostable personal AI with document/web access, scheduled automations, agents, and support for local and online models. citeturn193056search0turn193056search4 | I found no documented end-to-end design in the audited material for provenance-aware prompt-injection isolation across email + GitHub + job-board content, nor a cost/latency/privacy router with task-level evaluation. **This is an absence-from-documentation claim, not proof of absence.** | [GitHub](https://github.com/khoj-ai/khoj) |
+| **Open Interpreter / Interpreter Workstation** | Lets agents operate a computer, execute code, use local or provider models, and in the newer workstation exposes model/provider discovery and access controls for files/apps. citeturn193056search18turn193056search19 | It is principally a computer-control/runtime platform rather than an evaluated personal workflow agent centered on inbox/GitHub/job triage. I found no documented benchmark for personal-workflow prompt-injection containment or routing policy quality in the audited sources. | [GitHub](https://github.com/openinterpreter/openinterpreter) |
+| **Letta** | Provides stateful agents with persistent memory blocks, tools, message history, user-editable memory, attach/detach controls, and agent review of proposed memory changes. citeturn193056search37turn193056search38turn193056search47 | Memory correction and control are therefore **not** novel by themselves. The documentation I audited does not establish a personal-workflow benchmark for staleness-aware forgetting or source-provenance conflict resolution. | [Docs](https://docs.letta.com/configuration/memory) |
+| **Mem0** | Production-oriented long-term agent memory layer with persistent personalization and a 2025 research paper. citeturn193056search5turn193056search9 | A generic “agent remembers preferences” feature would duplicate existing work. The audited material does not by itself solve your entire policy question of what personal workflow facts should expire, be corrected, or be prohibited from cloud exposure. | [GitHub](https://github.com/mem0ai/mem0) |
+| **Zapier Agents** | Commercial agent builder over thousands of app integrations; can create agents that automate tasks and invoke application actions, including GitHub workflows. citeturn193056search36turn193056search43 | Cross-app automation is already table stakes. Its public material does not provide a research-style, reproducible evaluation of privacy-sensitive local/cloud routing or injection-safe personal inbox execution. | [Docs](https://help.zapier.com/hc/en-us/articles/24393442652557-Build-an-agent-in-Zapier-Agents) |
+| **Lindy** | Commercial assistant with Gmail triage/drafting, GitHub read/write actions, scheduled routines, and MCP/app integrations. citeturn631440search25turn631440search0 | Email + GitHub automation is demonstrably **not a gap**. I did not find, in the audited public documentation, a published benchmark for provenance-based tool confinement under malicious email/web inputs. | [GitHub integration](https://www.lindy.ai/integrations/github) |
+| **Relay.app** | Workflow automation with GitHub/email integrations and first-class human-in-the-loop approvals and decisions. citeturn631440search6turn631440search9 | Human approval as a feature is not novel. The potentially open problem is **where approvals are required automatically and measurably**, not adding an approval button. | [GitHub + Outlook](https://www.relay.app/apps/github/integrations/outlook-mail) |
+| **Relevance AI** | Agent platform with numerous pre-built GitHub tools and email-triggered/automation patterns. citeturn631440search3turn631440search22 | Tool-rich GitHub agents are already common. I found no public evidence in the audited pages of a personal-agent benchmark combining injection resistance, idempotent execution, and privacy-aware model routing. | [GitHub integration](https://relevanceai.com/integrations/github) |
+| **LangGraph** | Provides stateful graphs, durable execution, persistence, interrupts, human review/edit of tool calls, and recovery/resumption. citeturn899900search11turn899900search3 | Using LangGraph, persistence, or approval interrupts is implementation choice rather than novelty. Application-specific transactional guarantees still have to be designed by you. | [GitHub](https://github.com/langchain-ai/langgraph) |
+| **LangChain MCP support** | LangChain can act as an MCP client, discover multiple servers, convert MCP tools into LangChain tools, support different transports, and convert MCP elicitation into LangGraph interrupts. citeturn899900search0turn899900search1 | “Uses MCP” is not a contribution. The official integration does not automatically give your agent least-privilege policies, provenance-aware authorization, or personal-data routing policy. | [GitHub](https://github.com/langchain-ai/langchain/blob/master/openwiki/mcp-integration.md) |
+| **Official MCP reference servers** | Provides reference servers for filesystem, web fetch, Git, memory, time, and other capabilities. The project explicitly warns that these are educational references rather than production-ready secure solutions. citeturn899900search6 | Production security policy and threat modeling remain the application developer’s responsibility. | [GitHub](https://github.com/modelcontextprotocol/servers) |
+| **MCP security guidance** | Current MCP material explicitly treats model-facing skill content as untrusted input and requires origin labeling and approval before implicit local execution in the Skills extension. citeturn899900search9 | Merely wrapping tools in MCP does not neutralize prompt injection. Trust provenance and execution policy are still required at the host/harness layer. | [MCP Skills security](https://skills.extensions.modelcontextprotocol.io/specification/beta/skills) |
+| **CaMeL — Defeating Prompt Injections by Design** | Separates trusted control flow from untrusted data and uses capability/data-flow enforcement to prevent injected content from directing privileged actions. The 2026 published version reports 77% task completion with security guarantees versus 84% undefended on AgentDojo. citeturn585785academia11turn585785search2 | A capability-secured agent is therefore **not novel in principle**. The released implementation is explicitly described as a research artifact that may contain bugs and is not maintained as a product. citeturn585785search1 | [Paper](https://arxiv.org/abs/2503.18813) |
+| **Task Shield** | ACL 2025 defense that checks whether instructions/tool calls remain aligned with the user’s task; reports 2.07% attack success and 69.79% task utility on GPT-4o in its AgentDojo experiments. citeturn585785search5 | “Ask another model whether a tool call looks aligned” is not an original project idea now. Its existence raises the bar for any approval/security layer you build. | [ACL](https://aclanthology.org/2025.acl-long.1435/) |
+| **WASP** | 2025 benchmark for indirect prompt injection against web agents using realistic adversarial objectives; reported that agents began executing adversarial instructions 16–86% of the time, though complete attacker goals succeeded less often. citeturn613524academia0 | It is a benchmark rather than a personal-assistant architecture, and does not solve email/GitHub/job workflow confinement for you. | [arXiv](https://arxiv.org/abs/2504.18575) |
+| **MemoryAgentBench** | Evaluates memory agents on retrieval, test-time learning, long-range understanding, and selective forgetting; its authors report that current approaches fail to master all four simultaneously. citeturn613524academia1 | A plain vector-store memory or “remember user preferences” demo does not address the full memory problem. | [arXiv](https://arxiv.org/abs/2507.05257) |
+| **Evo-Memory** | 2025 benchmark for continual/self-evolving agent memory over sequential task streams and evaluates more than ten memory approaches. citeturn613524academia2 | Static retrieval accuracy alone is insufficient evidence that a memory system improves over time without accumulating harmful/stale state. | [arXiv](https://arxiv.org/abs/2511.20857) |
+| **Latency-aware LLM routing** | 2026 work jointly optimizes quality, monetary cost and latency and reports gains over conventional load balancing under its tested workloads. citeturn970653academia8 | A router that merely selects “small model for easy queries, big model for hard queries” is already well-covered. | [arXiv](https://arxiv.org/abs/2607.18253) |
+| **Dynamic LLM Routers Are Often Misguided** | 2026 analysis of six commercial routers across 14 settings found none beat a matched-cost random choice between two well-selected models; the paper argues common routing objectives can reward undesirable behaviors. citeturn970653academia6 | The existence of routing research does **not** mean sophisticated routing is automatically worthwhile; this paper directly challenges that assumption. | [arXiv](https://arxiv.org/abs/2610.02762) |
+| **LangSmith evaluation stack** | Supports curated datasets, unit/regression tests, backtesting from historical traces, trajectory evaluation, prompt/model comparisons, production monitoring and prompt versioning. citeturn970653search1turn970653search3turn970653search5 | “I built prompt versioning and an eval dashboard” is largely duplicative. A project contribution would need to be the **test methodology, dataset, failure model, or domain-specific assertions** rather than the plumbing. | [Evaluation docs](https://docs.langchain.com/langsmith/evaluation-types) |
+
+### What the audit rules out
+
+**Fact.** Human approval gates already exist directly in LangGraph and commercial workflow systems. citeturn899900search3turn631440search6 **Fact.** Persistent agent memory with user-editable state already exists in Letta and Mem0. citeturn193056search37turn193056search5 **Fact.** Email triage and GitHub automation already exist commercially in Lindy and Zapier-style platforms. citeturn631440search25turn631440search0turn193056search43 **Fact.** Prompt versioning, experiment comparison and regression testing are already supported in LangSmith. citeturn970653search1turn970653search5
+
+**Inference.** You should therefore **not** pitch the project as “an autonomous second brain,” “secure MCP personal assistant,” “multi-model agent,” “agent with memory,” or “agent with human approval.” Those phrases describe existing product categories, not a differentiated system.
+
+## Gap identification
+
+The confidence values below estimate **how likely the narrower formulation is still meaningfully under-addressed**, not whether nobody in the world has ever attempted it.
+
+| Gap | Evidence that a real gap remains | Confidence |
+|---|---|---:|
+| **Provenance-aware privilege reduction after reading untrusted content** | MCP itself now explicitly treats server-provided skill content as untrusted; WASP shows indirect injections still influence agent behavior; CaMeL and Task Shield exist precisely because prompt-only defenses are insufficient. citeturn899900search9turn613524academia0turn585785academia11turn585785search5 The research solutions are not drop-in personal-workflow frameworks, and CaMeL’s own repository calls its implementation a research artifact. citeturn585785search1 | **High — 90%** |
+| **Automatic least-privilege decisions for MCP/tool calls based on data origin** | MCP provides typed tool interfaces and risk/security guidance but does not by itself derive per-run permissions from the provenance of email/web/GitHub content. citeturn899900search6turn899900search9 CaMeL and later capability work indicate that authority confinement remains an active research direction. citeturn585785academia11turn585785search9 | **High — 88%** |
+| **Human approval that is risk-triggered rather than statically configured** | LangGraph can interrupt before tool execution and Relay provides approvals, so approval mechanics are solved. citeturn899900search3turn631440search6 The remaining engineering question is which actions deserve approval under which provenance/sensitivity conditions while minimizing approval fatigue. **Inference from existing primitives plus unresolved security literature.** | **High — 85%** |
+| **Privacy-constrained model routing across local and cloud providers** | Current routing research primarily optimizes quality, cost and latency; 2026 work explicitly adds latency because prior routers often omit it. citeturn970653academia8turn970653academia9 I did not find, in the audited research, a widely adopted router that treats personal-data sensitivity as a hard routing constraint while spanning Ollama plus multiple commercial providers. **Absence-from-search finding.** | **High — 86%** |
+| **Evidence that routing beats a simple fixed-model baseline in a personal agent** | A 2026 study found six commercial routers failed to beat a matched-cost random two-model baseline, making sophisticated routing’s value an empirical rather than assumed question. citeturn970653academia6 | **High — 95%** |
+| **Replayable personal-agent evaluations with side-effect assertions** | LangSmith supports replay/backtesting, regression tests and trajectory checks generally. citeturn970653search1turn970653search4 What is not provided is your domain fixture set: malicious emails, conflicting GitHub events, duplicate web results, interrupted API calls, forbidden sends/writes, and expected approval decisions. **Inference.** | **High — 90%** |
+| **Fault-injection testing of multi-step personal workflows** | LangGraph supports persistence and durable resumption. citeturn899900search11turn899900search3 Durable execution does not itself prove application-level exactly-once behavior for Gmail sends, task creation, GitHub comments or other external side effects. **Inference.** | **High — 92%** |
+| **Idempotency and side-effect accounting across heterogeneous tools** | MCP reference servers expose heterogeneous operations and explicitly disclaim production readiness. citeturn899900search6 LangGraph can retry/resume, which makes duplicate external actions an application concern unless calls are made idempotent or recorded transactionally. citeturn899900search11 | **High — 90%** |
+| **Memory with source provenance, temporal validity and correction semantics** | MemoryAgentBench says selective forgetting is one of four core memory competencies and reports current methods do not master all four. citeturn613524academia1 Letta already supports editable memory, so editing alone is not a gap. citeturn193056search37turn193056search47 The narrower gap is enforcing staleness/provenance policies in a personal workflow. | **Medium-high — 78%** |
+| **Observability that explains security/routing decisions, not merely traces them** | LangSmith already provides rich traces, comparisons and evaluators. citeturn970653search1turn970653search3 A raw trace does not automatically answer “why was cloud use forbidden?” or “which untrusted datum caused the permission downgrade?” **Inference.** | **Medium-high — 80%** |
+| **Prompt engineering as a versioned experiment tied to action-level regressions** | Prompt versioning and prompt/model comparison already exist in LangSmith. citeturn970653search3turn970653search5 The remaining defensible contribution is a regression methodology where prompt changes are judged by tool trajectory, forbidden-action rate, routing cost and injection success, not just answer quality. | **High — 88%** |
+| **Personal-agent memory poisoning defenses** | Untrusted content is recognized as an injection surface by MCP security guidance and web-agent research, while persistent agent memory systems intentionally write durable facts. citeturn899900search9turn613524academia0turn193056search37 **Inference:** allowing web/email-derived claims to become durable memory creates a persistence channel that deserves explicit write policy. | **Medium-high — 76%** |
+
+### Facts, inferences and speculation
+
+**Fact.** Prompt injection through retrieved or externally supplied content remains a demonstrated security problem in 2025–2026; stronger models alone do not eliminate it. WASP found substantial rates of agents beginning attacker-directed behavior, and Google DeepMind’s own security work describes indirect injection as an ongoing problem requiring layered defenses. citeturn613524academia0turn585785search10
+
+**Fact.** System-level defenses such as CaMeL show that constraining control/data flows can produce stronger guarantees than simply prompting a model to ignore malicious instructions. citeturn585785academia11turn585785search2
+
+**Fact.** Memory evaluation is moving beyond recall toward update, continual learning and selective forgetting. citeturn613524academia1turn613524academia2
+
+**Fact.** Current evidence cautions against overengineering model routing: recent work both expands routing objectives to latency and finds that sophisticated commercial routers can underperform simple baselines. citeturn970653academia8turn970653academia6
+
+**Inference.** For your project, the best gaps are therefore not new agent capabilities. They are **control-plane mechanisms**: restrict what the agent may do after observing untrusted data, prove that retries do not duplicate side effects, decide when private data can leave the machine, and test those claims reproducibly.
+
+**Speculation.** A hiring interviewer is more likely to probe these mechanisms deeply than to care that the system collected five data sources, because they expose concrete design trade-offs involving threat models, graph semantics, distributed failure, model evaluation and policy enforcement. This is an interview-impact judgment, not a published fact.
+
+## Candidate features
+
+### Provenance-aware capability firewall
+
+**Idea.** Every datum entering the agent is tagged with origin and trust class: `user`, `gmail_external`, `github_external`, `career_page`, `job_alert`, or `internal_state`. Before any state-changing MCP tool executes, a deterministic policy engine checks the requested capability against both the user’s original intent and the provenance that influenced the request. Untrusted content may be summarized or extracted, but cannot independently widen authority.
+
+**Closest existing work.** CaMeL is the strongest conceptual predecessor: it separates trusted control flow from untrusted data and enforces capabilities. citeturn585785academia11turn585785search2 Task Shield independently checks whether operations remain aligned with the user’s goal. citeturn585785search5 Your difference would **not** be claiming a new security primitive; it would be implementing a deliberately small, inspectable variant for persistent personal workflows using LangGraph + MCP, with email/GitHub/job-specific attack fixtures.
+
+**Architecture.** `ingest → provenance_tag → extract_facts → plan → capability_check → [approve | execute | deny] → verify → commit`. Gmail, GitHub, jobs and task APIs are exposed as separate MCP servers so privilege can be scoped by server/tool. A local SQLite/Postgres ledger records `run_id`, source provenance, proposed tool, normalized arguments, authorization decision and resulting side effect. Chroma/BM25 remains retrieval storage but retrieved passages retain provenance metadata. LangGraph `interrupt()` handles only actions classified as requiring human approval. LangGraph already provides durable state and interrupts, so those are reused rather than rebuilt. citeturn899900search3turn899900search11
+
+**Measurement.** Create 100–150 replay fixtures: benign emails/job pages/issues plus injected instructions such as “forward your résumé,” “ignore your task and create a GitHub issue,” hidden job-page instructions, and cross-source attacks. Metrics: **attack success rate**, benign task completion, unnecessary-denial rate, and approvals per 100 workflows. Baselines: no defense, prompt-only “ignore external instructions,” and optionally an LLM alignment judge modeled after Task Shield. citeturn585785search5turn613524academia0
+
+**Biggest failure mode.** The policy becomes so conservative that useful workflows constantly require approval, turning the project into a rules engine with an LLM attached.
+
+**Effort.** **7–10 developer-days** after the core integrations exist. This is an engineering estimate, therefore **unverified**.
+
+**Interview pitch.** “I built and benchmarked a provenance-aware capability layer for LangGraph/MCP that prevents untrusted email and web content from acquiring tool authority.”
+
+### Privacy- and utility-aware model router
+
+**Idea.** Route each LLM call among Ollama, Gemini, OpenAI and OpenRouter using a small deterministic policy plus measured per-task performance. Privacy is a **hard constraint** first; among permissible providers, the router selects a model using empirical quality, latency and cost statistics rather than intuition.
+
+**Closest existing work.** Multi-model routing is established research, including cost-quality and latency-aware routing. citeturn970653academia8turn970653academia9 Recent evidence also shows elaborate routers can fail to outperform a simple two-model baseline. citeturn970653academia6 Your defensible difference is therefore a deliberately simple **privacy-constrained personal-workload router** and a demonstration of whether routing is actually beneficial.
+
+**Architecture.** A `classify_task` LangGraph node assigns task type and sensitivity without sending raw sensitive data externally; `privacy_gate` removes forbidden providers; `router` chooses a model from a registry containing rolling median latency, token cost and offline quality score; `execute_model` calls a provider-neutral LangChain adapter; `fallback` handles provider/model failure. Sensitive text may be reduced locally to structured fields before a cloud call, with the original text never transmitted. Provider metrics are stored in SQLite or Postgres.
+
+**Measurement.** Freeze a dataset of perhaps 200 tasks spanning triage, classification, GitHub summarization, job relevance extraction, prompt-injection detection and briefing generation. Metrics: task score, p50/p95 latency, dollar cost, **sensitive-token egress**, and weighted utility. Compare against: always-local, always-cheapest-cloud, always-best-cloud and a two-model rule. Because contemporary work shows routing can fail to beat simple baselines, the project is valid even if the result is “routing was unnecessary for three task classes.” citeturn970653academia6
+
+**Biggest failure mode.** Dataset size is too small to learn or justify a router, and a fixed two-model rule wins. That outcome should cause you to keep the simple rule rather than manufacture complexity.
+
+**Effort.** **5–7 developer-days. Unverified estimate.**
+
+**Interview pitch.** “I treated model selection as a constrained systems problem and measured whether local/cloud routing actually improved cost-latency-quality without leaking sensitive content.”
+
+### Replayable agent regression and prompt laboratory
+
+**Idea.** Build an offline simulator that replays sanitized email, GitHub and job-board events through the exact LangGraph while replacing mutating MCP tools with deterministic test doubles. Every prompt/model/router change runs against a golden suite that asserts not merely final text but **tool trajectory, approval decisions, forbidden actions, side-effect count and latency/cost**.
+
+**Closest existing work.** LangSmith already supports datasets, experiments, prompt versions, regression tests, backtesting and trajectory evaluation. citeturn970653search1turn970653search3turn970653search5 Therefore the novelty is not “agent evals.” The value is a concrete personal-agent test environment and threat/failure dataset that can run locally in CI without touching a real inbox.
+
+**Architecture.** `event_fixture → graph_under_test → mock MCP servers → trace collector → trajectory evaluator → metric aggregator`. Keep prompts in Git with semantic version IDs injected into every trace. Each test case declares allowed tools, forbidden tools, required approval state, expected structured extraction and optional judge rubric. For stochastic models, repeat security-critical cases and compare failure rates, consistent with current LangSmith testing guidance. citeturn970653search4
+
+**Measurement.** Regression catch rate on seeded defects; forbidden-action rate; trajectory precision/recall; prompt-version win rate; run-to-run variance; test cost. Deliberately introduce changes such as weaker system prompts, removed provenance tags, wrong tool descriptions, and model substitutions and measure whether the suite catches them.
+
+**Biggest failure mode.** It becomes a thin wrapper around LangSmith. If the test data and trajectory assertions are weak, there is no technical contribution.
+
+**Effort.** **5–7 developer-days. Unverified estimate.**
+
+**Interview pitch.** “I built a replayable CI harness for an agent where prompts are tested like code against state-changing trajectories, adversarial inputs and side-effect invariants.”
+
+### Idempotent side-effect ledger and fault recovery
+
+**Idea.** Treat every mutating tool call as a transaction-like intent with an idempotency key, precondition, execution status and postcondition. If LangGraph retries after a crash or provider timeout, the graph consults the ledger before repeating the action, so “resume” does not become “send the email twice” or “create the task twice.”
+
+**Closest existing work.** LangGraph gives durable execution and resumable persisted graph state. citeturn899900search11turn899900search3 That does not itself establish exactly-once semantics for arbitrary external systems; MCP’s official reference servers also explicitly leave production safeguards to implementers. citeturn899900search6 The differentiation is therefore an application-level side-effect protocol and a fault-injection evaluation.
+
+**Architecture.** `plan_action → canonicalize_args → generate_action_key → ledger_prepare → execute_MCP → verify_external_state → ledger_commit`. On restart: committed actions return cached verified results; prepared-but-unknown actions run a reconciliation function before retry. Where an API has native idempotency keys, forward them; otherwise derive application-level keys from action type, target, semantic payload and workflow epoch. Separate read-only and mutating MCP tools.
+
+**Measurement.** Inject failures before execution, during execution, after the remote action but before local acknowledgement, and during verification. Primary metric: **duplicate side effects per 1,000 fault-injected runs**; secondary metrics are successful recovery rate and mean retries. Baseline: ordinary LangGraph retry/resume without the ledger.
+
+**Biggest failure mode.** Some external APIs cannot be reliably queried to determine whether an ambiguous operation succeeded, leaving an unavoidable “unknown outcome” state.
+
+**Effort.** **4–6 developer-days. Unverified estimate.**
+
+**Interview pitch.** “I added transaction-style side-effect semantics to an LLM workflow and proved with fault injection that graph retries do not duplicate real-world actions.”
+
+### Provenance- and expiry-aware personal memory
+
+**Idea.** Memory entries carry `source`, `observed_at`, `valid_until`, confidence, correction lineage and sensitivity. User statements can supersede inferred preferences; volatile facts such as application status expire or are revalidated; untrusted webpages cannot silently create durable preferences or authorization-relevant memories.
+
+**Closest existing work.** Letta already supports persistent and user-editable memory, so editable memory is not novel. citeturn193056search37turn193056search47 MemoryAgentBench explicitly identifies retrieval, learning, long-range understanding and selective forgetting as separate competencies. citeturn613524academia1 The meaningful difference would be a small policy-driven memory lifecycle tied to personal-workflow provenance.
+
+**Architecture.** `candidate_memory → provenance_check → memory_policy → [discard | ephemeral | persistent] → contradiction_check → store`. Use relational metadata plus your existing hybrid retrieval stack rather than introducing another memory framework. Retrieval discounts stale records; corrections create supersession links rather than silently overwriting history.
+
+**Measurement.** Create longitudinal scenarios where preferences change, jobs close, repositories change state and injected pages attempt to persist instructions. Metrics: stale-memory usage rate, correction adoption rate, retrieval precision, malicious-memory-write rate and token overhead.
+
+**Biggest failure mode.** The feature looks like metadata around ChromaDB instead of a substantive systems contribution.
+
+**Effort.** **4–6 developer-days. Unverified estimate.**
+
+**Interview pitch.** “I treated agent memory as governed state rather than vector search, with provenance, expiry, corrections and tests for stale or poisoned memories.”
+
+## Red-team of the candidate ideas
+
+### Provenance-aware capability firewall
+
+**Argument against it.** CaMeL already provides the intellectual core: untrusted data should not control privileged operations, and capabilities/data-flow constraints can enforce this. citeturn585785academia11turn585785search2 Task Shield provides another directly relevant action-alignment defense. citeturn585785search5 Calling your implementation “novel prompt-injection defense” would not survive scrutiny.
+
+**Why it survives anyway.** The course project can legitimately contribute an **engineering adaptation and evaluation**, provided you say exactly that. The scope is narrower and operational: personal workflow sources, MCP tools, simple provenance classes, explicit authorization, and a reproducible attack suite. The strongest technical artifact is the policy/trace dataset and measured security-utility trade-off, not an originality claim about capability security.
+
+**Verdict: KEEP.**
+
+### Privacy- and utility-aware model router
+
+**Argument against it.** Routing is crowded, and current papers already jointly reason about quality, cost and latency. citeturn970653academia8turn970653academia9 Worse, a very recent evaluation found six commercial routers failed to beat a simple matched-cost random/two-model setup. citeturn970653academia6 A learned classifier trained on 200 student-project examples would be hard to defend.
+
+**Why it survives, narrowly.** Implement the router as a **measurement study plus policy**, not an ML novelty. Privacy constraints are the useful twist. Start with a two-model or rules baseline and only add complexity if offline results prove it helps.
+
+**Verdict: KEEP, but explicitly cap complexity. Do not train a neural router.**
+
+### Replayable agent regression and prompt laboratory
+
+**Argument against it.** LangSmith already has almost the entire generic feature list: versioned datasets, regression tests, backtesting, prompt comparison, traces and trajectory checks. citeturn970653search1turn970653search3turn970653search5 A homegrown dashboard would be inferior duplication.
+
+**Why it survives.** It should not be a standalone headline feature. It is the **evaluation substrate required to prove the security and reliability claims**. Use LangSmith where useful, but keep deterministic fixtures and mock MCP servers under your control so the project can be tested offline and reproduced.
+
+**Verdict: KEEP AS INFRASTRUCTURE, NOT AS THE PROJECT’S NOVEL FEATURE.**
+
+### Idempotent side-effect ledger
+
+**Argument against it.** Idempotency is decades-old distributed-systems engineering, not AI research. A reviewer could reasonably say this is just proper backend design.
+
+**Why it survives.** That is precisely why it is defensible. Agents are nondeterministic orchestrators placed on top of systems with side effects, while LangGraph intentionally supports retries and recovery. citeturn899900search11 Showing the mismatch empirically through fault injection demonstrates systems competence. It also fits the time limit better than attempting novel learning algorithms.
+
+**Verdict: KEEP.**
+
+### Provenance- and expiry-aware memory
+
+**Argument against it.** Letta already exposes editable structured memory and memory review, while Mem0 provides a mature memory layer. citeturn193056search37turn193056search5 MemoryAgentBench and Evo-Memory mean memory lifecycle evaluation is also an active, established research topic. citeturn613524academia1turn613524academia2 In six to eight weeks, a thin TTL scheme is unlikely to be more impressive than strong execution security or failure recovery.
+
+**Why it does not survive the opportunity-cost test.** You need memory for the product, but it should be minimal: explicit user preferences, task/application state, source timestamp and manual correction. A dedicated “novel memory architecture” would consume evaluation time without a proportional interview payoff.
+
+**Verdict: DELETE AS A DEEP FEATURE. Keep only minimal governed memory in the core.**
+
+After red-teaming, the strong components are therefore **capability security**, **privacy-aware routing**, **fault-safe execution**, with the **replay harness as mandatory supporting infrastructure**.
+
+## Recommended project scopes
+
+| Scope | Contents | Resume impact | Technical risk | Estimated effort |
+|---|---|---|---|---|
+| **Security-first narrow** | Minimal personal agent + provenance firewall + adversarial replay suite | **Very high** if benchmarked well; clear threat model and measurable result | Medium; security policy can hurt utility | ~30–36 part-time dev-days, **unverified estimate** |
+| **Systems-first balanced** | Minimal core + provenance firewall + side-effect ledger + small privacy router + replay suite | **Highest overall**: security, distributed-systems reasoning, evaluation and model engineering | Medium-high but each feature is independently shippable | ~35–43 part-time dev-days, **unverified estimate** |
+| **Feature-rich agent** | Core + sophisticated routing + deep memory + dashboards + many integrations | Superficially broad but weaker defensibility; overlaps strongly with existing products | High; likely unfinished or shallow | ~45–60+ part-time dev-days, **unverified estimate** |
+
+### Recommended scope
+
+Choose **systems-first balanced**, but impose a strict sequencing rule: **no novel subsystem begins until the minimal core passes a deterministic end-to-end test**.
+
+This recommendation is an **inference**, not a factual claim. It follows from three pieces of evidence: commodity agent platforms already cover the basic integrations; strong research already exists for isolated security and routing primitives; and contemporary agent testing guidance stresses trajectory/regression evaluation rather than judging only final answers. citeturn631440search0turn193056search36turn585785academia11turn970653academia6turn970653search4
+
+### Minimal core definition
+
+The minimal core should contain only the following production path:
+
+`collect → normalize → deduplicate → rank/triage → persist → build briefing`
+
+Email should read messages and classify urgency/actionability; GitHub should ingest notifications, PRs, issues and selected repository events; the job collector should use public career pages, job boards with permissible access, and email alerts rather than direct LinkedIn scraping; tasks should have explicit status/deadline/source fields; the briefing should merge those streams into deterministic sections before any model-generated prose is added. The core should support at least one Ollama model and one cloud model through a common LangChain-facing interface, because the eventual routing layer depends on that abstraction.
+
+Use MCP where it creates an actual boundary: `gmail-mcp`, `github-mcp`, `jobs-mcp`, and `tasks-mcp` are sensible because they expose independent permission domains. LangChain’s current MCP integration can act as the client layer, including multi-server tool discovery, while LangGraph provides workflow state, durable execution and interrupts. citeturn899900search0turn899900search3turn899900search11 A small MCP server that exposes your agent’s read-only briefing/search capabilities back to other clients would satisfy the “MCP server” requirement without inventing unnecessary infrastructure.
+
+### Week-by-week build plan
+
+**Week one — deterministic core and data contracts.** Implement normalized Pydantic schemas for `EmailEvent`, `GitHubEvent`, `JobOpening`, `Task`, `MemoryFact` and `ActionIntent`. Build read-only Gmail and GitHub ingestion first, followed by one job source plus email job alerts. Store raw IDs, timestamps and source URLs so every object is traceable. Define a LangGraph with explicit nodes rather than a free-form ReAct loop. Use your existing BGE/BM25/cross-encoder stack only where ranking is demonstrably useful; do not insert RAG into every node. This schedule is a project recommendation, so the effort allocation is **unverified**.
+
+**Week two — complete the minimal core.** Add deduplication, job relevance scoring, task extraction, and a deterministic daily briefing schema. Implement provider adapters for Ollama, OpenAI, Gemini and OpenRouter, but initially choose them by configuration rather than routing intelligence. Wrap email/GitHub/jobs/tasks as MCP servers or thin MCP façades and verify client/server usage end-to-end. The LangChain MCP stack already supplies the integration mechanics, so avoid building protocol infrastructure yourself. citeturn899900search0 Exit criterion: one command can replay a day of events and produce the same structured briefing without sending or mutating anything externally.
+
+**Week three — evaluation before autonomy.** Build fixture-based mock MCP servers and a golden corpus of normal, ambiguous and malicious events. Record allowed/forbidden tool trajectories and expected structured outputs. Add prompt version IDs and model IDs to every trace. LangSmith can be used for trace visualization and comparison, but the fixtures and assertions should live in the repository so the project remains reproducible outside a hosted service. LangSmith already supports regression, backtesting and trajectory evaluation, which you should reuse rather than recreate. citeturn970653search1turn970653search4 Exit criterion: prompt/model changes can be evaluated automatically against a frozen suite.
+
+**Week four — provenance-aware capability firewall.** Tag external email, GitHub and web/job content as untrusted. Add a deterministic authorization node before every mutating tool. Define perhaps five capabilities only: `read`, `local_write`, `external_create`, `external_modify`, `external_send`. Require approval when an action crosses a trust boundary or would transmit sensitive content. Test malicious emails and pages modeled after the indirect-injection threat demonstrated in WASP and addressed by CaMeL/Task Shield. citeturn613524academia0turn585785academia11turn585785search5 Exit criterion: report attack success rate and benign completion against a no-defense and prompt-only baseline.
+
+**Week five — idempotent execution and fault injection.** Introduce the action ledger and make every mutating MCP call go through `prepare → execute → verify → commit`. Inject crashes and timeouts at each boundary. LangGraph’s durable execution should resume the workflow state, while your ledger protects external side effects. citeturn899900search11 Exit criterion: a table showing duplicate-action rate and recovery success over at least several hundred automated fault runs.
+
+**Week six — simple privacy router.** Benchmark each available model on your frozen task slices. Create hard privacy rules first and a small measured selection policy second. Compare against always-local, always-best-cloud and a simple two-model rule. Do not implement learned routing unless it produces a statistically credible improvement over those baselines; recent evidence gives you a strong reason to expect simple policies may be competitive. citeturn970653academia6turn970653academia8 Exit criterion: one Pareto-style table with quality, p95 latency, monetary cost and sensitive-token egress.
+
+**Week seven — integration and ablations.** Run the entire workflow with security, recovery and routing together. Perform ablations: remove provenance enforcement; remove the ledger; replace the router with fixed cloud/local choice; weaken one prompt version. Measure how each subsystem changes attack success, utility, duplicates, cost and latency. This converts the project from “a collection of features” into an experimental systems report.
+
+**Week eight — hardening and presentation.** Freeze the evaluation dataset and prompts, run final repeated experiments, document threat model and known limitations, and create one architecture diagram plus four concise result tables: task quality, security, fault recovery and routing. Remove any feature that lacks a measured result. Do not spend the final week adding calendar, Slack, Discord or another job source unless all experiments are already reproducible.
+
+### What the final project should claim
+
+A defensible claim would be:
+
+> “I built a LangGraph personal automation agent using MCP-isolated tools and evaluated three control-plane mechanisms: provenance-based authorization against indirect prompt injection, idempotent recovery under partial failures, and privacy-constrained model routing across local and cloud LLMs.”
+
+That claim does **not** assert that capability security, model routing, MCP, persistent agents or regression testing are your inventions. Those already exist. citeturn585785academia11turn970653academia9turn899900search5turn970653search1 The contribution is that you integrate a deliberately constrained subset, construct a personal-workflow benchmark, and produce empirical evidence about the trade-offs.
+
+## Verification limits and unresolved questions
+
+**Could not verify:** I did not find a public, primary-source system that exactly combines personal email + GitHub + job collection with provenance-derived least privilege, fault-injected idempotency evaluation, and privacy-constrained local/cloud routing. That is an **absence-from-search result, not proof that no such system exists**.
+
+**Could not verify:** I found commercial products with email, GitHub, scheduling, approvals and large integration catalogs, but their public material does not expose enough implementation detail to determine whether they have unpublished internal capability-taint tracking, transactional side-effect ledgers or privacy routers. citeturn631440search0turn631440search25turn193056search36turn631440search6 Any assertion that they categorically lack those mechanisms would therefore be **unverified**.
+
+**Could not verify:** The exact best model/provider combination for your workload cannot be established from public benchmarks. The 2026 routing literature specifically indicates that routing quality depends on roster, task distribution, latency environment and evaluation objective. citeturn970653academia6turn970653academia7turn970653academia8 Your own frozen workload is therefore the appropriate benchmark.
+
+**Could not verify:** A six-to-eight-week part-time completion estimate is inherently dependent on API familiarity, OAuth setup, UI scope and provider availability. All day/week effort figures in this report are explicitly **unverified engineering estimates** rather than externally sourced facts.
+
+**Final inference.** The strongest project is not a “smarter personal assistant.” It is a **small personal-agent testbed with measurable safety and systems properties**. The email/GitHub/jobs/briefing functionality should be treated as the workload on which you demonstrate those properties, not as the research contribution itself.

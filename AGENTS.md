@@ -1,0 +1,22 @@
+# Sentinel contributor rules
+
+- Always read `docs/BUILD_LEDGER.md` before starting a task.
+- Consult the Master Blueprint for applicable feature IDs, policy requirements, dependencies, and release gates.
+- Treat the latest Master Blueprint as authoritative.
+- Do not invent package compatibility, implemented features, benchmark results, or test outcomes.
+- Verify dependency versions from real registries and relevant behavior from official documentation.
+- Do not commit secrets, tokens, credentials, personal information, private mailbox data, or real user records.
+- Use synthetic fixtures only.
+- No TODO, pass-only placeholder, stub, or `NotImplemented` function may be presented as completed functionality.
+- Write and execute tests with every implementation slice.
+- Run the full available test, lint, and type-check commands before reporting completion.
+- Update `docs/BUILD_LEDGER.md` with actual evidence, commit identifiers, limitations, and open issues.
+- Create ADRs for deviations from the authoritative blueprint.
+- Never weaken P00-P03 hard invariants or bypass later security gates.
+- All future model calls must use `ModelGateway`, and all future tool calls must use `ToolGateway`.
+- External writes remain disabled until their release and approval gates pass.
+- Never expose an approval tool through MCP.
+- Do not fabricate evaluation results.
+- Stop and report blockers rather than inventing solutions.
+- Do not broaden the requested slice without approval.
+- Do not delete or rewrite previous tests merely to obtain passing results.
