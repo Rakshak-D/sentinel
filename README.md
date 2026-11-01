@@ -8,6 +8,32 @@ This slice establishes the repository rules, a Python package, and an installabl
 
 There is no agent, model adapter, MCP worker, policy engine, approval system, provider integration, database, daemon, or frontend. `init`, `doctor`, and `demo` are not available. No model, HTTP provider, MCP, or external-tool calls are made. External writes are unavailable. The CLI bootstrap does not demonstrate later security invariants.
 
+## CR0-B contract API
+
+`sentinel.contracts` exports the immutable `SourceEnvelope`, `ByteSpan`, and `BoundaryEnvelope` models, their `TrustLabel`, `SensitivityLabel`, and `BoundaryKind` enums, and `canonical_json_bytes` / `canonical_sha256` helpers. The models use UUID identifiers, timezone-aware UTC-normalized timestamps, lowercase 64-character SHA-256 hex digests, `sha256:<hex>` content references, tuples for nested collections, and reject undeclared fields.
+
+```python
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from sentinel.contracts import SensitivityLabel, SourceEnvelope, TrustLabel
+
+source = SourceEnvelope(
+    source_id=uuid4(),
+    provider_id="synthetic-source",
+    content_sha256="a" * 64,
+    observed_at=datetime.now(UTC),
+    trust=TrustLabel.T4_EXTERNAL,
+    sensitivity=SensitivityLabel.PRIVATE,
+    parent_ids=(),
+    byte_spans=(),
+)
+```
+
+`BoundaryEnvelope.kind` classifies `model` or `tool`. Request and response payloads are represented by content references and matching digests, not embedded bodies. Optional response reference/digest and error code fields must be supplied explicitly as a value or `None`. Byte spans enforce `0 <= start_byte < end_byte`; because the source body length is not part of the blueprint's SourceEnvelope schema, the envelope cannot validate an upper bound against that body.
+
+These contracts validate shape only. A `T1 OWNER_INTENT` value is a declaration, not proof of owner authentication; callers must not accept T0/T1 labels from untrusted source content. No generic external-payload factory is provided. The contracts do not authorize or execute actions. Canonical JSON is limited to exact contract types and is not the future approval digest or audit-chain algorithm.
+
 ## Windows PowerShell setup
 
 Install pyenv-win and Python 3.11.7 if not already available, then from the repository root:
