@@ -10,7 +10,8 @@ Canonical project status. Statuses describe implementation evidence, not the blu
 | Blueprint SHA-256 | `92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7` |
 | Current release / active slice | CR0 / CR0-A — Repository foundation, governance, and installable CLI bootstrap |
 | Branch | `main` |
-| Commit | Pending initial local commit; record its SHA in the final ledger update |
+| Initial implementation commit | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` (root commit; author email uses GitHub noreply) |
+| Private remote | `https://github.com/Rakshak-D/sentinel` (`origin`, `main` pushed) |
 | Environment | Windows, pyenv-win 3.11.7, project-local `.venv` |
 | Selected interpreter | Python 3.11.7 (`.venv\Scripts\python.exe`) |
 | Dependency management | `pyproject.toml`, setuptools build backend, pip through explicit venv interpreter; no lockfile yet |
@@ -163,5 +164,5 @@ Dependency resolution used the live PyPI registry through the project venv and c
 
 | Step | Commit | Tests/checks | Outcome |
 |---|---|---|---|
-| CR0-A implementation and first acceptance pass | Pending initial commit | `pip install -e ".[dev]"`: success; `pip check`: “No broken requirements found.”; `pytest -q`: 6 passed; `ruff check .`: “All checks passed!”; `mypy src/sentinel`: “Success: no issues found in 2 source files”; `build --wheel`: built `sentinel-0.1.0-py3-none-any.whl`; `sentinel --help`: exit 0 and lists `version`; `sentinel version`: exit 0 and prints `0.1.0`. | All mandatory local acceptance commands passed after fixing the first test run's real Typer/test assertion failures. Build and registry install succeeded. No later security capability claimed. |
-| Governance/data review | Pending initial commit | Governance test confirms required IDs/files; credential-pattern scan returned no matches; `.venv`, caches, build, dist, and egg-info are ignored; no runtime DB exists. | Reference documents are preserved and included only after this review. |
+| CR0-A implementation and acceptance | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` | `pip install -e ".[dev]"`: success; `pip check`: “No broken requirements found.”; `pytest -q`: 6 passed; `ruff check .`: “All checks passed!”; `mypy src/sentinel`: “Success: no issues found in 2 source files”; `build --wheel`: built `sentinel-0.1.0-py3-none-any.whl`; `sentinel --help`: exit 0 and lists `version`; `sentinel version`: exit 0 and prints `0.1.0`. | All mandatory local acceptance commands passed after fixing the first test run's real Typer/test assertion failures. Build and registry install succeeded. No later security capability claimed. |
+| Governance/data review and publication | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` | Governance test confirms required IDs/files; credential-pattern scan returned no matches; email-address scan of references returned no matches; `.venv`, caches, build, dist, and egg-info are ignored; no runtime DB exists. `gh auth status` passed. Private repo created; initial push was rejected for private commit email, unpublished local root commit was amended to noreply, then push of `main` succeeded. | Reference documents were reviewed and included. Remote is private: `https://github.com/Rakshak-D/sentinel`. |
