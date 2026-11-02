@@ -1,6 +1,7 @@
 """Tests for fixed, ordered and atomic schema migrations."""
 
 import sqlite3
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,13 @@ from sentinel.storage.migrations import (
     initialize_storage,
     verify_integrity,
 )
+from sentinel.storage.schema import (
+    FOUNDATION_SCHEMA,
+    MIGRATION_INDEX_DDL,
+    MIGRATION_TABLE_DDL,
+    SchemaDefinition,
+    SchemaObjectDefinition,
+)
 
 
 def _applied_rows(database: Path) -> list[tuple[object, ...]]:
@@ -26,6 +34,40 @@ def _applied_rows(database: Path) -> list[tuple[object, ...]]:
 
 def _initialize(database: Path, *, app_build: str = "sentinel-0.1.0") -> None:
     initialize_storage(database, app_build=app_build, create=True)
+
+
+_EXPANSION_TABLE_SQL = """CREATE TABLE test_migration_items (
+    item_id TEXT NOT NULL PRIMARY KEY,
+    item_value TEXT NOT NULL CHECK (length(item_value) > 0)
+)"""
+_EXPANSION_INDEX_SQL = (
+    "CREATE INDEX test_migration_items_value_idx "
+    "ON test_migration_items(item_value)"
+)
+
+
+def _schema_checkpoint(
+    migration_id: str,
+    *objects: SchemaObjectDefinition,
+) -> SchemaDefinition:
+    return SchemaDefinition(
+        schema_version=migration_id,
+        objects=(*FOUNDATION_SCHEMA.objects, *objects),
+    )
+
+
+def _schema_expansion_migration() -> Migration:
+    return Migration(
+        "test-0002-schema-expansion",
+        (_EXPANSION_TABLE_SQL, _EXPANSION_INDEX_SQL),
+        _schema_checkpoint(
+            "test-0002-schema-expansion",
+            SchemaObjectDefinition("table", "test_migration_items", _EXPANSION_TABLE_SQL),
+            SchemaObjectDefinition(
+                "index", "test_migration_items_value_idx", _EXPANSION_INDEX_SQL
+            ),
+        ),
+    )
 
 
 def test_initial_migration_creates_only_normative_migration_metadata(
@@ -74,8 +116,8 @@ def test_registry_migrations_apply_in_declared_order(
     database = tmp_path / "ordered.sqlite3"
     registered = (
         *migration_module.MIGRATIONS,
-        Migration("test-0002", ("SELECT 2",)),
-        Migration("test-0003", ("SELECT 3",)),
+        Migration("test-0002", ("SELECT 2",), _schema_checkpoint("test-0002")),
+        Migration("test-0003", ("SELECT 3",), _schema_checkpoint("test-0003")),
     )
     monkeypatch.setattr(migration_module, "MIGRATIONS", registered)
 
@@ -86,6 +128,328 @@ def test_registry_migrations_apply_in_declared_order(
         "test-0002",
         "test-0003",
     ]
+
+
+def test_trusted_schema_expansion_creates_a_real_table_and_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "schema-expansion.sqlite3"
+    migration = _schema_expansion_migration()
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, migration),
+    )
+
+    applied = initialize_storage(database, create=True)
+
+    assert applied == ("cr0-c-0001-schema-migrations", migration.migration_id)
+    with database_connection(database) as connection:
+        table = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+            ("test_migration_items",),
+        ).fetchone()
+        index = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+            ("test_migration_items_value_idx",),
+        ).fetchone()
+    assert table is not None and "CHECK (length(item_value) > 0)" in table[0]
+    assert index is not None and "ON test_migration_items(item_value)" in index[0]
+    with database_connection(database) as connection:
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO test_migration_items (item_id, item_value) VALUES (?, ?)",
+                ("synthetic-invalid", ""),
+            )
+
+
+def test_index_only_migration_uses_registered_schema_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "index-only.sqlite3"
+    index_name = "schema_migrations_build_idx"
+    index_sql = f"CREATE INDEX {index_name} ON schema_migrations(app_build)"
+    migration = Migration(
+        "test-0002-index-only",
+        (index_sql,),
+        _schema_checkpoint(
+            "test-0002-index-only",
+            SchemaObjectDefinition("index", index_name, index_sql),
+        ),
+    )
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, migration),
+    )
+
+    assert initialize_storage(database, create=True)[-1] == migration.migration_id
+    with database_connection(database) as connection:
+        index = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+            (index_name,),
+        ).fetchone()
+    assert index == (index_sql,)
+
+
+def test_data_only_migration_reuses_the_complete_schema_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "data-only.sqlite3"
+    create_items = _schema_expansion_migration()
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, create_items),
+    )
+    initialize_storage(database, create=True)
+    with database_connection(database) as connection:
+        connection.execute(
+            "INSERT INTO test_migration_items (item_id, item_value) VALUES (?, ?)",
+            ("synthetic-before-data-migration", "before"),
+        )
+    data_migration_id = "test-0003-data-only"
+    data_migration = Migration(
+        data_migration_id,
+        ("UPDATE test_migration_items SET item_value = 'after'",),
+        SchemaDefinition(
+            schema_version=data_migration_id,
+            objects=create_items.schema_after.objects,
+        ),
+    )
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, data_migration),
+    )
+
+    assert initialize_storage(database) == (data_migration_id,)
+    with database_connection(database) as connection:
+        row = connection.execute(
+            "SELECT item_value FROM test_migration_items WHERE item_id = ?",
+            ("synthetic-before-data-migration",),
+        ).fetchone()
+    assert row == ("after",)
+
+
+def test_existing_database_upgrades_without_losing_migration_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "upgrade-existing.sqlite3"
+    with database_connection(database, create=True) as connection:
+        connection.execute(MIGRATION_TABLE_DDL)
+        connection.execute(MIGRATION_INDEX_DDL)
+        connection.execute(
+            """INSERT INTO schema_migrations
+               (migration_id, applied_at, artifact_sha256, app_build, success)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                "cr0-c-0001-schema-migrations",
+                "2026-11-02T00:00:00.000000+00:00",
+                "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217",
+                "sentinel-before-upgrade",
+                1,
+            ),
+        )
+    old_rows = _applied_rows(database)
+    migration = _schema_expansion_migration()
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, migration),
+    )
+
+    applied = initialize_storage(database)
+
+    assert applied == (migration.migration_id,)
+    rows = _applied_rows(database)
+    assert [row[0] for row in rows] == [
+        "cr0-c-0001-schema-migrations",
+        migration.migration_id,
+    ]
+    assert rows[0] == old_rows[0]
+    assert rows[0][3] == "sentinel-before-upgrade"
+    assert rows[0][2] == migration_module.MIGRATIONS[0].artifact_sha256
+    assert rows[1][2] == migration.artifact_sha256
+
+
+def test_reopening_upgraded_database_is_idempotent_and_preserves_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "reopen-upgraded.sqlite3"
+    migration = _schema_expansion_migration()
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, migration),
+    )
+    initialize_storage(database, create=True)
+    with database_connection(database) as connection:
+        connection.execute(
+            "INSERT INTO test_migration_items (item_id, item_value) VALUES (?, ?)",
+            ("synthetic-item-1", "preserved"),
+        )
+    before = _applied_rows(database)
+
+    assert initialize_storage(database) == ()
+
+    with database_connection(database) as connection:
+        items = connection.execute(
+            "SELECT item_id, item_value FROM test_migration_items"
+        ).fetchall()
+    assert _applied_rows(database) == before
+    assert items == [("synthetic-item-1", "preserved")]
+
+
+@pytest.mark.parametrize(
+    "missing_object",
+    ("test_migration_items", "test_migration_items_value_idx"),
+)
+def test_missing_expected_expansion_objects_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_object: str,
+) -> None:
+    database = tmp_path / "missing-expanded-object.sqlite3"
+    migration = _schema_expansion_migration()
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, migration),
+    )
+    initialize_storage(database, create=True)
+    with database_connection(database) as connection:
+        object_type = "table" if missing_object == "test_migration_items" else "index"
+        connection.execute(f"DROP {object_type.upper()} {missing_object}")
+
+    with pytest.raises(MigrationIntegrityError, match="schema drift"):
+        initialize_storage(database)
+
+
+def test_new_artifact_hash_covers_its_expected_schema_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "schema-checkpoint-hash.sqlite3"
+    migration = _schema_expansion_migration()
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, migration),
+    )
+    initialize_storage(database, create=True)
+    changed_table = """CREATE TABLE test_migration_items (
+    item_id TEXT NOT NULL PRIMARY KEY,
+    item_value TEXT NOT NULL CHECK (length(item_value) > 1)
+)"""
+    altered = Migration(
+        migration.migration_id,
+        migration.statements,
+        _schema_checkpoint(
+            migration.migration_id,
+            SchemaObjectDefinition("table", "test_migration_items", changed_table),
+            SchemaObjectDefinition(
+                "index", "test_migration_items_value_idx", _EXPANSION_INDEX_SQL
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (migration_module.MIGRATIONS[0], altered),
+    )
+
+    with pytest.raises(MigrationIntegrityError, match="artifact digest mismatch"):
+        initialize_storage(database)
+
+
+def test_foundation_migration_artifact_hash_remains_unchanged() -> None:
+    assert migration_module.MIGRATIONS[0].artifact_sha256 == (
+        "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217"
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "CREATE TABLE unauthorized_table (item_id TEXT PRIMARY KEY)",
+        "CREATE INDEX unauthorized_index ON schema_migrations(app_build)",
+        "CREATE TRIGGER unauthorized_trigger AFTER INSERT ON schema_migrations "
+        "BEGIN SELECT 1; END",
+        "CREATE VIEW unauthorized_view AS SELECT migration_id FROM schema_migrations",
+    ),
+)
+def test_unauthorized_schema_objects_are_rejected(
+    tmp_path: Path,
+    statement: str,
+) -> None:
+    database = tmp_path / "unauthorized-object.sqlite3"
+    _initialize(database)
+    with database_connection(database) as connection:
+        connection.execute(statement)
+
+    with pytest.raises(MigrationIntegrityError, match="schema drift"):
+        _initialize(database)
+
+
+def test_altered_table_constraints_are_rejected_as_schema_drift(tmp_path: Path) -> None:
+    database = tmp_path / "altered-constraint.sqlite3"
+    _initialize(database)
+    with database_connection(database) as connection:
+        connection.execute(
+            """CREATE TABLE replacement_schema_migrations (
+                migration_id TEXT NOT NULL PRIMARY KEY,
+                applied_at TEXT NOT NULL,
+                artifact_sha256 TEXT NOT NULL,
+                app_build TEXT NOT NULL,
+                success INTEGER NOT NULL CHECK (success IN (0, 1))
+            )"""
+        )
+        connection.execute(
+            """INSERT INTO replacement_schema_migrations
+               SELECT migration_id, applied_at, artifact_sha256, app_build, success
+               FROM schema_migrations"""
+        )
+        connection.execute("DROP TABLE schema_migrations")
+        connection.execute(
+            "ALTER TABLE replacement_schema_migrations RENAME TO schema_migrations"
+        )
+        connection.execute(
+            "CREATE INDEX schema_migrations_applied_at_idx ON schema_migrations(applied_at)"
+        )
+
+    with pytest.raises(MigrationIntegrityError, match="schema drift"):
+        _initialize(database)
+
+
+def test_applied_migrations_must_be_a_registered_ordered_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = tmp_path / "prefix-gap.sqlite3"
+    _initialize(database)
+    second = Migration("test-0002", ("SELECT 2",), _schema_checkpoint("test-0002"))
+    third = Migration("test-0003", ("SELECT 3",), _schema_checkpoint("test-0003"))
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS, second, third),
+    )
+    with database_connection(database) as connection:
+        first_applied_at = connection.execute(
+            "SELECT applied_at FROM schema_migrations WHERE migration_id = ?",
+            (migration_module.MIGRATIONS[0].migration_id,),
+        ).fetchone()[0]
+        later_applied_at = (
+            datetime.fromisoformat(first_applied_at) + timedelta(microseconds=1)
+        ).isoformat(timespec="microseconds")
+        connection.execute(
+            """INSERT INTO schema_migrations
+               (migration_id, applied_at, artifact_sha256, app_build, success)
+               VALUES (?, ?, ?, ?, ?)""",
+            (third.migration_id, later_applied_at, third.artifact_sha256, "fixture", 1),
+        )
+
+    with pytest.raises(MigrationIntegrityError, match="registered order"):
+        _initialize(database)
 
 
 def test_unknown_previously_applied_migration_fails_closed(tmp_path: Path) -> None:
@@ -130,6 +494,8 @@ def test_changed_registered_migration_content_fails_digest_verification(
     changed_foundation = Migration(
         "cr0-c-0001-schema-migrations",
         ("SELECT 'altered synthetic artifact'",),
+        FOUNDATION_SCHEMA,
+        artifact_version=1,
     )
     monkeypatch.setattr(migration_module, "MIGRATIONS", (changed_foundation,))
 
@@ -179,8 +545,16 @@ def test_failed_multistatement_migration_rolls_back_every_statement_and_record(
     failing = Migration(
         "test-0002-failure",
         (
-            "CREATE TABLE should_rollback (record_id TEXT PRIMARY KEY)",
+            "CREATE TABLE should_rollback (record_id TEXT NOT NULL PRIMARY KEY)",
             "INSERT INTO absent_table VALUES ('synthetic')",
+        ),
+        _schema_checkpoint(
+            "test-0002-failure",
+            SchemaObjectDefinition(
+                "table",
+                "should_rollback",
+                "CREATE TABLE should_rollback (record_id TEXT NOT NULL PRIMARY KEY)",
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -208,7 +582,11 @@ def test_operational_migration_failure_is_not_reported_as_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "operational-failure.sqlite3"
-    failing = Migration("test-0002-operational", ("THIS IS NOT SQL",))
+    failing = Migration(
+        "test-0002-operational",
+        ("THIS IS NOT SQL",),
+        _schema_checkpoint("test-0002-operational"),
+    )
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",

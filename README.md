@@ -52,9 +52,39 @@ with TemporaryDirectory() as directory:
         print(connection.execute("PRAGMA foreign_keys").fetchone())
 ```
 
-Migrations are trusted Python artifacts registered in the ordered `MIGRATIONS` tuple in `sentinel.storage.migrations`. Each artifact is represented by its migration ID and ordered single-statement SQL strings; canonical UTF-8 JSON bytes are SHA-256 hashed. The current initial migration, `cr0-c-0001-schema-migrations`, creates the normative `schema_migrations` table and its `applied_at` index only. It does not create application data tables.
+Migrations are trusted Python artifacts registered in the ordered `MIGRATIONS` tuple in `sentinel.storage.migrations`. Every migration declares ordered single-statement SQL and a complete `SchemaDefinition` for the expected database after that migration. A checkpoint lists each expected table, index, view, and trigger with its trusted DDL. Registration is source code review; there is no runtime API for loading SQL or schema allowlists from a database, CLI input, or model output. A data-only migration still registers the full unchanged object inventory under its new migration ID.
 
-Initialization verifies the exact migration metadata schema, applied migration IDs/order/digests, and SQLite integrity and foreign-key checks. Untracked schema, unknown or changed migration records, malformed metadata, and schema drift fail closed without automatic repair. Every migration runs under `BEGIN IMMEDIATE`; individual statements use `execute()` rather than `executescript()`. A failure rolls back all statements and its success record together. A failed migration does not leave a successful metadata row.
+For example, a future source migration would add trusted DDL and a checkpoint that includes all existing schema objects plus the new table and indexes:
+
+```python
+from sentinel.storage.migrations import Migration
+from sentinel.storage.schema import FOUNDATION_SCHEMA, SchemaDefinition, SchemaObjectDefinition
+
+source_items_sql = (
+    "CREATE TABLE source_items "
+    "(item_id TEXT NOT NULL PRIMARY KEY, created_at TEXT NOT NULL)"
+)
+source_index_sql = "CREATE INDEX source_items_created_at_idx ON source_items(created_at)"
+source_checkpoint = SchemaDefinition(
+    schema_version="cr0-example-0002-source-items",
+    objects=(
+        *FOUNDATION_SCHEMA.objects,
+        SchemaObjectDefinition("table", "source_items", source_items_sql),
+        SchemaObjectDefinition("index", "source_items_created_at_idx", source_index_sql),
+    ),
+)
+source_migration = Migration(
+    "cr0-example-0002-source-items",
+    (source_items_sql, source_index_sql),
+    source_checkpoint,
+)
+```
+
+The application registry must include the migration in order. New migration artifact v2 hashes include both SQL and the complete schema checkpoint. The existing foundation artifact stays on its original v1 canonical bytes and SHA-256; a separate pinned schema-definition digest protects its added checkpoint without invalidating existing databases. Each registered historical artifact digest is still checked on startup.
+
+The current initial migration, `cr0-c-0001-schema-migrations`, creates the normative `schema_migrations` table and its `applied_at` index only. It does not create production application data tables.
+
+Initialization selects the expected schema checkpoint from the last migration in the validated applied registry prefix. It compares all persisted schema object identities and DDL against that trusted checkpoint and verifies the normative migration metadata columns and indexes. This detects unexpected or missing objects and altered table constraints, indexes, views, and triggers. It also checks applied migration IDs/order/digests and SQLite integrity and foreign keys. Untracked schema, unknown or changed migration records, malformed metadata, partial application, and schema drift fail closed without automatic repair. Every migration runs under `BEGIN IMMEDIATE`; individual statements use `execute()` rather than `executescript()`. A failure rolls back all statements and its success record together. A failed migration does not leave a successful metadata row.
 
 These guarantees cover this local migration foundation, not application-wide ownership. WAL and `BEGIN IMMEDIATE` do not implement the §3 process-wide writer lease. Backup/restore, checkpoint workflows, encryption, redacted logs, keychain abstraction, application tables, and the rest of CR0 remain unavailable. Do not store secrets or raw private source bodies in this database. The migration registry is trusted code and is not an interface for model output, CLI SQL, or external migration files.
 

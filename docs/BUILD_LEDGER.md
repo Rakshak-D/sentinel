@@ -8,12 +8,13 @@ Canonical project status. Statuses describe implementation evidence, not the blu
 |---|---|
 | Authoritative blueprint | `docs/spec/Sentinel Master Blueprint.pdf` |
 | Blueprint SHA-256 | `92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7` |
-| Current release / active slice | CR0 / CR0-C — SQLite initialization and migration integrity |
+| Current release / active slice | CR0 / CR0-C correction — migration-aware schema checkpoint integrity |
 | Previous accepted slice | CR0-B; starting HEAD `13f17158597d8060688e8d60780dcb9c2b315c57` |
 | CR0-B slice status | VERIFIED (contract slice only; CR0 remains IN_PROGRESS) |
 | CR0-B implementation commit | `f5833df063807c0fe383d5a10109cd5e2657ac31` |
-| CR0-C slice status | VERIFIED (migration foundation only; CR0 remains IN_PROGRESS) |
+| CR0-C slice status | VERIFIED (migration foundation and trusted schema-checkpoint extension; CR0 remains IN_PROGRESS) |
 | CR0-C implementation commit | `784707ab813c4e974655fc50c03a131f468d69e4` |
+| CR0-C correction commit | Pending implementation commit after correction acceptance |
 | Branch | `main` |
 | Initial implementation commit | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` (root commit; author email uses GitHub noreply) |
 | GitHub remote | `https://github.com/Rakshak-D/sentinel` (`origin`, `main`; visibility PUBLIC as of 2026-11-02) |
@@ -25,6 +26,7 @@ Canonical project status. Statuses describe implementation evidence, not the blu
 | CR0-B dependency | Pydantic 2.14.2; pydantic-core 2.50.2; annotated-types 0.8.0; typing-inspection 0.4.4. Registry checked via PyPI through the local pip index; constrained as `pydantic>=2,<3`. No lockfile claimed. |
 | CR0-C SQLite runtime | SQLite 3.43.1, observed via `.venv\Scripts\python.exe -c "import sqlite3; print(sqlite3.sqlite_version)"` |
 | CR0-C migration artifact | `cr0-c-0001-schema-migrations`; canonical-artifact SHA-256 `b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217` |
+| CR0-C foundation schema checkpoint | SHA-256 `1f4d935bf45b5c09f68b4f6e3deb18846aa6d9ee14510eed89b3ab4a71139d30`; separately pinned to preserve historical migration artifact validation |
 
 The Master Blueprint does not define a one-to-one release assignment for every feature ID. The assignment column below is the ledger's dependency-based planning map; it does not claim a verbatim per-feature assignment from the blueprint. Names and scope states come from section 2.
 
@@ -77,13 +79,13 @@ The Master Blueprint does not define a one-to-one release assignment for every f
 | F43 | CLI + optional Textual | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; later CR1-CR4 surfaces | `src/sentinel/cli.py`; `tests/test_cli.py`; CR0-A acceptance output | Only `--help` and `version` bootstrap; full command tree, golden output, approval negative tests remain |
 | F44 | React web control plane | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Frontend/API absent |
 | F45 | Sentinel-as-MCP server | ACTIVE TARGET | NOT_STARTED | CR3 | Master Blueprint §2 | MCP adapter absent; approval must never be exposed |
-| F46 | Diagnostic/backup/restore/migrations | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; CR4/CR8 capability | `sentinel.storage`; `tests/test_storage_connection.py`; `tests/test_storage_migrations.py`; CR0-C acceptance output | Only foundational migration metadata exists; diagnostics, remaining database schema, backup/restore, and clean offline install remain unavailable |
+| F46 | Diagnostic/backup/restore/migrations | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; CR4/CR8 capability | `sentinel.storage`; `tests/test_storage_connection.py`; `tests/test_storage_migrations.py`; CR0-C correction acceptance output | Migration-aware schema checkpoints are supported; diagnostics, production application tables, backup/restore, and clean offline install remain unavailable |
 
 ## C. Release table CR0-CR9
 
 | Release | Dependency | Status | Exit criteria | Verified evidence |
 |---|---|---|---|---|
-| CR0 — Package and trust skeleton | Initial foundation | IN_PROGRESS (CR0-A, CR0-B, and CR0-C only) | Offline pinned install; wheel/CLI (`init`, `doctor`, `demo`); typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures | CR0-A CLI, CR0-B contracts, and CR0-C migration foundation tests; offline install and remaining CR0 deliverables not verified |
+| CR0 — Package and trust skeleton | Initial foundation | IN_PROGRESS (CR0-A, CR0-B, and CR0-C only) | Offline pinned install; wheel/CLI (`init`, `doctor`, `demo`); typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures | CR0-A CLI, CR0-B contracts, and CR0-C migration foundation/checkpoint tests; offline install and remaining CR0 deliverables not verified |
 | CR1 — Daily read/product core | CR0 | NOT_STARTED | Source normalization/citation tests; missing credentials clear; one-shot CLI restart behavior | None |
 | CR2 — Deterministic authorization | CR1 | NOT_STARTED | P00-P17 hard cases, no direct tool bypass, task idempotency/outbox crash matrix | None |
 | CR3 — MCP and regression platform | CR2 | NOT_STARTED | MCP conformance, no approve tools, replay without network, seeded mutations caught, manifest hashing | None |
@@ -156,6 +158,7 @@ Every case remains NOT_STARTED; the CLI bootstrap is not bypass-test evidence.
 - The blueprint assigns capability dependencies and release exits but does not give a one-to-one release label for every F01-F46 row. The feature release column is a dependency-based planning map, not a quoted blueprint assignment.
 - The blueprint requests the broader CR0 skeleton. CR0-A implements only package governance and two real CLI commands; remaining CR0 work is intentionally incomplete.
 - CR0-C interprets the first migration as the minimum legitimate slice: it creates only `schema_migrations` and its required `applied_at` index. The broader §10 application schema is deliberately not synthesized in this slice.
+- CR0-C correction root cause: the first storage implementation compared every database to a single foundation-only `EXPECTED_SCHEMA_OBJECTS` set after every migration, so a trusted migration adding application tables or indexes was rolled back. The correction selects a complete trusted schema checkpoint from the validated applied migration prefix; it does not learn allowed objects from SQLite contents.
 
 ## H. Open issues and verification blockers
 
@@ -164,6 +167,7 @@ Every case remains NOT_STARTED; the CLI bootstrap is not bypass-test evidence.
 - Complete CR0 clean offline install, remaining schema/migration inventory, redacted logs, keychain abstraction, default config, demo fixtures, and `init`, `doctor`, `demo` commands.
 - Decide supported Python/OS matrix and verify each selected interpreter/platform combination.
 - Later policy, provenance, approval, credential isolation, model/tool gateway, application-wide SQLite writer lease, and external-write gates are entirely unimplemented. Keep external writes disabled.
+- CR0-C correction regression evidence: a trusted test-only migration creates a real table with a CHECK constraint and an index; separate test-only migrations cover index-only and data-only schema checkpoints. Legacy foundation rows and application records remain preserved during upgrade/reopen. Extra/missing objects and changed checkpoint digests fail closed. No production application table was registered.
 - Credential-pattern scan of the proposed tracked files and supplied reference text found no matches; email-address scan of the references found no matches; Master Blueprint PDF metadata contains title/creator/producer only and no author field. References are preserved and safe for this initial commit review.
 - Package metadata is intentionally restricted to Python 3.11 (`>=3.11,<3.12`); Python 3.12 support is not claimed because it was not verified in this slice.
 
@@ -177,6 +181,8 @@ The canonical helpers accept only the exact two contract classes and revalidate 
 
 CR0-C schema decisions: the first transaction creates only the normative `schema_migrations` table (`migration_id`, `applied_at`, `artifact_sha256`, `app_build`, `success`) and its `applied_at` index; no application table is inferred from the broader §10 inventory. The registered artifact `cr0-c-0001-schema-migrations` hashes canonical UTF-8 JSON containing the migration ID and ordered SQL statements. Successful rows record `success=1`; a failed migration rolls back its effects and row together rather than persisting a failed row. Applied timestamps are UTC ISO-8601 with microseconds, and histories must form the registry's ordered prefix. Missing DB files are refused by default; file creation requires `create=True`. Foreign-key enforcement is set and checked per connection; file databases must successfully enable WAL; the default busy timeout is 5 seconds, bounded to 60 seconds. SQLite integrity and foreign-key checks run before each migration commit and on initialized storage. WAL and `BEGIN IMMEDIATE` are not the §3 application-wide process writer lease. No migration bootstrap occurs outside a transaction.
 
+CR0-C correction design: each trusted migration registers a complete `SchemaDefinition` checkpoint for its post-migration schema. The verifier compares the exact set of table/index/view/trigger objects and their DDL, plus the normative `schema_migrations` columns/index and SQLite integrity checks. It selects the checkpoint associated with the last ID in the validated applied migration prefix. New artifact v2 digests include both ordered SQL and checkpoint content; data-only migrations carry the full unchanged object inventory at a new checkpoint version. The foundation remains artifact v1 with its original canonical bytes and SHA-256, and its checkpoint has an independent pinned SHA-256. Test-only migrations cover real table/index/constraint expansion, index-only and data-only changes, legacy database upgrade, preservation, repeat initialization, altered checkpoint digest, unregistered schema objects, and rollback. No production application schema migration is added.
+
 No material blueprint deviation was required, so no CR0-C ADR was created. This slice does not implement the full §10 schema, application writer lease, backup/restore, checkpointing, encryption, redacted logs, keychain abstraction, diagnostics, or application workflows. The repository visibility is currently PUBLIC; this metadata is not a security certification.
 
 ## I. Step history
@@ -189,3 +195,5 @@ No material blueprint deviation was required, so no CR0-C ADR was created. This 
 | CR0-B implementation and acceptance | `f5833df063807c0fe383d5a10109cd5e2657ac31` | `pip install -e ".[dev]"`: success; selected Pydantic 2.14.2 / pydantic-core 2.50.2; `pip check`: no broken requirements; full pytest: 87 passed; contract-only tests: 81 passed; original CR0-A tests: 6 passed; Ruff: all checks passed; mypy: no issues in 6 source files; wheel: built successfully; CLI help/version exited 0 and version printed 0.1.0. | First Ruff pass reported style errors and a mypy pass reported one canonical serializer annotation error; both were corrected. Final acceptance passed. CR0, F12, F20, and F29 remain incomplete. |
 | CR0-C tests-first | `784707ab813c4e974655fc50c03a131f468d69e4` | Before storage modules were created: `pytest -q tests/test_storage_connection.py tests/test_storage_migrations.py` failed collection with 2 `ModuleNotFoundError: No module named 'sentinel.storage'` errors; exit 1. | Expected red phase: storage behavior tests were authored before implementation. |
 | CR0-C implementation and acceptance | `784707ab813c4e974655fc50c03a131f468d69e4` | SQLite 3.43.1; migration `cr0-c-0001-schema-migrations`, artifact SHA-256 `b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217`; storage-focused tests: 20 passed; full pytest: 107 passed; editable install succeeded; `pip check`: no broken requirements; Ruff: all checks passed; mypy: no issues in 10 source files; wheel `sentinel-0.1.0-py3-none-any.whl` built; CLI help/version exited 0 and version printed 0.1.0. | During implementation, early storage tests found index-validation and test expectation defects; a first Ruff run found import/line formatting issues. These were corrected without removing negative assertions. Final acceptance passed. Application tables and process writer lease remain unimplemented. CR0 and F46 remain IN_PROGRESS. |
+| CR0-C correction tests-first | Pending implementation commit after correction acceptance | Before changing `schema.py` or `migrations.py`, the new migration regressions reported 3 failed and 20 passed. All three failures were real table/index schema expansion, legacy database upgrade, and upgraded-database reopen; each was rejected by the foundation-only schema checkpoint. | Expected red phase reproduced the reported defect; the full captured pytest failure output is included with the correction evidence. |
+| CR0-C migration-aware schema correction | Pending implementation commit after correction acceptance | Focused storage tests: 35 passed; full suite: 122 passed; Ruff: all checks passed; mypy: no issues in 10 source files; pip check clean; wheel built; CLI help/version exited 0 and version printed 0.1.0. Foundation artifact digest remains `b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217`; checkpoint digest is `1f4d935bf45b5c09f68b4f6e3deb18846aa6d9ee14510eed89b3ab4a71139d30`. | Test-only table/index, index-only, and data-only expansions pass. Legacy history/data survives upgrade and repeat initialization. Missing/extra objects, altered constraints, altered checkpoint hashes, unknown migrations, and partial failures are rejected or rolled back. No production schema was added. CR0/F46 remain IN_PROGRESS; P00-P17 and AB01-AB18 remain NOT_STARTED. |

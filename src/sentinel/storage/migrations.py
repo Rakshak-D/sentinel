@@ -12,8 +12,11 @@ from typing import Final
 from sentinel import __version__
 from sentinel.storage.connection import database_connection
 from sentinel.storage.schema import (
+    FOUNDATION_SCHEMA,
+    FOUNDATION_SCHEMA_DEFINITION_SHA256,
     MIGRATION_INDEX_DDL,
     MIGRATION_TABLE_DDL,
+    SchemaDefinition,
     SchemaIntegrityError,
     verify_schema,
 )
@@ -21,6 +24,9 @@ from sentinel.storage.schema import (
 _MIGRATION_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9][a-z0-9-]{0,95}$")
 _SHA256_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[0-9a-f]{64}$")
 _FOUNDATION_MIGRATION_ID: Final = "cr0-c-0001-schema-migrations"
+_FOUNDATION_ARTIFACT_SHA256: Final = (
+    "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217"
+)
 
 
 class MigrationIntegrityError(RuntimeError):
@@ -33,10 +39,12 @@ class MigrationApplyError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class Migration:
-    """One trusted migration artifact represented by ordered, single SQL statements."""
+    """One trusted migration and its complete expected post-migration schema."""
 
     migration_id: str
     statements: tuple[str, ...]
+    schema_after: SchemaDefinition
+    artifact_version: int = 2
 
     def __post_init__(self) -> None:
         if not isinstance(self.migration_id, str) or not _MIGRATION_ID_PATTERN.fullmatch(
@@ -50,11 +58,27 @@ class Migration:
             for statement in self.statements
         ):
             raise ValueError("migration statements must contain non-empty SQL strings")
+        if self.artifact_version not in {1, 2}:
+            raise ValueError("unsupported migration artifact version")
+        if not isinstance(self.schema_after, SchemaDefinition):
+            raise ValueError("migration must include a trusted schema checkpoint")
+        if self.schema_after.schema_version != self.migration_id:
+            raise ValueError("schema checkpoint version must match migration_id")
 
     @property
     def canonical_artifact(self) -> bytes:
         """Return deterministic UTF-8 bytes representing this exact migration content."""
-        payload = {"migration_id": self.migration_id, "statements": self.statements}
+        # Artifact v1 is the historical CR0-C encoding and remains byte-for-byte stable.
+        payload: dict[str, object]
+        if self.artifact_version == 1:
+            payload = {"migration_id": self.migration_id, "statements": self.statements}
+        else:
+            payload = {
+                "artifact_version": 2,
+                "migration_id": self.migration_id,
+                "schema_after": json.loads(self.schema_after.canonical_artifact),
+                "statements": self.statements,
+            }
         return json.dumps(
             payload,
             sort_keys=True,
@@ -73,17 +97,33 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         _FOUNDATION_MIGRATION_ID,
         (MIGRATION_TABLE_DDL, MIGRATION_INDEX_DDL),
+        FOUNDATION_SCHEMA,
+        artifact_version=1,
     ),
 )
 
 
 def _registered_migrations() -> tuple[Migration, ...]:
     migrations = MIGRATIONS
-    if not migrations or migrations[0].migration_id != _FOUNDATION_MIGRATION_ID:
+    if not migrations:
+        raise MigrationIntegrityError("registered migration set lacks its foundation migration")
+    if any(not isinstance(migration, Migration) for migration in migrations):
+        raise MigrationIntegrityError("registered migration set contains an invalid entry")
+    if migrations[0].migration_id != _FOUNDATION_MIGRATION_ID:
         raise MigrationIntegrityError("registered migration set lacks its foundation migration")
     ids = tuple(migration.migration_id for migration in migrations)
     if len(ids) != len(set(ids)):
         raise MigrationIntegrityError("registered migration IDs are not unique")
+    foundation = migrations[0]
+    if (
+        foundation.artifact_version != 1
+        or foundation.artifact_sha256 != _FOUNDATION_ARTIFACT_SHA256
+    ):
+        raise MigrationIntegrityError("foundation migration artifact digest mismatch")
+    if foundation.schema_after.sha256 != FOUNDATION_SCHEMA_DEFINITION_SHA256:
+        raise MigrationIntegrityError("foundation schema checkpoint was modified")
+    if any(migration.artifact_version != 2 for migration in migrations[1:]):
+        raise MigrationIntegrityError("new migrations must use checkpoint-aware artifact v2")
     return migrations
 
 
@@ -122,11 +162,6 @@ def _read_and_validate_history(
     connection: sqlite3.Connection,
     migrations: tuple[Migration, ...],
 ) -> tuple[str, ...]:
-    try:
-        verify_schema(connection)
-    except SchemaIntegrityError as exc:
-        raise MigrationIntegrityError("schema drift detected") from exc
-
     rows = connection.execute(
         """SELECT migration_id, applied_at, artifact_sha256, app_build, success
            FROM schema_migrations ORDER BY applied_at, migration_id"""
@@ -157,6 +192,13 @@ def _read_and_validate_history(
     expected_prefix = tuple(migration.migration_id for migration in migrations[: len(applied_ids)])
     if tuple(applied_ids) != expected_prefix:
         raise MigrationIntegrityError("applied migrations are not in registered order")
+    if not applied_ids:
+        raise MigrationIntegrityError("migration metadata exists without an applied foundation")
+    expected_schema = migrations[len(applied_ids) - 1].schema_after
+    try:
+        verify_schema(connection, expected_schema)
+    except SchemaIntegrityError as exc:
+        raise MigrationIntegrityError("schema drift detected") from exc
     return tuple(applied_ids)
 
 
@@ -190,7 +232,7 @@ def _apply_migration(
             (migration.migration_id, applied_at, migration.artifact_sha256, app_build, 1),
         )
         try:
-            verify_schema(connection)
+            verify_schema(connection, migration.schema_after)
         except SchemaIntegrityError as exc:
             raise MigrationIntegrityError(
                 f"registered migration produced schema drift ({migration.migration_id})"
@@ -237,7 +279,7 @@ def initialize_storage(
             _apply_migration(connection, migration, app_build=app_build)
             newly_applied.append(migration.migration_id)
             try:
-                verify_schema(connection)
+                verify_schema(connection, migration.schema_after)
             except SchemaIntegrityError as exc:
                 raise MigrationIntegrityError("schema drift detected after migration") from exc
 
