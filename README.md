@@ -112,6 +112,33 @@ Canonical bytes use UTF-8 JSON with sorted keys, compact `,` / `:` separators, n
 
 This CR0-F schema represents only `schema_version`, `profile.name/timezone`, `data.storage_path`, `sources.enabled/host_allowlist`, `models.egress.internal_cloud_consent`, and `security.external_writes`, `security.allowed_email_recipients`, and `security.github_allowlisted_repos`. The schema accepts only `UTC` for timezone in this slice; other IANA timezones require separately verified timezone data. It has no model provider/profile IDs, credentials, plugin registry, policy rules/unsafe overrides, approval grants, retention, prompt/briefing/scheduler/notification/UI settings, or evaluation manifest. Such keys are rejected, not ignored. There is no config file loader, user/profile/project/CLI merge, persistence, activation state machine, owner-admin provenance, quick-evaluation receipt, or config hash authorization check in gateways. The configuration is data, not authority; trusted policy ceilings and P00-P03 enforcement remain future work.
 
+## CR0-G credential references and broker
+
+`sentinel.credentials.SecretRef` is a frozen, strict metadata record matching the §10 `secret_refs` fields: `secret_ref_id`, `provider`, `keychain_locator`, `scope_manifest_sha256`, `os_owner_binding`, `created_at`, and optional `revoked_at`. Identifiers and opaque references are bounded, the scope hash must be lowercase SHA-256 hex, timestamps must be timezone-aware and normalize to UTC, and a revocation timestamp cannot precede creation. Unknown fields are rejected. A reference contains no token, password, passkey, or signing private-key bytes. Its locator and owner-binding fields are excluded from `repr`, and these values are not part of model, tool, boundary, or diagnostic event DTOs.
+
+The production `CredentialBroker()` uses `UnavailableCredentialBackend`. Its `status(reference)` method reports `backend=UNAVAILABLE` and `reference=UNKNOWN`; the production broker has no value-retrieval, write, delete, environment fallback, or plaintext-file operation. Public `CredentialStatus` and `CredentialBrokerError` contain only bounded enums and fixed messages. A secret reference is a locator, not authorization or evidence that the caller may retrieve its value.
+
+```python
+from datetime import UTC, datetime
+
+from sentinel.credentials import CredentialBroker, SecretRef
+
+reference = SecretRef(
+    secret_ref_id="secret.synthetic.calendar-read",
+    provider="calendar",
+    keychain_locator="sentinel:calendar/read",
+    scope_manifest_sha256="a" * 64,
+    os_owner_binding="windows-owner:local-profile",
+    created_at=datetime.now(UTC),
+)
+status = CredentialBroker().status(reference)
+assert status.backend.value == "UNAVAILABLE"
+```
+
+`CredentialBroker.for_tests()` explicitly constructs an `InMemoryTestBackend` for synthetic automated tests. That path has `put_for_test`, `status`, `resolve_for_test`, and `revoke_for_test`; repeated identical registration and revocation are idempotent, missing and revoked references have separate failure codes, and conflicting registration fails. `resolve_for_test` returns a redacted `SyntheticCredentialAccess` handle whose value is available only through the test-named `reveal_for_test()` method. This is a contract-test facility, not a secure store; Python memory is not zeroized or isolated from a compromised process. It must not be used by the application, gateways, CLI, or production adapters.
+
+There is no verified OS keychain backend or isolated worker in CR0-G, and no keyring dependency was added. No OS credentials are read or written. The reference record is suitable as a future metadata contract only: a later §10 `secret_refs` table would hold reference metadata, never raw secrets. Signing private keys remain outside SQLite; a reference to one must remain unavailable to models and external tools. No trusted internal credential-operation principal, authenticated owner, OS-protected IPC, or owner verification is implemented here. P17 and credential isolation remain unimplemented, and this slice does not establish F23 or production C6 behavior.
+
 ## CR0-C SQLite storage API
 
 `sentinel.storage` provides `open_database`, the closing `database_connection` context manager, `inspect_connection`, `initialize_storage`, and `verify_integrity`. There is no default database location. Opening an existing database is the default; creating a file requires an explicit `create=True` argument. Parent directories are never created automatically. File-backed databases must support WAL, foreign keys are enabled and checked on every connection, and the default SQLite busy timeout is 5 seconds (configurable up to 60 seconds).
