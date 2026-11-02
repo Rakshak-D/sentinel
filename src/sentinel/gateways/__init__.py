@@ -1,0 +1,61 @@
+"""Centralized, demo-only model and tool gateway interfaces for CR0-D."""
+
+from sentinel.gateways.model import ModelGateway
+from sentinel.gateways.registry import (
+    GatewayRegistry,
+    ModelAdapterRegistration,
+    SyntheticModelAdapter,
+    SyntheticToolAdapter,
+    ToolAdapterRegistration,
+)
+from sentinel.gateways.tool import ToolGateway
+from sentinel.gateways.types import (
+    AuthorizationStatus,
+    DemoPayload,
+    ExecutionMode,
+    GatewayFailure,
+    GatewayFailureCode,
+    ModelAdapterOutput,
+    ModelCallResult,
+    ModelInvocation,
+    ModelLocality,
+    ModelProfile,
+    ModelRequest,
+    ModelResponse,
+    ModelTaskClass,
+    ToolAdapterOutput,
+    ToolCallResult,
+    ToolCapability,
+    ToolInvocation,
+    ToolRequest,
+    ToolResponse,
+)
+
+__all__ = [
+    "AuthorizationStatus",
+    "DemoPayload",
+    "ExecutionMode",
+    "GatewayFailure",
+    "GatewayFailureCode",
+    "GatewayRegistry",
+    "ModelAdapterOutput",
+    "ModelAdapterRegistration",
+    "ModelCallResult",
+    "ModelGateway",
+    "ModelInvocation",
+    "ModelLocality",
+    "ModelProfile",
+    "ModelRequest",
+    "ModelResponse",
+    "ModelTaskClass",
+    "SyntheticModelAdapter",
+    "SyntheticToolAdapter",
+    "ToolAdapterOutput",
+    "ToolAdapterRegistration",
+    "ToolCallResult",
+    "ToolCapability",
+    "ToolGateway",
+    "ToolInvocation",
+    "ToolRequest",
+    "ToolResponse",
+]
