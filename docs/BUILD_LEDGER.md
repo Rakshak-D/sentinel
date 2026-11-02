@@ -8,19 +8,23 @@ Canonical project status. Statuses describe implementation evidence, not the blu
 |---|---|
 | Authoritative blueprint | `docs/spec/Sentinel Master Blueprint.pdf` |
 | Blueprint SHA-256 | `92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7` |
-| Current release / active slice | CR0 / CR0-B — Typed source and model/tool boundary contracts |
-| Previous accepted slice | CR0-A; initial verification HEAD `d13148f92fc89efa6b94586e80bec1484f151e21` |
+| Current release / active slice | CR0 / CR0-C — SQLite initialization and migration integrity |
+| Previous accepted slice | CR0-B; starting HEAD `13f17158597d8060688e8d60780dcb9c2b315c57` |
 | CR0-B slice status | VERIFIED (contract slice only; CR0 remains IN_PROGRESS) |
 | CR0-B implementation commit | `f5833df063807c0fe383d5a10109cd5e2657ac31` |
+| CR0-C slice status | VERIFIED (migration foundation only; CR0 remains IN_PROGRESS) |
+| CR0-C implementation commit | `784707ab813c4e974655fc50c03a131f468d69e4` |
 | Branch | `main` |
 | Initial implementation commit | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` (root commit; author email uses GitHub noreply) |
-| Private remote | `https://github.com/Rakshak-D/sentinel` (`origin`, `main` pushed) |
+| GitHub remote | `https://github.com/Rakshak-D/sentinel` (`origin`, `main`; visibility PUBLIC as of 2026-11-02) |
 | Environment | Windows, pyenv-win 3.11.7, project-local `.venv` |
 | Selected interpreter | Python 3.11.7 (`.venv\Scripts\python.exe`) |
 | Dependency management | `pyproject.toml`, setuptools build backend, pip through explicit venv interpreter; no lockfile yet |
 | Environment inspection | Git 2.53.0.windows.2; Python initially resolved to 3.14.2; pyenv 3.14.2; installed versions 3.10.11, 3.11.7, 3.14.2; Node v24.14.0; npm 11.12.1. Python 3.11.7 was selected and verified. |
 | Installed runtime/dev packages | sentinel 0.1.0; typer 0.27.3; rich 15.0.0; pytest 8.4.2; ruff 0.17.3; mypy 1.20.2; build 1.6.1; packaging 26.3; pluggy 1.7.0; setuptools in isolated wheel build 84.2.1. Full resolved environment: annotated-doc 0.0.5, colorama 0.4.6, iniconfig 2.3.1, librt 0.16.0, markdown-it-py 4.2.0, mdurl 0.1.2, mypy_extensions 1.1.0, pathspec 1.1.1, pyproject_hooks 1.3.3, Pygments 2.21.0, shellingham 1.5.4, typing_extensions 4.16.0. Local pip 23.2.1 and setuptools 65.5.0 are present in the venv; build isolation selected setuptools 84.2.1. |
 | CR0-B dependency | Pydantic 2.14.2; pydantic-core 2.50.2; annotated-types 0.8.0; typing-inspection 0.4.4. Registry checked via PyPI through the local pip index; constrained as `pydantic>=2,<3`. No lockfile claimed. |
+| CR0-C SQLite runtime | SQLite 3.43.1, observed via `.venv\Scripts\python.exe -c "import sqlite3; print(sqlite3.sqlite_version)"` |
+| CR0-C migration artifact | `cr0-c-0001-schema-migrations`; canonical-artifact SHA-256 `b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217` |
 
 The Master Blueprint does not define a one-to-one release assignment for every feature ID. The assignment column below is the ledger's dependency-based planning map; it does not claim a verbatim per-feature assignment from the blueprint. Names and scope states come from section 2.
 
@@ -73,13 +77,13 @@ The Master Blueprint does not define a one-to-one release assignment for every f
 | F43 | CLI + optional Textual | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; later CR1-CR4 surfaces | `src/sentinel/cli.py`; `tests/test_cli.py`; CR0-A acceptance output | Only `--help` and `version` bootstrap; full command tree, golden output, approval negative tests remain |
 | F44 | React web control plane | ACTIVE TARGET | NOT_STARTED | CR4 | Master Blueprint §2 | Frontend/API absent |
 | F45 | Sentinel-as-MCP server | ACTIVE TARGET | NOT_STARTED | CR3 | Master Blueprint §2 | MCP adapter absent; approval must never be exposed |
-| F46 | Diagnostic/backup/restore/migrations | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; CR4/CR8 capability | `pyproject.toml`; tests; CR0-A acceptance output | No diagnostics, database, migrations, backup/restore, or clean offline install |
+| F46 | Diagnostic/backup/restore/migrations | ACTIVE TARGET | IN_PROGRESS | CR0 bootstrap; CR4/CR8 capability | `sentinel.storage`; `tests/test_storage_connection.py`; `tests/test_storage_migrations.py`; CR0-C acceptance output | Only foundational migration metadata exists; diagnostics, remaining database schema, backup/restore, and clean offline install remain unavailable |
 
 ## C. Release table CR0-CR9
 
 | Release | Dependency | Status | Exit criteria | Verified evidence |
 |---|---|---|---|---|
-| CR0 — Package and trust skeleton | Initial foundation | IN_PROGRESS (CR0-A and CR0-B only) | Offline pinned install; wheel/CLI (`init`, `doctor`, `demo`); typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures | CR0-A packaging/CLI and CR0-B typed contract tests; offline install and remaining CR0 deliverables not verified |
+| CR0 — Package and trust skeleton | Initial foundation | IN_PROGRESS (CR0-A, CR0-B, and CR0-C only) | Offline pinned install; wheel/CLI (`init`, `doctor`, `demo`); typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures | CR0-A CLI, CR0-B contracts, and CR0-C migration foundation tests; offline install and remaining CR0 deliverables not verified |
 | CR1 — Daily read/product core | CR0 | NOT_STARTED | Source normalization/citation tests; missing credentials clear; one-shot CLI restart behavior | None |
 | CR2 — Deterministic authorization | CR1 | NOT_STARTED | P00-P17 hard cases, no direct tool bypass, task idempotency/outbox crash matrix | None |
 | CR3 — MCP and regression platform | CR2 | NOT_STARTED | MCP conformance, no approve tools, replay without network, seeded mutations caught, manifest hashing | None |
@@ -151,14 +155,15 @@ Every case remains NOT_STARTED; the CLI bootstrap is not bypass-test evidence.
 - The Master Blueprint presents uv as a candidate tool for installation/locking, with its exact pin unverified. CR0-A uses the owner's requested pyenv + pip workflow and records the deviation from the table's `SQLite/uv tools` alternative for F46 in ADR-0001. Locking/offline requirements remain CR0 exit gates.
 - The blueprint assigns capability dependencies and release exits but does not give a one-to-one release label for every F01-F46 row. The feature release column is a dependency-based planning map, not a quoted blueprint assignment.
 - The blueprint requests the broader CR0 skeleton. CR0-A implements only package governance and two real CLI commands; remaining CR0 work is intentionally incomplete.
+- CR0-C interprets the first migration as the minimum legitimate slice: it creates only `schema_migrations` and its required `applied_at` index. The broader §10 application schema is deliberately not synthesized in this slice.
 
 ## H. Open issues and verification blockers
 
 - Verify the selected dependency graph in a fresh clean install; capture exact dependency versions and solver output.
 - Create and verify a deterministic hash-pinned lock and local wheelhouse; pass an offline clean install before CR0 exit.
-- Complete CR0 typed envelopes, SQLite migrations, redacted logs, keychain abstraction, default config, demo fixtures, and `init`, `doctor`, `demo` commands.
+- Complete CR0 clean offline install, remaining schema/migration inventory, redacted logs, keychain abstraction, default config, demo fixtures, and `init`, `doctor`, `demo` commands.
 - Decide supported Python/OS matrix and verify each selected interpreter/platform combination.
-- Later policy, provenance, approval, credential isolation, model/tool gateway, and external-write gates are entirely unimplemented. Keep external writes disabled.
+- Later policy, provenance, approval, credential isolation, model/tool gateway, application-wide SQLite writer lease, and external-write gates are entirely unimplemented. Keep external writes disabled.
 - Credential-pattern scan of the proposed tracked files and supplied reference text found no matches; email-address scan of the references found no matches; Master Blueprint PDF metadata contains title/creator/producer only and no author field. References are preserved and safe for this initial commit review.
 - Package metadata is intentionally restricted to Python 3.11 (`>=3.11,<3.12`); Python 3.12 support is not claimed because it was not verified in this slice.
 
@@ -170,11 +175,17 @@ CR0-B defines data structures only. ModelGateway, ToolGateway, policy, approval,
 
 The canonical helpers accept only the exact two contract classes and revalidate `model_dump(mode="python")` before canonical JSON/hash generation, protecting against invalid state introduced through Pydantic's unchecked copy/construct escape hatches. This still validates structure only and is not an adversarial authority boundary.
 
+CR0-C schema decisions: the first transaction creates only the normative `schema_migrations` table (`migration_id`, `applied_at`, `artifact_sha256`, `app_build`, `success`) and its `applied_at` index; no application table is inferred from the broader §10 inventory. The registered artifact `cr0-c-0001-schema-migrations` hashes canonical UTF-8 JSON containing the migration ID and ordered SQL statements. Successful rows record `success=1`; a failed migration rolls back its effects and row together rather than persisting a failed row. Applied timestamps are UTC ISO-8601 with microseconds, and histories must form the registry's ordered prefix. Missing DB files are refused by default; file creation requires `create=True`. Foreign-key enforcement is set and checked per connection; file databases must successfully enable WAL; the default busy timeout is 5 seconds, bounded to 60 seconds. SQLite integrity and foreign-key checks run before each migration commit and on initialized storage. WAL and `BEGIN IMMEDIATE` are not the §3 application-wide process writer lease. No migration bootstrap occurs outside a transaction.
+
+No material blueprint deviation was required, so no CR0-C ADR was created. This slice does not implement the full §10 schema, application writer lease, backup/restore, checkpointing, encryption, redacted logs, keychain abstraction, diagnostics, or application workflows. The repository visibility is currently PUBLIC; this metadata is not a security certification.
+
 ## I. Step history
 
 | Step | Commit | Tests/checks | Outcome |
 |---|---|---|---|
 | CR0-A implementation and acceptance | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` | `pip install -e ".[dev]"`: success; `pip check`: “No broken requirements found.”; `pytest -q`: 6 passed; `ruff check .`: “All checks passed!”; `mypy src/sentinel`: “Success: no issues found in 2 source files”; `build --wheel`: built `sentinel-0.1.0-py3-none-any.whl`; `sentinel --help`: exit 0 and lists `version`; `sentinel version`: exit 0 and prints `0.1.0`. | All mandatory local acceptance commands passed after fixing the first test run's real Typer/test assertion failures. Build and registry install succeeded. No later security capability claimed. |
-| Governance/data review and publication | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` | Governance test confirms required IDs/files; credential-pattern scan returned no matches; email-address scan of references returned no matches; `.venv`, caches, build, dist, and egg-info are ignored; no runtime DB exists. `gh auth status` passed. Private repo created; initial push was rejected for private commit email, unpublished local root commit was amended to noreply, then push of `main` succeeded. | Reference documents were reviewed and included. Remote is private: `https://github.com/Rakshak-D/sentinel`. |
+| Governance/data review and publication | `61c218f7f0ebb5185a15cb2ce86e82b7918adac3` | Governance test confirms required IDs/files; credential-pattern scan returned no matches; email-address scan of references returned no matches; `.venv`, caches, build, dist, and egg-info are ignored; no runtime DB exists. `gh auth status` passed. The repository was initially created private; initial push was rejected for private commit email, unpublished local root commit was amended to noreply, then push of `main` succeeded. | Reference documents were reviewed and included. Current repository visibility is PUBLIC as of 2026-11-02. |
 | CR0-B tests-first | Pending implementation commit | Before contract implementation: targeted contract pytest collection failed with three `ModuleNotFoundError: No module named 'sentinel.contracts'` errors; exit 1. | Expected red phase: tests were present before contract modules/classes. |
 | CR0-B implementation and acceptance | `f5833df063807c0fe383d5a10109cd5e2657ac31` | `pip install -e ".[dev]"`: success; selected Pydantic 2.14.2 / pydantic-core 2.50.2; `pip check`: no broken requirements; full pytest: 87 passed; contract-only tests: 81 passed; original CR0-A tests: 6 passed; Ruff: all checks passed; mypy: no issues in 6 source files; wheel: built successfully; CLI help/version exited 0 and version printed 0.1.0. | First Ruff pass reported style errors and a mypy pass reported one canonical serializer annotation error; both were corrected. Final acceptance passed. CR0, F12, F20, and F29 remain incomplete. |
+| CR0-C tests-first | `784707ab813c4e974655fc50c03a131f468d69e4` | Before storage modules were created: `pytest -q tests/test_storage_connection.py tests/test_storage_migrations.py` failed collection with 2 `ModuleNotFoundError: No module named 'sentinel.storage'` errors; exit 1. | Expected red phase: storage behavior tests were authored before implementation. |
+| CR0-C implementation and acceptance | `784707ab813c4e974655fc50c03a131f468d69e4` | SQLite 3.43.1; migration `cr0-c-0001-schema-migrations`, artifact SHA-256 `b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217`; storage-focused tests: 20 passed; full pytest: 107 passed; editable install succeeded; `pip check`: no broken requirements; Ruff: all checks passed; mypy: no issues in 10 source files; wheel `sentinel-0.1.0-py3-none-any.whl` built; CLI help/version exited 0 and version printed 0.1.0. | During implementation, early storage tests found index-validation and test expectation defects; a first Ruff run found import/line formatting issues. These were corrected without removing negative assertions. Final acceptance passed. Application tables and process writer lease remain unimplemented. CR0 and F46 remain IN_PROGRESS. |
