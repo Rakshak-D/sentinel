@@ -94,6 +94,7 @@ def _gateway(
     *,
     sensitivity: SensitivityLabel = SensitivityLabel.PUBLIC,
     locality: ModelLocality = ModelLocality.LOOPBACK,
+    model_id: str = "synthetic.text.v1",
 ) -> ModelGateway:
     source_payload = {
         SensitivityLabel.PUBLIC: PUBLIC_PAYLOAD,
@@ -113,7 +114,7 @@ def _gateway(
             ModelAdapterRegistration(
                 adapter_id="demo.text",
                 provider_id="synthetic.memory",
-                model_id="synthetic.text.v1",
+                model_id=model_id,
                 locality=locality,
                 demo_only=True,
                 adapter=adapter,
@@ -204,6 +205,61 @@ def test_unregistered_model_identifier_is_rejected_without_execution() -> None:
 
     assert result.failure is not None
     assert result.failure.code is GatewayFailureCode.UNKNOWN_MODEL
+    assert adapter.invocations == []
+
+
+def test_slash_model_identifier_executes_and_is_preserved_end_to_end() -> None:
+    model_id = "synthetic/example-v1"
+    adapter = ProbeModelAdapter(output=b"slash model result")
+    gateway = _gateway(adapter, model_id=model_id)
+    request = _request(model_id=model_id)
+
+    result = gateway.generate(request)
+
+    assert result.failure is None
+    assert result.response is not None
+    assert len(adapter.invocations) == 1
+    assert adapter.invocations[0].model_id == model_id
+    assert result.response.provider_model_id == model_id
+
+
+def test_unregistered_slash_model_identifier_fails_before_adapter() -> None:
+    adapter = ProbeModelAdapter()
+    gateway = _gateway(adapter, model_id="synthetic/registered-v1")
+
+    result = gateway.generate(_request(model_id="synthetic/unregistered-v1"))
+
+    assert result.failure is not None
+    assert result.failure.code is GatewayFailureCode.UNKNOWN_MODEL
+    assert adapter.invocations == []
+
+
+@pytest.mark.parametrize("model_id", ["Synthetic/example-v1", "synthetic/example#v1"])
+def test_invalid_model_identifiers_are_rejected(model_id: str) -> None:
+    with pytest.raises(ValidationError):
+        _request(model_id=model_id)
+
+    adapter = ProbeModelAdapter()
+    with pytest.raises(ValueError, match="model_id"):
+        ModelAdapterRegistration(
+            adapter_id="demo.text",
+            provider_id="synthetic.memory",
+            model_id=model_id,
+            locality=ModelLocality.LOOPBACK,
+            demo_only=True,
+            adapter=adapter,
+        )
+
+
+def test_gateway_revalidates_malformed_model_id_before_adapter() -> None:
+    adapter = ProbeModelAdapter()
+    request = _request().model_dump(mode="python")
+    request["model_id"] = "synthetic/example#v1"
+
+    result = _gateway(adapter).generate(request)
+
+    assert result.failure is not None
+    assert result.failure.code is GatewayFailureCode.INVALID_REQUEST
     assert adapter.invocations == []
 
 

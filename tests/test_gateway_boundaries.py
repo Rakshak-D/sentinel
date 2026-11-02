@@ -76,13 +76,13 @@ class BoundaryToolAdapter:
         return ToolAdapterOutput(output_bytes=self.output_bytes)
 
 
-def _model_request() -> ModelRequest:
+def _model_request(model_id: str = "synthetic.text.v1") -> ModelRequest:
     digest = sha256(MODEL_TEXT.encode("utf-8")).hexdigest()
     return ModelRequest(
         call_id=UUID("362c043a-33b7-49bd-9339-801a88f6b6bf"),
         run_id=UUID("1c99b2b1-0c2e-436e-bfcf-932d7909e0ad"),
         adapter_id="demo.text",
-        model_id="synthetic.text.v1",
+        model_id=model_id,
         task_class=ModelTaskClass.SUMMARIZATION,
         prompt_id="demo.summary",
         prompt_version="1.0.0",
@@ -121,6 +121,7 @@ def _tool_request() -> ToolRequest:
 
 
 def test_model_boundary_hashes_exact_request_and_response_bytes() -> None:
+    model_id = "synthetic/example-v1"
     adapter = BoundaryModelAdapter()
     registry = GatewayRegistry(
         execution_mode=ExecutionMode.DEMO,
@@ -130,7 +131,7 @@ def test_model_boundary_hashes_exact_request_and_response_bytes() -> None:
             ModelAdapterRegistration(
                 adapter_id="demo.text",
                 provider_id="synthetic.memory",
-                model_id="synthetic.text.v1",
+                model_id=model_id,
                 locality=ModelLocality.LOOPBACK,
                 demo_only=True,
                 adapter=adapter,
@@ -138,11 +139,13 @@ def test_model_boundary_hashes_exact_request_and_response_bytes() -> None:
         ),
     )
 
-    result = ModelGateway(registry).generate(_model_request())
+    result = ModelGateway(registry).generate(_model_request(model_id))
 
     boundary = result.boundary
     assert isinstance(boundary, BoundaryEnvelope)
     assert boundary.kind is BoundaryKind.MODEL
+    assert result.response is not None
+    assert result.response.provider_model_id == model_id
     assert adapter.invocation is not None
     assert boundary.request_sha256 == sha256(adapter.invocation.request_bytes).hexdigest()
     assert adapter.invocation.payload_bytes == MODEL_TEXT.encode("utf-8")

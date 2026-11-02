@@ -11,11 +11,14 @@ from threading import Lock
 from typing import Protocol
 from uuid import UUID
 
+from pydantic import TypeAdapter, ValidationError
+
 from sentinel.contracts import SourceEnvelope
 from sentinel.gateways.types import (
     DemoPayload,
     ExecutionMode,
     ModelAdapterOutput,
+    ModelIdentifier,
     ModelInvocation,
     ModelLocality,
     ToolAdapterOutput,
@@ -24,7 +27,7 @@ from sentinel.gateways.types import (
 )
 
 _IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
-_MODEL_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9_.:/-]{0,127}$")
+_MODEL_IDENTIFIER_VALIDATOR: TypeAdapter[str] = TypeAdapter(ModelIdentifier)
 
 
 class SyntheticModelAdapter(Protocol):
@@ -51,7 +54,7 @@ class ModelAdapterRegistration:
 
     adapter_id: str
     provider_id: str
-    model_id: str
+    model_id: ModelIdentifier
     locality: ModelLocality
     demo_only: bool
     adapter: SyntheticModelAdapter
@@ -61,10 +64,10 @@ class ModelAdapterRegistration:
             value = getattr(self, field_name)
             if not isinstance(value, str) or not _IDENTIFIER_PATTERN.fullmatch(value):
                 raise ValueError(f"{field_name} must be a bounded lower-case identifier")
-        if not isinstance(self.model_id, str) or not _MODEL_IDENTIFIER_PATTERN.fullmatch(
-            self.model_id
-        ):
-            raise ValueError("model_id must be a bounded lower-case model identifier")
+        try:
+            _MODEL_IDENTIFIER_VALIDATOR.validate_python(self.model_id, strict=True)
+        except ValidationError as exc:
+            raise ValueError("model_id must be a bounded lower-case model identifier") from exc
         if not isinstance(self.locality, ModelLocality):
             raise ValueError("model locality must use a registered ModelLocality value")
         if self.demo_only is not True or getattr(self.adapter, "demo_only", False) is not True:
@@ -188,7 +191,7 @@ class GatewayRegistry:
         )
 
     def find_model_adapter(
-        self, adapter_id: str, model_id: str
+        self, adapter_id: str, model_id: ModelIdentifier
     ) -> ModelAdapterRegistration | None:
         """Return only the exact pre-registered adapter/model pair."""
         return next(

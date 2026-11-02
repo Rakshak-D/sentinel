@@ -235,7 +235,7 @@ class ModelInvocation(_FrozenModel):
     request: ModelRequest
     sources: tuple[SourceEnvelope, ...]
     provider_id: GatewayIdentifier
-    model_id: GatewayIdentifier
+    model_id: ModelIdentifier
     adapter_id: GatewayIdentifier
     locality: ModelLocality
     payload_bytes: Annotated[StrictBytes, Field(repr=False, max_length=32_768)]
@@ -255,7 +255,7 @@ class ModelResponse(_FrozenModel):
     """Typed §7 response metadata for the local synthetic execution path."""
 
     provider_id: GatewayIdentifier
-    provider_model_id: GatewayIdentifier
+    provider_model_id: ModelIdentifier
     output: Annotated[StrictStr, Field(max_length=65_536, repr=False)]
     output_trust: Literal[TrustLabel.T3_DERIVED] = TrustLabel.T3_DERIVED
     schema_valid: StrictBool
