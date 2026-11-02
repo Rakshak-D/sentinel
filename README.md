@@ -6,7 +6,7 @@ Sentinel is a planned local-first personal automation application. Its authorita
 
 CR0-A establishes repository governance, a Python package, and an installable CLI with `sentinel --help` and `sentinel version`. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. These slices do not complete F38, F43, F46, or CR0.
 
-There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. `init`, `doctor`, and `demo` are not available. CR0-C's only application schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. The included CR0-D synthetic adapters are test fixtures and operate only in memory. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
+There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; `doctor` and `demo` remain unavailable. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. The included CR0-D synthetic adapters are test fixtures and operate only in memory. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
 
 ## CR0-B contract API
 
@@ -214,6 +214,7 @@ Do not install project packages with a global or ambiguous `pip` command. Run th
 
 ```powershell
 .\.venv\Scripts\sentinel.exe --help
+.\.venv\Scripts\sentinel.exe init --help
 .\.venv\Scripts\sentinel.exe version
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check .
@@ -226,3 +227,21 @@ The initial development install is registry-resolved and not yet hash-locked. Se
 ## Security limitations
 
 This bootstrap is not a security certification and does not implement the blueprint's P00-P17 policy rules or AB01-AB18 bypass tests. It has no credentials or personal-data fixtures. All consequential external capabilities remain unavailable pending their release gates. Use synthetic fixtures only in future tests.
+
+## CR0-H explicit database initialization
+
+Create a new local database by supplying an absolute path whose parent directory already exists:
+
+```powershell
+.\.venv\Scripts\sentinel.exe init --database "$env:TEMP\sentinel-cr0-h-disposable.sqlite3"
+```
+
+Use a fresh, disposable path for this example. The command refuses every existing target, including a previously initialized Sentinel database; choose another new path if it reports that the target already exists. There is no default database location, no automatic parent-directory creation, and no command in this slice to open or upgrade an existing installation.
+
+The CLI reserves the exact target with the operating system's exclusive-create operation, then calls the existing trusted storage migration API. It applies the currently registered foundation migration `cr0-c-0001-schema-migrations`, verifies the registered artifact digest and expected schema, and runs SQLite integrity and foreign-key checks. File-backed connection setup retains the existing `foreign_keys=ON`, WAL, and bounded busy timeout behavior. Success output is fixed and does not disclose the path. Invalid paths and initialization failures exit unsuccessfully with bounded messages that omit exception text and path values.
+
+If initialization fails after exclusive creation, the newly reserved file and any SQLite-owned sidecars are left for inspection. The command does not attempt path-based cleanup because a concurrent path replacement could make deletion unsafe. Resolve the cause before manually removing that exact disposable path.
+
+Exclusive creation uses `O_CREAT|O_EXCL`, which refuses an already present final-component path, and adds `O_NOFOLLOW` where the host exposes it. The symlink test could not run here because Windows denied symlink creation without elevated support. This does not establish full race-free filesystem protection: directory junctions/reparse points are not comprehensively defended against, and a process able to replace directory entries concurrently may race subsequent SQLite path opens. The implementation checks the reserved file identity before and after storage operations, but does not claim protection from a hostile process with directory write access.
+
+CR0-H adds only the `init` command. `doctor` and `demo`, configuration activation, application tables, writer leases, backup/restore, credentials, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.

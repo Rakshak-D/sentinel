@@ -1,4 +1,4 @@
-"""Behavioral tests for the supported CR0-A CLI surface."""
+"""Behavioral tests for the supported Sentinel CLI surface."""
 
 from importlib.metadata import PackageNotFoundError, entry_points, version
 
@@ -15,6 +15,13 @@ def test_help_exits_successfully_and_lists_version() -> None:
 
     assert result.exit_code == 0
     assert "version" in result.output
+
+
+def test_help_lists_explicit_init_command() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "init" in result.output
 
 
 def test_version_reports_package_metadata() -> None:
