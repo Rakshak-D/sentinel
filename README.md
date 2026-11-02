@@ -2,11 +2,11 @@
 
 Sentinel is a planned local-first personal automation application. Its authoritative design is [the Sentinel Master Blueprint](docs/spec/Sentinel%20Master%20Blueprint.pdf); [the build ledger](docs/BUILD_LEDGER.md) tracks implementation evidence and remaining gates. The architecture separates untrusted source content, model access through `ModelGateway`, tool effects through `ToolGateway`, and a deterministic policy reference monitor.
 
-## CR0-A scope
+## Implemented bootstrap slices
 
-This slice establishes the repository rules, a Python package, and an installable CLI with `sentinel --help` and `sentinel version`. The CLI reports package metadata. These commands are package scaffolding only; they do not implement F43 or F46 and do not complete CR0.
+CR0-A establishes repository governance, a Python package, and an installable CLI with `sentinel --help` and `sentinel version`. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. These slices do not complete F43, F46, or CR0.
 
-There is no agent, model adapter, MCP worker, policy engine, approval system, provider integration, database, daemon, or frontend. `init`, `doctor`, and `demo` are not available. No model, HTTP provider, MCP, or external-tool calls are made. External writes are unavailable. The CLI bootstrap does not demonstrate later security invariants.
+There is no agent, model adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. `init`, `doctor`, and `demo` are not available. CR0-C's only application schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. No model, HTTP provider, MCP, or external-tool calls are made. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
 
 ## CR0-B contract API
 
@@ -33,6 +33,30 @@ source = SourceEnvelope(
 `BoundaryEnvelope.kind` classifies `model` or `tool`. Request and response payloads are represented by content references and matching digests, not embedded bodies. Optional response reference/digest and error code fields must be supplied explicitly as a value or `None`. Byte spans enforce `0 <= start_byte < end_byte`; because the source body length is not part of the blueprint's SourceEnvelope schema, the envelope cannot validate an upper bound against that body.
 
 These contracts validate shape only. A `T1 OWNER_INTENT` value is a declaration, not proof of owner authentication; callers must not accept T0/T1 labels from untrusted source content. No generic external-payload factory is provided. The contracts do not authorize or execute actions. Canonical JSON is limited to exact contract types and is not the future approval digest or audit-chain algorithm.
+
+## CR0-C SQLite storage API
+
+`sentinel.storage` provides `open_database`, the closing `database_connection` context manager, `inspect_connection`, `initialize_storage`, and `verify_integrity`. There is no default database location. Opening an existing database is the default; creating a file requires an explicit `create=True` argument. Parent directories are never created automatically. File-backed databases must support WAL, foreign keys are enabled and checked on every connection, and the default SQLite busy timeout is 5 seconds (configurable up to 60 seconds).
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from sentinel.storage import database_connection, initialize_storage
+
+with TemporaryDirectory() as directory:
+    database = Path(directory) / "sentinel.sqlite3"
+    applied = initialize_storage(database, create=True)
+    with database_connection(database) as connection:
+        print(applied)
+        print(connection.execute("PRAGMA foreign_keys").fetchone())
+```
+
+Migrations are trusted Python artifacts registered in the ordered `MIGRATIONS` tuple in `sentinel.storage.migrations`. Each artifact is represented by its migration ID and ordered single-statement SQL strings; canonical UTF-8 JSON bytes are SHA-256 hashed. The current initial migration, `cr0-c-0001-schema-migrations`, creates the normative `schema_migrations` table and its `applied_at` index only. It does not create application data tables.
+
+Initialization verifies the exact migration metadata schema, applied migration IDs/order/digests, and SQLite integrity and foreign-key checks. Untracked schema, unknown or changed migration records, malformed metadata, and schema drift fail closed without automatic repair. Every migration runs under `BEGIN IMMEDIATE`; individual statements use `execute()` rather than `executescript()`. A failure rolls back all statements and its success record together. A failed migration does not leave a successful metadata row.
+
+These guarantees cover this local migration foundation, not application-wide ownership. WAL and `BEGIN IMMEDIATE` do not implement the §3 process-wide writer lease. Backup/restore, checkpoint workflows, encryption, redacted logs, keychain abstraction, application tables, and the rest of CR0 remain unavailable. Do not store secrets or raw private source bodies in this database. The migration registry is trusted code and is not an interface for model output, CLI SQL, or external migration files.
 
 ## Windows PowerShell setup
 
