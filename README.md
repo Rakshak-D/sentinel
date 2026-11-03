@@ -4,9 +4,11 @@ Sentinel is a planned local-first personal automation application. Its authorita
 
 ## Implemented bootstrap slices
 
-CR0-A establishes repository governance, a Python package, and an installable CLI. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. CR0-G adds a fail-closed credential broker contract; CR0-H adds explicit new-database initialization; CR0-I adds read-only diagnostics; CR0-J adds one deterministic synthetic `demo` flow through the existing gateway methods. These slices do not complete F38, F43, F46, or CR0.
+CR0-A establishes repository governance, a Python package, and an installable CLI. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. CR0-G adds a fail-closed credential broker contract; CR0-H adds explicit new-database initialization; CR0-I adds read-only diagnostics; CR0-J adds one deterministic synthetic `demo` flow through the existing gateway methods. CR1-A adds an in-memory UTF-8 plain-text normalizer and verified byte-span citations. CR0 is accepted only for the recorded Windows x64 / CPython 3.11.7 / Sentinel 0.1.0 scope; CR1-A does not complete F12, F43, F46, or CR1.
 
 There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; CR0-I adds read-only diagnostics for an existing database; CR0-J adds a fixed-fixture `sentinel demo` that uses only in-memory synthetic adapters. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
+
+The project metadata now identifies ongoing CR1 development as `0.2.0.dev0`. The immutable CR0 tag and the historical `requirements/cr0-windows-py311.lock` retain the accepted `0.1.0` release identity and hashes.
 
 ## CR0-B contract API
 
@@ -355,4 +357,51 @@ Pip's hash-checking mode requires every requirement and transitive dependency to
 
 The wheelhouse is not committed. It is staged under a disposable directory outside the checkout so its binary artifacts and temporary venv do not enter Git. Preserve the printed wheel inventory and command output with the release evidence. The verified platform is only Windows x64 with CPython 3.11.7; no other Python patch, architecture, or OS is established by this gate. Local `ensurepip` supplies the installer pip; the requirements lock covers Sentinel's runtime, not pip itself or build/dev tooling. The build backend is isolated and resolved by `build` under `setuptools>=68`; the observed build used `setuptools==84.2.1`. That build-tool range is not hash-locked.
 
-This offline gate completes only the CR0 installation evidence. A clean pinned install does not prove cross-toolchain or cross-platform source-build reproducibility, network sandboxing, policy enforcement, credential isolation for future code, or production readiness. The existing Windows symlink test remains skipped/unverified. After this gate passes, CR0 is `READY_FOR_INDEPENDENT_REVIEW` and remains so until the technical lead reviews and accepts the evidence; later-release capabilities remain out of scope.
+This offline gate completes only the CR0 installation evidence. A clean pinned install does not prove cross-toolchain or cross-platform source-build reproducibility, network sandboxing, policy enforcement, credential isolation for future code, or production readiness. The existing Windows symlink test remains skipped/unverified. The technical lead subsequently accepted CR0 for the recorded Windows x64 / CPython 3.11.7 scope; the ledger records that bounded acceptance. Later-release capabilities remain out of scope.
+
+## CR1-A strict plain-text normalization and citations
+
+`sentinel.normalization` exports `PlainTextSourceDescriptor`, `NormalizedPlainTextSource`, `normalize_plain_text`, `add_citation`, `verify_citation`, and `NormalizationError`. The descriptor is a frozen, strict Pydantic model containing the trusted caller's `source_id`, `provider_id`, aware `observed_at`, `TrustLabel`, and `SensitivityLabel`. The resulting immutable value contains the existing `SourceEnvelope`, the exact decoded `text` for explicit internal use, original bytes, the original-byte `payload_sha256`, normalized MIME information, and the envelope's tuple of `ByteSpan` citations. It deliberately has no JSON/model dump helper that emits source content, and its default representation omits the body.
+
+The accepted MIME forms are `text/plain` and `text/plain; charset=utf-8`. MIME tokens and charset are matched case-insensitively; surrounding ASCII spaces/tabs are accepted. No other MIME parameters or repeated charset parameters are accepted. A missing charset is interpreted as UTF-8. Input is at most **1 MiB (1,048,576 bytes)** and must be a real `bytes` object that strictly decodes as UTF-8. There is no content sniffing or fallback decoder. The normalizer preserves the original bytes and exact decoded code points, including a UTF-8 BOM, NUL/control characters, CRLF versus LF, and NFC versus NFD distinctions. It does not alter whitespace, line endings, case, or Unicode normalization.
+
+```python
+from datetime import UTC, datetime
+from uuid import UUID
+
+from sentinel.contracts import SensitivityLabel, TrustLabel
+from sentinel.normalization import (
+    PlainTextSourceDescriptor,
+    add_citation,
+    normalize_plain_text,
+    verify_citation,
+)
+
+content = b"synthetic fact\n"
+source = normalize_plain_text(
+    PlainTextSourceDescriptor(
+        source_id=UUID("f3d9e8b2-6f52-45a1-850d-76b9df02dc7c"),
+        provider_id="synthetic-reader",
+        observed_at=datetime(2026, 11, 3, tzinfo=UTC),
+        trust=TrustLabel.T4_EXTERNAL,
+        sensitivity=SensitivityLabel.PUBLIC,
+    ),
+    content,
+    "text/plain; charset=utf-8",
+)
+cited = add_citation(
+    source,
+    span_id=UUID("9f371f63-8180-4ef3-85ef-56a8c018a652"),
+    start_byte=10,
+    end_byte=14,
+    expected_text="fact",
+)
+assert verify_citation(cited, cited.citations[0], expected_text="fact") == "fact"
+assert cited.envelope.content_sha256 == cited.payload_sha256
+```
+
+Citation offsets are half-open UTF-8 byte coordinates `[start_byte, end_byte)`, never Python character indexes. `add_citation` requires explicit offsets and a UUID; it returns a new normalized value with the validated `ByteSpan` in `SourceEnvelope.byte_spans`. It does not search text for a phrase. `verify_citation` revalidates the source envelope, re-hashes the complete original bytes, confirms that the span belongs to that envelope, checks both UTF-8 boundaries, re-hashes the exact selected bytes, and optionally compares exact cited text. Errors use fixed `NormalizationErrorCode` categories and never include raw source text or filesystem paths.
+
+Caller-supplied trust and sensitivity labels are retained exactly. These labels describe asserted provenance and classification; they do not authenticate the descriptor's caller or grant authority. Literal instructions inside a source remain untrusted content. PRIVATE and SECRET data may be normalized in memory, but this slice does not send content to `ModelGateway`, persist it, or authorize its use. Authentication of reader metadata and future source ingestion belong to later CR1 boundaries.
+
+Only plain UTF-8 text is supported. HTML, Markdown transformation, multipart MIME, attachments, OCR/PDF extraction, providers/readers, deduplication, persistence, and citations generated by models are not implemented. The operation is in-memory and introduces no network, process, model, tool, or database access. The CR0 release lock, CR0 wheel hash, and `cr0-v0.1.0` tag remain historical artifacts and are not changed for CR1 development.
