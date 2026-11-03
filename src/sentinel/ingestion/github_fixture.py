@@ -844,6 +844,14 @@ def ingest_packaged_github_fixture(
                         else:
                             existing_spans += 1
 
+                # A successful commit must leave the complete fixed-fixture
+                # dataset, not only the rows visited by the insertion loops.
+                # These checks share this write transaction, so any unexpected,
+                # missing, or altered row rolls back all batch DML.
+                _verify_registration(connection, prepared.registry)
+                _verify_persisted_items(connection, prepared.items)
+                _verify_persisted_spans(connection, prepared.items)
+
             return GithubFixtureIngestionReport(
                 registry_source_id=FIXTURE_REGISTRY_SOURCE_ID,
                 fixture_sha256=prepared.fixture.fixture_sha256,
