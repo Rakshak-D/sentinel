@@ -4,9 +4,9 @@ Sentinel is a planned local-first personal automation application. Its authorita
 
 ## Implemented bootstrap slices
 
-CR0-A establishes repository governance, a Python package, and an installable CLI with `sentinel --help` and `sentinel version`. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. These slices do not complete F38, F43, F46, or CR0.
+CR0-A establishes repository governance, a Python package, and an installable CLI. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. CR0-G adds a fail-closed credential broker contract; CR0-H adds explicit new-database initialization; CR0-I adds read-only diagnostics. These slices do not complete F38, F43, F46, or CR0.
 
-There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; `doctor` and `demo` remain unavailable. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. The included CR0-D synthetic adapters are test fixtures and operate only in memory. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
+There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; CR0-I adds read-only diagnostics for an existing database; `demo` remains unavailable. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. The included CR0-D synthetic adapters are test fixtures and operate only in memory. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
 
 ## CR0-B contract API
 
@@ -215,6 +215,7 @@ Do not install project packages with a global or ambiguous `pip` command. Run th
 ```powershell
 .\.venv\Scripts\sentinel.exe --help
 .\.venv\Scripts\sentinel.exe init --help
+.\.venv\Scripts\sentinel.exe doctor --help
 .\.venv\Scripts\sentinel.exe version
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check .
@@ -244,4 +245,22 @@ If initialization fails after exclusive creation, the newly reserved file and an
 
 Exclusive creation uses `O_CREAT|O_EXCL`, which refuses an already present final-component path, and adds `O_NOFOLLOW` where the host exposes it. The symlink test could not run here because Windows denied symlink creation without elevated support. This does not establish full race-free filesystem protection: directory junctions/reparse points are not comprehensively defended against, and a process able to replace directory entries concurrently may race subsequent SQLite path opens. The implementation checks the reserved file identity before and after storage operations, but does not claim protection from a hostile process with directory write access.
 
-CR0-H adds only the `init` command. `doctor` and `demo`, configuration activation, application tables, writer leases, backup/restore, credentials, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.
+CR0-H adds only the `init` command. CR0-I adds read-only `doctor`; `demo`, configuration activation, application tables, writer leases, backup/restore, credentials, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.
+
+## CR0-I read-only diagnostics
+
+Inspect an existing, disposable CR0-H database with an explicit absolute path:
+
+```powershell
+$database = Join-Path $env:TEMP ("sentinel-cr0-i-" + [guid]::NewGuid().ToString("N") + ".sqlite3")
+.\.venv\Scripts\sentinel.exe init --database $database
+.\.venv\Scripts\sentinel.exe doctor --database $database
+```
+
+`doctor` never selects a default database, creates a database, initializes it, migrates it, repairs it, or runs application SQL writes. It requires an existing absolute path. It opens the file with SQLite URI `mode=ro`, enables `PRAGMA query_only=ON`, enables and verifies connection-local foreign-key enforcement, and closes the connection deterministically. Invalid, missing, relative, or corrupted database paths produce bounded `FAIL` output without echoing the path or SQLite exception text and exit nonzero.
+
+Supported checks report separate results for read-only opening, WAL mode, SQLite integrity, foreign-key enforcement and integrity, registered migration IDs/order/artifact digests, the trusted schema checkpoint, bundled config validation and deterministic fingerprinting, the default credential broker state, and actual synthetic ModelGateway/ToolGateway success and denial probes. The gateway probes use only fixed in-memory PUBLIC fixtures: they verify typed boundary metadata and hashes, reject an unknown model/tool and SECRET model input, and deny write and approval capabilities. They do not invoke a provider, network, MCP process, credential retrieval, or external effect.
+
+`UNAVAILABLE` is expected for the production credential backend and OS keychain. `NOT_IMPLEMENTED` is reported for authenticated owner verification, policy enforcement, live model/provider routing, MCP smoke testing, backup verification, and signed audit roots. These states are never displayed as `PASS`. The command exits 0 when every currently supported required check passes; expected unavailable or not-implemented capabilities do not make this partial CR0 diagnostic fail. A passing report is not production readiness, authorization, or proof that P00-P17 or AB01-AB18 have passed.
+
+The database connection itself is opened with SQLite `mode=ro`, and tests verify writes fail even after temporarily turning `query_only` off. Doctor does not issue application data writes or change journal mode. SQLite may still create or update its own WAL/SHM sidecars to read a WAL database. On the current Windows/SQLite 3.43.1 environment, inspecting a clean initialized database left the main database at the same 16,384-byte size and created `-wal` and `-shm` sidecars. This filesystem-side effect is SQLite-managed and is not an application-data write; the database directory must permit SQLite's WAL coordination. A mode=ro connection may fail if the needed WAL state cannot be read safely. Doctor does not use `immutable=1` to skip locking or uncheckpointed WAL data. This slice does not guarantee zero filesystem changes, defend against all directory junction/reparse-point races, or perform backups/checkpointing.

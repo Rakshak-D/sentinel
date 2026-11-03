@@ -158,7 +158,7 @@ def _timestamp_is_aware(value: object) -> bool:
     )
 
 
-def _read_and_validate_history(
+def _validate_migration_rows(
     connection: sqlite3.Connection,
     migrations: tuple[Migration, ...],
 ) -> tuple[str, ...]:
@@ -194,12 +194,67 @@ def _read_and_validate_history(
         raise MigrationIntegrityError("applied migrations are not in registered order")
     if not applied_ids:
         raise MigrationIntegrityError("migration metadata exists without an applied foundation")
+    return tuple(applied_ids)
+
+
+def _verify_checkpoint_for_ids(
+    connection: sqlite3.Connection,
+    migrations: tuple[Migration, ...],
+    applied_ids: tuple[str, ...],
+) -> str:
+    expected_prefix = tuple(migration.migration_id for migration in migrations[: len(applied_ids)])
+    if not applied_ids or applied_ids != expected_prefix:
+        raise MigrationIntegrityError("applied migrations are not a registered prefix")
     expected_schema = migrations[len(applied_ids) - 1].schema_after
     try:
         verify_schema(connection, expected_schema)
     except SchemaIntegrityError as exc:
         raise MigrationIntegrityError("schema drift detected") from exc
+    return expected_schema.schema_version
+
+
+def _read_and_validate_history(
+    connection: sqlite3.Connection,
+    migrations: tuple[Migration, ...],
+) -> tuple[str, ...]:
+    applied_ids = _validate_migration_rows(connection, migrations)
+    _verify_checkpoint_for_ids(connection, migrations, applied_ids)
     return tuple(applied_ids)
+
+
+def _require_readonly_connection(connection: sqlite3.Connection) -> None:
+    try:
+        query_only = int(connection.execute("PRAGMA query_only").fetchone()[0]) == 1
+    except sqlite3.Error as exc:
+        raise MigrationIntegrityError("read-only connection state could not be verified") from exc
+    if not query_only:
+        raise MigrationIntegrityError("read-only connection is required for inspection")
+
+
+def inspect_migration_history_readonly(connection: sqlite3.Connection) -> tuple[str, ...]:
+    """Validate applied IDs, order and artifact digests on a query-only connection."""
+    _require_readonly_connection(connection)
+    try:
+        return _validate_migration_rows(connection, _registered_migrations())
+    except sqlite3.Error:
+        raise MigrationIntegrityError("migration history could not be read") from None
+
+
+def verify_schema_checkpoint_readonly(
+    connection: sqlite3.Connection, migration_ids: tuple[str, ...]
+) -> str:
+    """Verify the trusted schema checkpoint selected by applied migration IDs."""
+    _require_readonly_connection(connection)
+    if not isinstance(migration_ids, tuple):
+        raise MigrationIntegrityError("applied migrations are not a registered prefix")
+    try:
+        return _verify_checkpoint_for_ids(
+            connection,
+            _registered_migrations(),
+            migration_ids,
+        )
+    except sqlite3.Error:
+        raise MigrationIntegrityError("schema checkpoint could not be verified") from None
 
 
 def _next_applied_at(connection: sqlite3.Connection) -> str:
@@ -290,12 +345,25 @@ def initialize_storage(
 
 def verify_integrity(connection: sqlite3.Connection) -> None:
     """Run SQLite page and foreign-key integrity checks; raise on any reported issue."""
+    verify_sqlite_integrity(connection)
+    verify_foreign_key_integrity(connection)
+
+
+def verify_sqlite_integrity(connection: sqlite3.Connection) -> None:
+    """Run SQLite's full page, index and constraint integrity check."""
     try:
         integrity_rows = connection.execute("PRAGMA integrity_check").fetchall()
-        foreign_key_rows = connection.execute("PRAGMA foreign_key_check").fetchall()
     except sqlite3.Error as exc:
-        raise MigrationIntegrityError("SQLite integrity checks could not complete") from exc
+        raise MigrationIntegrityError("SQLite integrity check could not complete") from exc
     if integrity_rows != [("ok",)]:
         raise MigrationIntegrityError("SQLite integrity check failed")
+
+
+def verify_foreign_key_integrity(connection: sqlite3.Connection) -> None:
+    """Run SQLite's foreign-key check separately for diagnostic reporting."""
+    try:
+        foreign_key_rows = connection.execute("PRAGMA foreign_key_check").fetchall()
+    except sqlite3.Error as exc:
+        raise MigrationIntegrityError("SQLite foreign-key check could not complete") from exc
     if foreign_key_rows:
         raise MigrationIntegrityError("SQLite foreign-key check failed")

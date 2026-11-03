@@ -125,3 +125,83 @@ def inspect_connection(connection: sqlite3.Connection) -> ConnectionSettings:
         journal_mode=journal_mode,
         busy_timeout_ms=busy_timeout_ms,
     )
+
+
+def open_database_readonly(
+    database: str | Path,
+    *,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+) -> sqlite3.Connection:
+    """Open an existing absolute database through SQLite URI ``mode=ro``.
+
+    This API never creates the database or changes its journal mode. It enables
+    per-connection foreign-key enforcement and ``query_only`` before returning.
+    SQLite may still need to access WAL/SHM sidecars for a WAL database; callers
+    must not infer that read-only mode guarantees zero filesystem side effects.
+    """
+    if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int):
+        raise DatabaseOpenError("busy timeout must be an integer from 0 to 60000 ms")
+    if not 0 <= busy_timeout_ms <= MAX_BUSY_TIMEOUT_MS:
+        raise DatabaseOpenError("busy timeout must be an integer from 0 to 60000 ms")
+    if isinstance(database, Path):
+        path = database
+    elif type(database) is str:
+        path = Path(database)
+    else:
+        raise DatabaseOpenError("database selection must be an absolute filesystem path")
+    if not path.is_absolute() or "\x00" in str(path):
+        raise DatabaseOpenError("database selection must be an absolute filesystem path")
+    try:
+        if path.is_symlink():
+            raise DatabaseOpenError("selected database path must not be a symbolic link")
+        resolved = path.resolve(strict=True)
+        if not resolved.is_file():
+            raise DatabaseOpenError("selected database path is not a regular file")
+        uri = f"{resolved.as_uri()}?mode=ro"
+    except DatabaseOpenError:
+        raise
+    except FileNotFoundError:
+        raise DatabaseOpenError("selected database does not exist") from None
+    except (OSError, RuntimeError, ValueError, TypeError):
+        raise DatabaseOpenError("selected database path is unavailable") from None
+
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(
+            uri,
+            uri=True,
+            timeout=busy_timeout_ms / 1000,
+            isolation_level=None,
+        )
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+        connection.execute("PRAGMA query_only = ON")
+        if int(connection.execute("PRAGMA query_only").fetchone()[0]) != 1:
+            raise DatabaseOpenError("SQLite query-only mode could not be enabled")
+        if int(connection.execute("PRAGMA foreign_keys").fetchone()[0]) != 1:
+            raise DatabaseOpenError("SQLite foreign-key enforcement could not be enabled")
+        return connection
+    except DatabaseOpenError:
+        if connection is not None:
+            connection.close()
+        raise
+    except (OSError, sqlite3.Error):
+        if connection is not None:
+            connection.close()
+        raise DatabaseOpenError("read-only SQLite database could not be opened") from None
+
+
+@contextmanager
+def readonly_database_connection(
+    database: str | Path,
+    *,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+) -> Iterator[sqlite3.Connection]:
+    """Yield a configured mode=ro SQLite connection and close it deterministically."""
+    connection = open_database_readonly(database, busy_timeout_ms=busy_timeout_ms)
+    try:
+        yield connection
+    finally:
+        if connection.in_transaction:
+            connection.rollback()
+        connection.close()
