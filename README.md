@@ -292,4 +292,67 @@ To build and confirm the fixture is in the wheel:
 .\.venv\Scripts\python.exe -c "import glob, zipfile; wheel = zipfile.ZipFile(glob.glob('dist/*.whl')[0]); assert 'sentinel/demo/fixtures/demo-v1.json' in wheel.namelist(); print('fixture included')"
 ```
 
-A successful demo proves that this fixed packaged fixture validates and that the current synthetic gateway success/denial contracts and content hashes behave as expected. It does not demonstrate LLM inference, production model/tool adapters, network or credential isolation for future code, policy authorization, human approval, production readiness, or P00-P17/AB01-AB18 compliance. The demo's source labels and gateway contract checks are not security certification. The clean offline install from locally cached pinned artifacts remains an outstanding CR0 exit gate; CR0 stays IN_PROGRESS.
+A successful demo proves that this fixed packaged fixture validates and that the current synthetic gateway success/denial contracts and content hashes behave as expected. It does not demonstrate LLM inference, production model/tool adapters, network or credential isolation for future code, policy authorization, human approval, production readiness, or P00-P17/AB01-AB18 compliance. The demo's source labels and gateway contract checks are not security certification. At CR0-J, the clean offline install remained the final §16 exit gate; CR0-K records that installation evidence below.
+
+## CR0-K pinned Windows offline installation
+
+`requirements/cr0-windows-py311.lock` pins the complete Sentinel 0.1.0 runtime dependency closure for **CPython 3.11.7 on Windows x64**. Every installed distribution, including the Sentinel wheel, has an exact version and SHA-256 listed in the lock. The lock is an installation manifest, not a general source-build lock: setuptools' build dependency is not pinned in this file. The staging recipe fixes `SOURCE_DATE_EPOCH=1793687886` for wheel timestamps. Two builds using `build==1.6.1` and isolated `setuptools==84.2.1` produced identical wheel bytes in this environment; this does not establish cross-toolchain or cross-platform build reproducibility. The development extra remains separately resolved for local linting and tests.
+
+The selected runtime versions were resolved against the live package registry with binary-only downloads on the target interpreter. The lock contains Sentinel 0.1.0, Pydantic 2.14.2, Typer 0.27.3, and all 11 transitive runtime distributions. The Blueprint §15 lists nearby candidates Pydantic 2.14.0 and Typer 0.27.1; this lock uses later registry releases that satisfy the existing project constraints and whose full Windows wheel closure installed and passed `pip check`. `pydantic-core` is pinned to its CPython 3.11 Windows AMD64 wheel. The exact inventory and hashes are in the lock and build ledger.
+
+Stage the artifacts outside the repository. Run the commands from the repository root in Windows PowerShell:
+
+```powershell
+$stage = Join-Path $env:TEMP ("sentinel-cr0k-stage-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $stage | Out-Null
+$wheelhouse = Join-Path $stage "wheelhouse"
+New-Item -ItemType Directory -Path $wheelhouse | Out-Null
+$env:SOURCE_DATE_EPOCH = "1793687886"
+.\.venv\Scripts\python.exe -m build --wheel
+Copy-Item .\dist\sentinel-0.1.0-py3-none-any.whl $wheelhouse
+Get-Content .\requirements\cr0-windows-py311.lock | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -and -not $line.StartsWith("#")) {
+        $spec = ($line -split "\s+")[0]
+        if (-not $spec.StartsWith("sentinel==")) {
+            .\.venv\Scripts\python.exe -m pip download --no-cache-dir --only-binary=:all: --no-deps --dest $wheelhouse $spec
+            if ($LASTEXITCODE -ne 0) { throw "Wheel download failed for $spec" }
+        }
+    }
+}
+```
+
+The command shown above uses the project-local environment only for build and download tooling. Keep the resulting wheelhouse disposable and untracked. The offline verifier checks that its wheels exactly match the lock before pip runs. To install and execute the installed wheel from a fresh environment, pass the pyenv-managed base interpreter and new external install root:
+
+```powershell
+$basePython = (pyenv which python).Trim()
+$installRoot = Join-Path $env:TEMP ("sentinel-cr0k-install-" + [guid]::NewGuid().ToString("N"))
+.\.venv\Scripts\python.exe .\tools\verify_cr0_offline.py `
+    --python-exe $basePython `
+    --wheelhouse $wheelhouse `
+    --requirements .\requirements\cr0-windows-py311.lock `
+    --install-root $installRoot
+if ($LASTEXITCODE -ne 0) { throw "CR0-K offline verification failed" }
+```
+
+The installer creates a new venv with system site packages disabled, bootstraps pip only with that Python installation's bundled `ensurepip`, removes inherited Python/pip configuration and credential-like environment variables for its child processes, and runs pip with:
+
+```powershell
+python -m pip install --no-index --find-links <wheelhouse> --require-hashes --no-cache-dir --only-binary=:all: -r requirements/cr0-windows-py311.lock
+```
+
+The verifier runs from a working directory outside the checkout. It checks package imports resolve only from the new venv, rejects editable/source-path links, runs `pip check`, verifies the wheel's CLI entry point and packaged modules, and executes `version`, `--help`, `demo`, `init`, and `doctor`. The demo must produce one deterministic JSON document twice; the disposable database is checked for the unchanged foundation migration/hash and exact foundation schema. Missing and malformed database diagnostics must fail without creating/replacing data. It also validates fixture/config fingerprints, the six documented denials, expected credential/keychain `UNAVAILABLE` states, and future-component `NOT_IMPLEMENTED` states.
+
+For a manual hash-checked pip install into an already-created fresh venv, the offline command is:
+
+```powershell
+& "$installRoot\venv\Scripts\python.exe" -m pip install `
+    --no-index --find-links $wheelhouse --require-hashes --no-cache-dir `
+    --only-binary=:all: -r .\requirements\cr0-windows-py311.lock
+```
+
+Pip's hash-checking mode requires every requirement and transitive dependency to be pinned and hashed, and `--only-binary=:all:` excludes source distributions. `--no-index` limits pip to the local wheelhouse. The verifier additionally compares each wheel's metadata version and SHA-256 with the lock before installation. Missing or changed wheels fail; the verifier does not retry against an index. This does not disable networking at the operating-system level or sandbox package code. The fixed wheel artifacts are integrity-pinned relative to the committed lock, not independently authenticated by that lock alone.
+
+The wheelhouse is not committed. It is staged under a disposable directory outside the checkout so its binary artifacts and temporary venv do not enter Git. Preserve the printed wheel inventory and command output with the release evidence. The verified platform is only Windows x64 with CPython 3.11.7; no other Python patch, architecture, or OS is established by this gate. Local `ensurepip` supplies the installer pip; the requirements lock covers Sentinel's runtime, not pip itself or build/dev tooling. The build backend is isolated and resolved by `build` under `setuptools>=68`; the observed build used `setuptools==84.2.1`. That build-tool range is not hash-locked.
+
+This offline gate completes only the CR0 installation evidence. A clean pinned install does not prove cross-toolchain or cross-platform source-build reproducibility, network sandboxing, policy enforcement, credential isolation for future code, or production readiness. The existing Windows symlink test remains skipped/unverified. After this gate passes, CR0 is `READY_FOR_INDEPENDENT_REVIEW` and remains so until the technical lead reviews and accepts the evidence; later-release capabilities remain out of scope.
