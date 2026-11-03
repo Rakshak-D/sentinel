@@ -1,6 +1,6 @@
 """Immutable results and bounded errors for synthetic source fixtures."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
@@ -68,3 +68,75 @@ class GithubFixtureRead:
     fixture_version: str
     fixture_sha256: str
     issues: tuple[GithubFixtureIssue, ...]
+
+
+class GmailFixtureErrorCode(StrEnum):
+    """Fixed, non-sensitive error categories for the synthetic Gmail reader."""
+
+    FIXTURE_UNAVAILABLE = "fixture_unavailable"
+    FIXTURE_HASH_MISMATCH = "fixture_hash_mismatch"
+    INVALID_FIXTURE = "invalid_fixture"
+    INVALID_BASE64URL = "invalid_base64url"
+    INVALID_BODY = "invalid_body"
+    INVALID_OBSERVED_AT = "invalid_observed_at"
+    INVALID_CITATION = "invalid_citation"
+
+
+_GMAIL_ERROR_MESSAGES = {
+    GmailFixtureErrorCode.FIXTURE_UNAVAILABLE: "The packaged Gmail fixture is unavailable.",
+    GmailFixtureErrorCode.FIXTURE_HASH_MISMATCH: (
+        "The packaged Gmail fixture failed integrity verification."
+    ),
+    GmailFixtureErrorCode.INVALID_FIXTURE: "The synthetic Gmail fixture is invalid.",
+    GmailFixtureErrorCode.INVALID_BASE64URL: "A synthetic message body encoding is invalid.",
+    GmailFixtureErrorCode.INVALID_BODY: "A synthetic message body is invalid.",
+    GmailFixtureErrorCode.INVALID_OBSERVED_AT: "The trusted observation timestamp is invalid.",
+    GmailFixtureErrorCode.INVALID_CITATION: "A synthetic message citation is invalid.",
+}
+
+
+class GmailFixtureError(ValueError):
+    """Bounded public error that never includes mail metadata or body content."""
+
+    def __init__(self, code: GmailFixtureErrorCode) -> None:
+        self.code = code
+        super().__init__(_GMAIL_ERROR_MESSAGES[code])
+
+
+@dataclass(frozen=True, slots=True)
+class GmailFixtureMessage:
+    """Immutable message result; mail subject and normalized content stay out of repr."""
+
+    mailbox_alias: str
+    message_id: str
+    thread_id: str
+    internal_date: datetime
+    subject: str = field(repr=False)
+    normalized_source: NormalizedPlainTextSource = field(repr=False)
+    citations: tuple[SourceBoundCitation, ...]
+
+    @property
+    def source_id(self) -> UUID:
+        return self.normalized_source.envelope.source_id
+
+    @property
+    def body_text(self) -> str:
+        """Explicit access to decoded body text for trusted internal callers."""
+
+        return self.normalized_source.text
+
+    @property
+    def body_bytes(self) -> bytes:
+        """Explicit access to the original decoded body bytes."""
+
+        return self.normalized_source.original_bytes
+
+
+@dataclass(frozen=True, slots=True)
+class GmailFixtureRead:
+    """Immutable read result for the single pinned synthetic Gmail collection."""
+
+    mailbox_alias: str
+    fixture_version: str
+    fixture_sha256: str
+    messages: tuple[GmailFixtureMessage, ...]

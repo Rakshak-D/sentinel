@@ -433,3 +433,27 @@ assert verify_bound_citation(issue.normalized_source, citation) == "parser repor
 The reader returns a complete collection or raises a fixed, body-free `GithubFixtureError`; it never drops invalid issues and returns partial success. The resource is available through `importlib.resources` from an installed package. Setuptools package data includes the JSON file in the built wheel; `python -m build --wheel` followed by inspection of the wheel archive verifies the actual packaged bytes and pinned digest.
 
 This is a local fixture/format adapter only. It does not authenticate GitHub, source IDs, timestamps, or labels; inspect Markdown/HTML; synchronize live repositories; persist source items; or make CR1 complete. CR0's `0.1.0` tag and runtime lock are unchanged.
+
+## CR1-C synthetic Gmail message fixture reader
+
+`sentinel.readers.read_packaged_gmail_fixture()` loads only the fixed packaged resource `sentinel/readers/fixtures/gmail-messages-v1.json`. The wrapper schema is `sentinel.gmail-messages-fixture.v1`; the fictional package file is pinned to SHA-256 `781112d5b62439e833f33040f0e4f67c4adafa86d2f94e1b137fa09d52fa8b57`. The returned immutable `GmailFixtureRead` contains fictional mailbox metadata and `GmailFixtureMessage` records. A message exposes `message_id`, `thread_id`, parsed `internal_date`, its `SourceEnvelope` through `normalized_source`, verified `citations`, and explicit internal `subject`, `body_text`, and `body_bytes` access. Subject and normalized source fields are omitted from the default message representation; no generic body dump is provided. Errors use fixed `GmailFixtureErrorCode` categories and do not include mail content.
+
+This models a deliberately small Gmail `users.messages.get(format=full)` subset: `id`, `threadId`, `internalDate`, and `payload` with `mimeType`, `filename`, `headers`, and `body.size`/`body.data`. The fixture wrapper keeps `fixture_version`, `mailbox_alias`, and the test-only `evidence_spans` annotations outside each Gmail-style `message` object. The selected fields follow the official [Gmail Message resource](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages), [MessagePartBody resource](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages.attachments), and [Gmail Format enum](https://developers.google.com/workspace/gmail/api/reference/rest/v1/Format); this reader does not implement their complete schemas or API methods.
+
+The fixture accepts only a plain `text/plain` payload, an empty filename, and one in-memory body. Multipart `parts`, HTML, non-empty filenames, `attachmentId`, `raw` RFC 822 data, unsupported headers, and unknown fields are rejected. A `Content-Type` header is optional; when present, this subset requires `text/plain; charset=utf-8`. Body `data` must use the fixture's canonical unpadded base64url form: URL-safe alphabet only, no whitespace or padding, and re-encoding must reproduce the same characters. This is a strict fixture convention, not a claim that every valid Gmail response uses this exact canonical spelling. `body.size` is checked against the decoded byte count.
+
+Three byte representations are kept distinct: SHA-256 of the full JSON fixture file; ASCII base64url characters in `body.data`; and the decoded message body bytes. The `SourceEnvelope.content_sha256` hashes only those decoded bytes, and citation offsets address those bytes. The body is strictly decoded as UTF-8 and passed unchanged to `normalize_plain_text(..., "text/plain; charset=utf-8")`; CRLF/LF, whitespace, and Unicode code points are preserved. Fixture citations give explicit half-open byte ranges and expected text, then use the existing `add_citation`, `bind_citation`, and `verify_bound_citation` functions.
+
+Source IDs use UUIDv5 with `NAMESPACE_URL` and the name `sentinel:gmail.fixture:<mailbox-alias>#<message-id>`. The message ID, not `threadId`, identifies the source; the stable identity is unchanged by a body revision, while its content digest changes. Reader code assigns `provider_id="gmail.fixture"`, `trust=T4_EXTERNAL`, and `sensitivity=PRIVATE`. The fixed observation timestamp is `2026-11-03T12:00:00Z`; `internalDate` is parsed as bounded epoch milliseconds and remains untrusted provider-like metadata. Neither the timestamp, source ID, headers, nor email body authenticate a sender or convey owner intent. PRIVATE is intentionally conservative for mail-like data even though this fixture is entirely fictional.
+
+```python
+from sentinel.normalization import verify_bound_citation
+from sentinel.readers import read_packaged_gmail_fixture
+
+fixture = read_packaged_gmail_fixture()
+message = fixture.messages[0]
+citation = message.citations[0]
+assert verify_bound_citation(message.normalized_source, citation) == "parser flagged"
+```
+
+The reader makes no Gmail API, OAuth, keychain, SMTP, IMAP, network, subprocess, database, gateway, or provider calls. It does not read a real mailbox, implement attachments or general MIME support, or enable message modifications. F01's production OAuth reader, source authentication, credentials, cursor/sync state, and persistence remain unimplemented. CR1 remains in progress.
