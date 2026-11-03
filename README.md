@@ -460,7 +460,7 @@ The reader makes no Gmail API, OAuth, keychain, SMTP, IMAP, network, subprocess,
 
 ## CR1-D cooperative SQLite writer lease
 
-`sentinel.storage.acquire_writer_lease(database)` provides a Windows-only cooperative writer-ownership context for one already initialized Sentinel database. It requires an explicit absolute path to an existing regular database file on a local drive. UNC paths and mapped remote drives are rejected before resolving or opening the database. The registered migration history, artifact hashes, schema checkpoint, SQLite integrity, foreign-key integrity, foreign-key setting, and existing WAL mode are checked before a lease is returned. The API never creates a database, applies a migration, or changes journal mode.
+`sentinel.storage.acquire_writer_lease(database)` provides a Windows-only cooperative writer-ownership context for one already initialized Sentinel database. It requires an explicit absolute path to an existing regular database file on a fixed, removable, or RAM disk. UNC paths, mapped remote drives, and unknown/no-root drive types are rejected before resolving or opening the database. The registered migration history, artifact hashes, schema checkpoint, SQLite integrity, foreign-key integrity, foreign-key setting, and existing WAL mode are checked before a lease is returned. The API never creates a database, applies a migration, or changes journal mode.
 
 ```python
 from pathlib import Path

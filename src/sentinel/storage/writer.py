@@ -30,7 +30,7 @@ _ERROR_ALREADY_EXISTS = 183
 _WAIT_OBJECT_0 = 0
 _WAIT_ABANDONED = 0x80
 _WAIT_TIMEOUT = 0x102
-_DRIVE_REMOTE = 4
+_LOCAL_DRIVE_TYPES = frozenset({2, 3, 6})  # removable, fixed, or RAM disk
 
 _PROCESS_LOCK = threading.Lock()
 _PROCESS_MUTEX_NAMES: set[str] = set()
@@ -165,11 +165,11 @@ def _reject_remote_drive(path: Path) -> None:
         kernel = _kernel32()
         kernel.GetDriveTypeW.argtypes = (ctypes.c_wchar_p,)
         kernel.GetDriveTypeW.restype = ctypes.c_uint32
-        if int(kernel.GetDriveTypeW(f"{drive}\\")) == _DRIVE_REMOTE:
+        if int(kernel.GetDriveTypeW(f"{drive}\\")) not in _LOCAL_DRIVE_TYPES:
             _raise(WriterLeaseErrorCode.INVALID_PATH)
     except WriterLeaseError:
         raise
-    except (AttributeError, OSError, ValueError, TypeError):
+    except Exception:
         _raise(WriterLeaseErrorCode.DATABASE_UNAVAILABLE)
 
 
@@ -242,28 +242,73 @@ def _close_handle(kernel: Any, handle: int) -> bool:
 
 
 def _acquire_named_mutex(name: str) -> int:
-    kernel = _kernel32()
-    ctypes.set_last_error(0)
-    raw_handle = kernel.CreateMutexW(None, 1, name)
-    if not raw_handle:
+    handle: int | None = None
+    acquired = False
+    kernel: Any = None
+    try:
+        kernel = _kernel32()
+        ctypes.set_last_error(0)
+        raw_handle = kernel.CreateMutexW(None, 1, name)
+        if not raw_handle:
+            _raise(WriterLeaseErrorCode.LOCK_UNAVAILABLE)
+        handle = int(raw_handle)
+        acquired = True
+        last_error = ctypes.get_last_error()
+        if last_error == _ERROR_ALREADY_EXISTS:
+            acquired = False  # CreateMutex ignores initial ownership for existing objects.
+            wait_result = int(kernel.WaitForSingleObject(handle, WRITER_MUTEX_WAIT_MS))
+            if wait_result in (_WAIT_OBJECT_0, _WAIT_ABANDONED):
+                acquired = True
+                return handle
+            close_succeeded = _close_handle(kernel, handle)
+            if close_succeeded:
+                handle = None
+            if not close_succeeded:
+                _raise(WriterLeaseErrorCode.LOCK_UNAVAILABLE)
+            if wait_result == _WAIT_TIMEOUT:
+                _raise(WriterLeaseErrorCode.LOCK_CONTENDED)
+            _raise(WriterLeaseErrorCode.LOCK_UNAVAILABLE)
+        return handle
+    except WriterLeaseError:
+        if handle is not None and kernel is not None:
+            if acquired:
+                try:
+                    kernel.ReleaseMutex(handle)
+                except Exception:
+                    pass
+            try:
+                _close_handle(kernel, handle)
+            except Exception:
+                pass
+        raise
+    except Exception:
+        if handle is not None and kernel is not None:
+            if acquired:
+                try:
+                    kernel.ReleaseMutex(handle)
+                except Exception:
+                    pass
+            try:
+                _close_handle(kernel, handle)
+            except Exception:
+                pass
         _raise(WriterLeaseErrorCode.LOCK_UNAVAILABLE)
-    handle = int(raw_handle)
-    last_error = ctypes.get_last_error()
-    if last_error == _ERROR_ALREADY_EXISTS:
-        wait_result = int(kernel.WaitForSingleObject(handle, WRITER_MUTEX_WAIT_MS))
-        if wait_result in (_WAIT_OBJECT_0, _WAIT_ABANDONED):
-            return handle
-        _close_handle(kernel, handle)
-        if wait_result == _WAIT_TIMEOUT:
-            _raise(WriterLeaseErrorCode.LOCK_CONTENDED)
-        _raise(WriterLeaseErrorCode.LOCK_UNAVAILABLE)
-    return handle
 
 
 def _release_named_mutex(handle: int) -> None:
-    kernel = _kernel32()
-    release_ok = bool(kernel.ReleaseMutex(handle))
-    close_ok = _close_handle(kernel, handle)
+    try:
+        kernel = _kernel32()
+        try:
+            release_ok = bool(kernel.ReleaseMutex(handle))
+        except Exception:
+            release_ok = False
+        try:
+            close_ok = _close_handle(kernel, handle)
+        except Exception:
+            close_ok = False
+    except Exception:
+        release_ok = False
+        close_ok = False
     if not release_ok or not close_ok:
         _raise(WriterLeaseErrorCode.LEASE_RELEASE_FAILED)
 

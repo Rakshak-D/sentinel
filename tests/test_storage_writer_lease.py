@@ -154,15 +154,33 @@ def test_os_mutex_creation_failure_is_bounded_and_releases_process_reservation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = _database(tmp_path)
+    canary = f"SYNTHETIC_MUTEX_FAILURE_{path}"
 
-    def fail_lock(_name: str) -> int:
-        raise WriterLeaseError(WriterLeaseErrorCode.LOCK_UNAVAILABLE)
+    class ApiFunction:
+        argtypes: object = None
+        restype: object = None
 
-    monkeypatch.setattr(writer_module, "_acquire_named_mutex", fail_lock)
+        def __init__(self, result: int | None = None, failure: Exception | None = None) -> None:
+            self.result = result
+            self.failure = failure
+
+        def __call__(self, *_args: object) -> int | None:
+            if self.failure is not None:
+                raise self.failure
+            return self.result
+
+    class FakeKernel:
+        def __init__(self) -> None:
+            self.GetDriveTypeW = ApiFunction(result=3)
+            self.CreateMutexW = ApiFunction(failure=OSError(canary))
+
+    monkeypatch.setattr(writer_module, "_kernel32", FakeKernel)
     with pytest.raises(WriterLeaseError) as error:
         with acquire_writer_lease(path):
             pytest.fail("lease acquired without an OS mutex")
     assert error.value.code is WriterLeaseErrorCode.LOCK_UNAVAILABLE
+    assert canary not in str(error.value)
+    assert str(path) not in str(error.value)
 
     monkeypatch.undo()
     with acquire_writer_lease(path):
@@ -249,25 +267,27 @@ def test_unc_path_is_rejected_before_filesystem_access(
     assert error.value.code is WriterLeaseErrorCode.INVALID_PATH
 
 
-def test_mapped_remote_drive_is_rejected_before_database_access(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("drive_type", [0, 1, 4, 5])
+def test_nonlocal_drive_types_are_rejected_before_database_access(
+    drive_type: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class DriveTypeFunction:
         argtypes: object = None
         restype: object = None
 
-        def __init__(self) -> None:
+        def __init__(self, result: int) -> None:
+            self.result = result
             self.roots: list[str] = []
 
         def __call__(self, root: str) -> int:
             self.roots.append(root)
-            return 4
+            return self.result
 
     class FakeKernel:
-        def __init__(self) -> None:
-            self.GetDriveTypeW = DriveTypeFunction()
+        def __init__(self, result: int) -> None:
+            self.GetDriveTypeW = DriveTypeFunction(result)
 
-    kernel = FakeKernel()
+    kernel = FakeKernel(drive_type)
     monkeypatch.setattr(writer_module, "_kernel32", lambda: kernel)
     monkeypatch.setattr(
         Path,
