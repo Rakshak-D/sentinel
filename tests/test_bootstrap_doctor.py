@@ -15,6 +15,7 @@ from sentinel.storage.connection import (
     readonly_database_connection,
 )
 from sentinel.storage.migrations import (
+    MIGRATIONS,
     initialize_storage,
     inspect_migration_history_readonly,
     verify_integrity,
@@ -128,8 +129,8 @@ def test_readonly_migration_and_schema_verifiers_use_trusted_registry(
         schema_version = verify_schema_checkpoint_readonly(connection, migration_ids)
         verify_integrity(connection)
 
-    assert migration_ids == (FOUNDATION_ID,)
-    assert schema_version == FOUNDATION_ID
+    assert migration_ids == tuple(migration.migration_id for migration in MIGRATIONS)
+    assert schema_version == migration_ids[-1]
 
 
 def test_missing_database_fails_without_creation(tmp_path: Path) -> None:
@@ -165,7 +166,8 @@ def test_invalid_database_bytes_fail_without_disclosing_path_or_contents(
     ("sql", "expected_check"),
     [
         (
-            "UPDATE schema_migrations SET migration_id = 'unknown-doctor-migration'",
+            "UPDATE schema_migrations SET migration_id = 'unknown-doctor-migration' "
+            "WHERE migration_id = 'cr0-c-0001-schema-migrations'",
             DoctorCheckId.MIGRATION_HISTORY,
         ),
         (

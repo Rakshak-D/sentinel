@@ -18,14 +18,14 @@ FOUNDATION_ID = "cr0-c-0001-schema-migrations"
 FOUNDATION_SHA256 = "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217"
 
 
-def test_new_database_uses_only_registered_foundation_and_integrity_checks(
+def test_new_database_uses_all_registered_migrations_and_integrity_checks(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "sentinel.sqlite3"
 
     result = initialize_new_database(database)
 
-    assert result.migration_ids == (FOUNDATION_ID,)
+    assert result.migration_ids == tuple(migration.migration_id for migration in MIGRATIONS)
     assert MIGRATIONS[0].migration_id == FOUNDATION_ID
     assert MIGRATIONS[0].artifact_sha256 == FOUNDATION_SHA256
     with database_connection(database) as connection:
@@ -41,10 +41,9 @@ def test_new_database_uses_only_registered_foundation_and_integrity_checks(
     assert row == (FOUNDATION_ID, FOUNDATION_SHA256, 1)
     assert settings.foreign_keys_enabled is True
     assert settings.journal_mode == "wal"
-    assert objects == [
-        ("index", "schema_migrations_applied_at_idx"),
-        ("table", "schema_migrations"),
-    ]
+    assert objects == sorted(
+        (item.object_type, item.name) for item in MIGRATIONS[-1].schema_after.objects
+    )
 
 
 def test_new_database_closes_and_reopens_without_duplicate_migration(
@@ -110,7 +109,9 @@ def test_existing_valid_sentinel_database_is_refused_unchanged(tmp_path: Path) -
     assert caught.value.code == InitializationErrorCode.ALREADY_EXISTS
     assert database.read_bytes() == before
     with database_connection(database) as connection:
-        assert connection.execute("SELECT count(*) FROM schema_migrations").fetchone() == (1,)
+        assert connection.execute("SELECT count(*) FROM schema_migrations").fetchone() == (
+            len(MIGRATIONS),
+        )
 
 
 def test_final_path_symlink_is_refused_and_target_is_unchanged(tmp_path: Path) -> None:

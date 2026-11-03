@@ -9,6 +9,7 @@ import pytest
 
 import sentinel.storage.migrations as migration_module
 import sentinel.storage.writer as writer_module
+from sentinel.storage.connection import database_connection
 from sentinel.storage.migrations import Migration, initialize_storage
 from sentinel.storage.schema import FOUNDATION_SCHEMA, SchemaDefinition
 from sentinel.storage.writer import (
@@ -88,7 +89,11 @@ def test_malformed_database_and_tampered_migration_records_fail_closed(tmp_path:
 
     for name, change in (
         ("tampered.sqlite3", "UPDATE schema_migrations SET artifact_sha256 = ?"),
-        ("unknown.sqlite3", "UPDATE schema_migrations SET migration_id = ?"),
+        (
+            "unknown.sqlite3",
+            "UPDATE schema_migrations SET migration_id = ? "
+            "WHERE migration_id = 'cr0-c-0001-schema-migrations'",
+        ),
     ):
         path = _database(tmp_path, name)
         value = "0" * 64 if name.startswith("tampered") else "unknown-0001"
@@ -207,8 +212,30 @@ def test_writer_validation_does_not_apply_registered_pending_migrations(
                 "SELECT 1 FROM sqlite_master WHERE name = 'must_not_be_applied'"
             ).fetchone()
 
-    assert rows == [(FOUNDATION_ID,)]
+    assert rows == [(migration.migration_id,) for migration in migration_module.MIGRATIONS[:2]]
     assert table is None
+
+
+def test_writer_lease_does_not_apply_pending_cr1_e_migration(tmp_path: Path) -> None:
+    path = tmp_path / "historical-cr0-pending.sqlite3"
+    with database_connection(path, create=True) as connection:
+        migration_module._apply_migration(
+            connection,
+            migration_module.MIGRATIONS[0],
+            app_build="synthetic-cr0-history",
+        )
+
+    with acquire_writer_lease(path):
+        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+            rows = connection.execute(
+                "SELECT migration_id FROM schema_migrations ORDER BY migration_id"
+            ).fetchall()
+            sources = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sources'"
+            ).fetchone()
+
+    assert rows == [(FOUNDATION_ID,)]
+    assert sources is None
 
 
 def test_final_component_symlink_is_refused_when_host_allows_creation(tmp_path: Path) -> None:

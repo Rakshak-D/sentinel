@@ -12,10 +12,23 @@ from typing import Final
 from sentinel import __version__
 from sentinel.storage.connection import database_connection
 from sentinel.storage.schema import (
+    CR1_SOURCE_SCHEMA,
+    CR1_SOURCE_SCHEMA_DEFINITION_SHA256,
     FOUNDATION_SCHEMA,
     FOUNDATION_SCHEMA_DEFINITION_SHA256,
     MIGRATION_INDEX_DDL,
     MIGRATION_TABLE_DDL,
+    PLUGIN_MANIFESTS_ENABLED_TRUST_INDEX_DDL,
+    PLUGIN_MANIFESTS_TABLE_DDL,
+    PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL,
+    PRINCIPALS_TABLE_DDL,
+    SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL,
+    SOURCE_ITEMS_SOURCE_OBSERVED_AT_INDEX_DDL,
+    SOURCE_ITEMS_TABLE_DDL,
+    SOURCES_ENABLED_TYPE_INDEX_DDL,
+    SOURCES_TABLE_DDL,
+    SYNC_CURSORS_STATUS_INDEX_DDL,
+    SYNC_CURSORS_TABLE_DDL,
     SchemaDefinition,
     SchemaIntegrityError,
     verify_schema,
@@ -27,6 +40,10 @@ _FOUNDATION_MIGRATION_ID: Final = "cr0-c-0001-schema-migrations"
 _FOUNDATION_ARTIFACT_SHA256: Final = (
     "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217"
 )
+_CR1_E_MIGRATION_ID: Final = "cr1-e-0002-source-registry"
+_CR1_E_MIGRATION_ARTIFACT_SHA256: Final = (
+    "7ef613bdb646d9b98bc18bb20dd7bba3467d4de12b2cb5c4802e4d1dd8d1c0c7"
+)
 
 
 class MigrationIntegrityError(RuntimeError):
@@ -35,6 +52,21 @@ class MigrationIntegrityError(RuntimeError):
 
 class MigrationApplyError(RuntimeError):
     """Raised when one registered migration failed and was rolled back."""
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationState:
+    """Read-only distinction between a valid schema prefix and current schema."""
+
+    applied_migration_ids: tuple[str, ...]
+    schema_version: str
+    pending_migration_ids: tuple[str, ...]
+
+    @property
+    def is_current(self) -> bool:
+        """Whether the validated database has every currently registered migration."""
+
+        return not self.pending_migration_ids
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,12 +125,32 @@ class Migration:
         return hashlib.sha256(self.canonical_artifact).hexdigest()
 
 
+_CR1_E_STATEMENTS: tuple[str, ...] = (
+    PRINCIPALS_TABLE_DDL,
+    PLUGIN_MANIFESTS_TABLE_DDL,
+    SOURCES_TABLE_DDL,
+    SYNC_CURSORS_TABLE_DDL,
+    SOURCE_ITEMS_TABLE_DDL,
+    PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL,
+    PLUGIN_MANIFESTS_ENABLED_TRUST_INDEX_DDL,
+    SOURCES_ENABLED_TYPE_INDEX_DDL,
+    SYNC_CURSORS_STATUS_INDEX_DDL,
+    SOURCE_ITEMS_SOURCE_OBSERVED_AT_INDEX_DDL,
+    SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         _FOUNDATION_MIGRATION_ID,
         (MIGRATION_TABLE_DDL, MIGRATION_INDEX_DDL),
         FOUNDATION_SCHEMA,
         artifact_version=1,
+    ),
+    Migration(
+        _CR1_E_MIGRATION_ID,
+        _CR1_E_STATEMENTS,
+        CR1_SOURCE_SCHEMA,
+        artifact_version=2,
     ),
 )
 
@@ -122,6 +174,13 @@ def _registered_migrations() -> tuple[Migration, ...]:
         raise MigrationIntegrityError("foundation migration artifact digest mismatch")
     if foundation.schema_after.sha256 != FOUNDATION_SCHEMA_DEFINITION_SHA256:
         raise MigrationIntegrityError("foundation schema checkpoint was modified")
+    if len(migrations) < 2 or migrations[1].migration_id != _CR1_E_MIGRATION_ID:
+        raise MigrationIntegrityError("registered migrations lack the CR1-E source registry")
+    source_registry = migrations[1]
+    if source_registry.artifact_sha256 != _CR1_E_MIGRATION_ARTIFACT_SHA256:
+        raise MigrationIntegrityError("CR1-E migration artifact digest mismatch")
+    if source_registry.schema_after.sha256 != CR1_SOURCE_SCHEMA_DEFINITION_SHA256:
+        raise MigrationIntegrityError("CR1-E schema checkpoint digest mismatch")
     if any(migration.artifact_version != 2 for migration in migrations[1:]):
         raise MigrationIntegrityError("new migrations must use checkpoint-aware artifact v2")
     return migrations
@@ -238,6 +297,29 @@ def inspect_migration_history_readonly(connection: sqlite3.Connection) -> tuple[
         return _validate_migration_rows(connection, _registered_migrations())
     except sqlite3.Error:
         raise MigrationIntegrityError("migration history could not be read") from None
+
+
+def inspect_migration_state_readonly(connection: sqlite3.Connection) -> MigrationState:
+    """Validate schema integrity and report currentness without applying migrations.
+
+    A historical registered prefix is a valid state when its checkpoint matches;
+    callers can inspect ``pending_migration_ids`` to distinguish it from the current
+    registered schema. This function never repairs or upgrades the database.
+    """
+    _require_readonly_connection(connection)
+    try:
+        migrations = _registered_migrations()
+        applied_ids = _validate_migration_rows(connection, migrations)
+        schema_version = _verify_checkpoint_for_ids(connection, migrations, applied_ids)
+        return MigrationState(
+            applied_migration_ids=applied_ids,
+            schema_version=schema_version,
+            pending_migration_ids=tuple(
+                migration.migration_id for migration in migrations[len(applied_ids) :]
+            ),
+        )
+    except sqlite3.Error:
+        raise MigrationIntegrityError("migration state could not be read") from None
 
 
 def verify_schema_checkpoint_readonly(

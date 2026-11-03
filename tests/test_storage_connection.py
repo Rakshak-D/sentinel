@@ -11,7 +11,7 @@ from sentinel.storage.connection import (
     inspect_connection,
     open_database,
 )
-from sentinel.storage.migrations import initialize_storage
+from sentinel.storage.migrations import MIGRATIONS, initialize_storage
 
 
 def test_file_creation_is_explicit_and_errors_are_actionable(tmp_path: Path) -> None:
@@ -101,4 +101,4 @@ def test_reopening_does_not_remove_existing_data(tmp_path: Path) -> None:
 
     with database_connection(database) as connection:
         rows = connection.execute("SELECT app_build FROM schema_migrations").fetchall()
-    assert rows == [("synthetic-persisted-fixture",)]
+    assert rows == [("synthetic-persisted-fixture",)] * len(MIGRATIONS)

@@ -17,8 +17,6 @@ from sentinel.storage.migrations import (
 )
 from sentinel.storage.schema import (
     FOUNDATION_SCHEMA,
-    MIGRATION_INDEX_DDL,
-    MIGRATION_TABLE_DDL,
     SchemaDefinition,
     SchemaObjectDefinition,
 )
@@ -52,7 +50,7 @@ def _schema_checkpoint(
 ) -> SchemaDefinition:
     return SchemaDefinition(
         schema_version=migration_id,
-        objects=(*FOUNDATION_SCHEMA.objects, *objects),
+        objects=(*migration_module.MIGRATIONS[-1].schema_after.objects, *objects),
     )
 
 
@@ -70,12 +68,16 @@ def _schema_expansion_migration() -> Migration:
     )
 
 
-def test_initial_migration_creates_only_normative_migration_metadata(
+def test_historical_cr0_migration_creates_only_normative_migration_metadata(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "initial.sqlite3"
-
-    _initialize(database, app_build="sentinel-test")
+    with database_connection(database, create=True) as connection:
+        migration_module._apply_migration(
+            connection,
+            migration_module.MIGRATIONS[0],
+            app_build="sentinel-test",
+        )
 
     with database_connection(database) as connection:
         columns = connection.execute("PRAGMA table_info(schema_migrations)").fetchall()
@@ -125,6 +127,7 @@ def test_registry_migrations_apply_in_declared_order(
 
     assert [row[0] for row in _applied_rows(database)] == [
         "cr0-c-0001-schema-migrations",
+        "cr1-e-0002-source-registry",
         "test-0002",
         "test-0003",
     ]
@@ -143,7 +146,11 @@ def test_trusted_schema_expansion_creates_a_real_table_and_index(
 
     applied = initialize_storage(database, create=True)
 
-    assert applied == ("cr0-c-0001-schema-migrations", migration.migration_id)
+    assert applied == (
+        "cr0-c-0001-schema-migrations",
+        "cr1-e-0002-source-registry",
+        migration.migration_id,
+    )
     with database_connection(database) as connection:
         table = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -236,20 +243,11 @@ def test_existing_database_upgrades_without_losing_migration_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "upgrade-existing.sqlite3"
-    with database_connection(database, create=True) as connection:
-        connection.execute(MIGRATION_TABLE_DDL)
-        connection.execute(MIGRATION_INDEX_DDL)
+    _initialize(database)
+    with database_connection(database) as connection:
         connection.execute(
-            """INSERT INTO schema_migrations
-               (migration_id, applied_at, artifact_sha256, app_build, success)
-               VALUES (?, ?, ?, ?, ?)""",
-            (
-                "cr0-c-0001-schema-migrations",
-                "2026-11-02T00:00:00.000000+00:00",
-                "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217",
-                "sentinel-before-upgrade",
-                1,
-            ),
+            "UPDATE schema_migrations SET app_build = ? WHERE migration_id = ?",
+            ("sentinel-before-upgrade", "cr0-c-0001-schema-migrations"),
         )
     old_rows = _applied_rows(database)
     migration = _schema_expansion_migration()
@@ -264,13 +262,13 @@ def test_existing_database_upgrades_without_losing_migration_metadata(
     assert applied == (migration.migration_id,)
     rows = _applied_rows(database)
     assert [row[0] for row in rows] == [
-        "cr0-c-0001-schema-migrations",
+        *(row[0] for row in old_rows),
         migration.migration_id,
     ]
-    assert rows[0] == old_rows[0]
+    assert rows[: len(old_rows)] == old_rows
     assert rows[0][3] == "sentinel-before-upgrade"
     assert rows[0][2] == migration_module.MIGRATIONS[0].artifact_sha256
-    assert rows[1][2] == migration.artifact_sha256
+    assert rows[-1][2] == migration.artifact_sha256
 
 
 def test_reopening_upgraded_database_is_idempotent_and_preserves_rows(
@@ -341,21 +339,21 @@ def test_new_artifact_hash_covers_its_expected_schema_checkpoint(
     item_id TEXT NOT NULL PRIMARY KEY,
     item_value TEXT NOT NULL CHECK (length(item_value) > 1)
 )"""
+    altered_objects = tuple(
+        SchemaObjectDefinition(item.object_type, item.name, changed_table)
+        if item.object_type == "table" and item.name == "test_migration_items"
+        else item
+        for item in migration.schema_after.objects
+    )
     altered = Migration(
         migration.migration_id,
         migration.statements,
-        _schema_checkpoint(
-            migration.migration_id,
-            SchemaObjectDefinition("table", "test_migration_items", changed_table),
-            SchemaObjectDefinition(
-                "index", "test_migration_items_value_idx", _EXPANSION_INDEX_SQL
-            ),
-        ),
+        SchemaDefinition(migration.migration_id, altered_objects),
     )
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",
-        (migration_module.MIGRATIONS[0], altered),
+        (*migration_module.MIGRATIONS[:2], altered),
     )
 
     with pytest.raises(MigrationIntegrityError, match="artifact digest mismatch"):

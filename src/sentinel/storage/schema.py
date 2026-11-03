@@ -111,6 +111,141 @@ FOUNDATION_SCHEMA_DEFINITION_SHA256 = (
     "1f4d935bf45b5c09f68b4f6e3deb18846aa6d9ee14510eed89b3ab4a71139d30"
 )
 
+# CR1-E source registry foundation.  These are metadata/reference tables only:
+# content_ref and value_cipher_ref do not establish that backing bytes are
+# encrypted, available, or authorized for a particular operation.
+PRINCIPALS_TABLE_DDL = """CREATE TABLE principals (
+    principal_id TEXT NOT NULL PRIMARY KEY,
+    kind TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    os_binding TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    revoked_at TEXT
+)"""
+PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL = """CREATE INDEX principals_kind_revoked_at_idx
+    ON principals(kind, revoked_at)"""
+
+PLUGIN_MANIFESTS_TABLE_DDL = """CREATE TABLE plugin_manifests (
+    plugin_id TEXT NOT NULL,
+    plugin_version TEXT NOT NULL,
+    manifest_ref TEXT NOT NULL,
+    manifest_sha256 TEXT NOT NULL CHECK (
+        length(manifest_sha256) = 64 AND manifest_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    origin TEXT NOT NULL,
+    capability_json TEXT NOT NULL,
+    trust TEXT NOT NULL,
+    sensitivity TEXT NOT NULL,
+    host_allowlist_json TEXT NOT NULL,
+    fixture_set_sha256 TEXT NOT NULL CHECK (
+        length(fixture_set_sha256) = 64 AND fixture_set_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    registered_at TEXT NOT NULL,
+    PRIMARY KEY (plugin_id, plugin_version),
+    UNIQUE (manifest_sha256)
+)"""
+PLUGIN_MANIFESTS_ENABLED_TRUST_INDEX_DDL = """CREATE INDEX plugin_manifests_enabled_trust_idx
+    ON plugin_manifests(enabled, trust)"""
+
+SOURCES_TABLE_DDL = """CREATE TABLE sources (
+    source_id TEXT NOT NULL PRIMARY KEY,
+    plugin_id TEXT NOT NULL,
+    plugin_version TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    account_alias TEXT NOT NULL,
+    scope_json TEXT NOT NULL,
+    host_allowlist_json TEXT NOT NULL,
+    trust TEXT NOT NULL,
+    default_sensitivity TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    created_at TEXT NOT NULL,
+    UNIQUE (plugin_id, account_alias),
+    FOREIGN KEY (plugin_id, plugin_version)
+        REFERENCES plugin_manifests(plugin_id, plugin_version),
+    FOREIGN KEY (principal_id) REFERENCES principals(principal_id)
+)"""
+SOURCES_ENABLED_TYPE_INDEX_DDL = """CREATE INDEX sources_enabled_type_idx
+    ON sources(enabled, source_type)"""
+
+SYNC_CURSORS_TABLE_DDL = """CREATE TABLE sync_cursors (
+    cursor_id TEXT NOT NULL PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    cursor_kind TEXT NOT NULL,
+    value_cipher_ref TEXT NOT NULL,
+    etag TEXT,
+    generation INTEGER NOT NULL CHECK (generation >= 0),
+    last_full_sync_at TEXT,
+    last_commit_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    UNIQUE (source_id, cursor_kind),
+    FOREIGN KEY (source_id) REFERENCES sources(source_id)
+)"""
+SYNC_CURSORS_STATUS_INDEX_DDL = """CREATE INDEX sync_cursors_status_idx
+    ON sync_cursors(status)"""
+
+SOURCE_ITEMS_TABLE_DDL = """CREATE TABLE source_items (
+    item_id TEXT NOT NULL PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    provider_item_id TEXT NOT NULL,
+    provider_revision TEXT,
+    canonical_uri TEXT,
+    content_ref TEXT NOT NULL,
+    content_sha256 TEXT NOT NULL CHECK (
+        length(content_sha256) = 64 AND content_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    trust TEXT NOT NULL,
+    sensitivity TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    source_at TEXT,
+    deleted_at TEXT,
+    metadata_json TEXT NOT NULL,
+    UNIQUE (source_id, provider_item_id, content_sha256),
+    FOREIGN KEY (source_id) REFERENCES sources(source_id)
+)"""
+SOURCE_ITEMS_SOURCE_OBSERVED_AT_INDEX_DDL = """CREATE INDEX source_items_source_observed_at_idx
+    ON source_items(source_id, observed_at)"""
+SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL = """CREATE INDEX source_items_content_sha256_idx
+    ON source_items(content_sha256)"""
+
+CR1_SOURCE_SCHEMA_VERSION = "cr1-e-0002-source-registry"
+CR1_SOURCE_SCHEMA = SchemaDefinition(
+    schema_version=CR1_SOURCE_SCHEMA_VERSION,
+    objects=(
+        *FOUNDATION_SCHEMA.objects,
+        SchemaObjectDefinition("table", "principals", PRINCIPALS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index", "principals_kind_revoked_at_idx", PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL
+        ),
+        SchemaObjectDefinition("table", "plugin_manifests", PLUGIN_MANIFESTS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index",
+            "plugin_manifests_enabled_trust_idx",
+            PLUGIN_MANIFESTS_ENABLED_TRUST_INDEX_DDL,
+        ),
+        SchemaObjectDefinition("table", "sources", SOURCES_TABLE_DDL),
+        SchemaObjectDefinition("index", "sources_enabled_type_idx", SOURCES_ENABLED_TYPE_INDEX_DDL),
+        SchemaObjectDefinition("table", "sync_cursors", SYNC_CURSORS_TABLE_DDL),
+        SchemaObjectDefinition("index", "sync_cursors_status_idx", SYNC_CURSORS_STATUS_INDEX_DDL),
+        SchemaObjectDefinition("table", "source_items", SOURCE_ITEMS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index",
+            "source_items_source_observed_at_idx",
+            SOURCE_ITEMS_SOURCE_OBSERVED_AT_INDEX_DDL,
+        ),
+        SchemaObjectDefinition(
+            "index", "source_items_content_sha256_idx", SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL
+        ),
+    ),
+)
+
+# Independent checkpoint pin; the registry validates this separately from the
+# migration artifact hash so historical CR0 metadata remains unchanged.
+CR1_SOURCE_SCHEMA_DEFINITION_SHA256 = (
+    "38eb2f69500aa21df1002691c40759ba5acbc58b09c97de4a8ab7bfdd9c40d6a"
+)
+
 
 def _normalized_sql(value: object) -> str | None:
     if not isinstance(value, str):
