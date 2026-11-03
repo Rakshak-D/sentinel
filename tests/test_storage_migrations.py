@@ -128,6 +128,7 @@ def test_registry_migrations_apply_in_declared_order(
     assert [row[0] for row in _applied_rows(database)] == [
         "cr0-c-0001-schema-migrations",
         "cr1-e-0002-source-registry",
+        "cr1-f-0003-source-spans",
         "test-0002",
         "test-0003",
     ]
@@ -149,6 +150,7 @@ def test_trusted_schema_expansion_creates_a_real_table_and_index(
     assert applied == (
         "cr0-c-0001-schema-migrations",
         "cr1-e-0002-source-registry",
+        "cr1-f-0003-source-spans",
         migration.migration_id,
     )
     with database_connection(database) as connection:
@@ -353,7 +355,7 @@ def test_new_artifact_hash_covers_its_expected_schema_checkpoint(
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",
-        (*migration_module.MIGRATIONS[:2], altered),
+        (*migration_module.MIGRATIONS[:3], altered),
     )
 
     with pytest.raises(MigrationIntegrityError, match="artifact digest mismatch"):

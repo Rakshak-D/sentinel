@@ -18,7 +18,11 @@ CR1_E_MIGRATION_ID = "cr1-e-0002-source-registry"
 
 def _database(tmp_path: Path, name: str = "integrity.sqlite3") -> Path:
     database = tmp_path / name
-    initialize_storage(database, create=True)
+    with database_connection(database, create=True) as connection:
+        for migration in migration_module.MIGRATIONS[:2]:
+            migration_module._apply_migration(
+                connection, migration, app_build="synthetic-cr1-e-history"
+            )
     return database
 
 
@@ -30,11 +34,11 @@ def test_foundation_and_new_migration_and_full_checkpoint_have_independent_pins(
     assert FOUNDATION_SCHEMA_DEFINITION_SHA256 == (
         "1f4d935bf45b5c09f68b4f6e3deb18846aa6d9ee14510eed89b3ab4a71139d30"
     )
-    assert migration_module.MIGRATIONS[-1].migration_id == CR1_E_MIGRATION_ID
-    assert migration_module.MIGRATIONS[-1].artifact_sha256 == (
+    assert migration_module.MIGRATIONS[1].migration_id == CR1_E_MIGRATION_ID
+    assert migration_module.MIGRATIONS[1].artifact_sha256 == (
         "7ef613bdb646d9b98bc18bb20dd7bba3467d4de12b2cb5c4802e4d1dd8d1c0c7"
     )
-    assert migration_module.MIGRATIONS[-1].schema_after.sha256 == (
+    assert migration_module.MIGRATIONS[1].schema_after.sha256 == (
         "38eb2f69500aa21df1002691c40759ba5acbc58b09c97de4a8ab7bfdd9c40d6a"
     )
     assert CR1_SOURCE_SCHEMA_DEFINITION_SHA256 == (
@@ -44,7 +48,7 @@ def test_foundation_and_new_migration_and_full_checkpoint_have_independent_pins(
         rows = connection.execute(
             "SELECT migration_id, artifact_sha256 FROM schema_migrations"
         ).fetchall()
-    assert rows[-1][1] == migration_module.MIGRATIONS[-1].artifact_sha256
+    assert rows[-1][1] == migration_module.MIGRATIONS[1].artifact_sha256
 
 
 @pytest.mark.parametrize(
@@ -71,7 +75,7 @@ def test_changed_registered_migration_artifact_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = _database(tmp_path)
-    registered = migration_module.MIGRATIONS[-1]
+    registered = migration_module.MIGRATIONS[1]
     changed = migration_module.Migration(
         registered.migration_id,
         (*registered.statements, "SELECT 1"),
@@ -80,7 +84,11 @@ def test_changed_registered_migration_artifact_is_rejected(
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",
-        (*migration_module.MIGRATIONS[:-1], changed),
+        (
+            migration_module.MIGRATIONS[0],
+            changed,
+            *migration_module.MIGRATIONS[2:],
+        ),
     )
     with pytest.raises(MigrationIntegrityError, match="digest"):
         initialize_storage(database)

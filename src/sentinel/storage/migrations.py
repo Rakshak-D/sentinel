@@ -12,6 +12,12 @@ from typing import Final
 from sentinel import __version__
 from sentinel.storage.connection import database_connection
 from sentinel.storage.schema import (
+    BOUNDARY_ENVELOPES_KIND_ADAPTER_INDEX_DDL,
+    BOUNDARY_ENVELOPES_TABLE_DDL,
+    CONFIG_REVISIONS_ACTIVATION_CREATED_AT_INDEX_DDL,
+    CONFIG_REVISIONS_TABLE_DDL,
+    CR1_F_SCHEMA,
+    CR1_F_SCHEMA_DEFINITION_SHA256,
     CR1_SOURCE_SCHEMA,
     CR1_SOURCE_SCHEMA_DEFINITION_SHA256,
     FOUNDATION_SCHEMA,
@@ -22,9 +28,16 @@ from sentinel.storage.schema import (
     PLUGIN_MANIFESTS_TABLE_DDL,
     PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL,
     PRINCIPALS_TABLE_DDL,
+    RUN_MANIFESTS_CREATED_AT_INDEX_DDL,
+    RUN_MANIFESTS_TABLE_DDL,
+    RUNS_STATUS_STARTED_AT_INDEX_DDL,
+    RUNS_TABLE_DDL,
+    RUNS_THREAD_STARTED_AT_INDEX_DDL,
     SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL,
     SOURCE_ITEMS_SOURCE_OBSERVED_AT_INDEX_DDL,
     SOURCE_ITEMS_TABLE_DDL,
+    SOURCE_SPANS_ITEM_START_BYTE_INDEX_DDL,
+    SOURCE_SPANS_TABLE_DDL,
     SOURCES_ENABLED_TYPE_INDEX_DDL,
     SOURCES_TABLE_DDL,
     SYNC_CURSORS_STATUS_INDEX_DDL,
@@ -43,6 +56,10 @@ _FOUNDATION_ARTIFACT_SHA256: Final = (
 _CR1_E_MIGRATION_ID: Final = "cr1-e-0002-source-registry"
 _CR1_E_MIGRATION_ARTIFACT_SHA256: Final = (
     "7ef613bdb646d9b98bc18bb20dd7bba3467d4de12b2cb5c4802e4d1dd8d1c0c7"
+)
+_CR1_F_MIGRATION_ID: Final = "cr1-f-0003-source-spans"
+_CR1_F_MIGRATION_ARTIFACT_SHA256: Final = (
+    "6e6b98e60cff17f0eac94b942533964588344fdd0d8342567962ac4a1c3304b7"
 )
 
 
@@ -139,6 +156,20 @@ _CR1_E_STATEMENTS: tuple[str, ...] = (
     SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL,
 )
 
+_CR1_F_STATEMENTS: tuple[str, ...] = (
+    CONFIG_REVISIONS_TABLE_DDL,
+    RUN_MANIFESTS_TABLE_DDL,
+    RUNS_TABLE_DDL,
+    BOUNDARY_ENVELOPES_TABLE_DDL,
+    SOURCE_SPANS_TABLE_DDL,
+    CONFIG_REVISIONS_ACTIVATION_CREATED_AT_INDEX_DDL,
+    RUN_MANIFESTS_CREATED_AT_INDEX_DDL,
+    RUNS_THREAD_STARTED_AT_INDEX_DDL,
+    RUNS_STATUS_STARTED_AT_INDEX_DDL,
+    BOUNDARY_ENVELOPES_KIND_ADAPTER_INDEX_DDL,
+    SOURCE_SPANS_ITEM_START_BYTE_INDEX_DDL,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         _FOUNDATION_MIGRATION_ID,
@@ -150,6 +181,12 @@ MIGRATIONS: tuple[Migration, ...] = (
         _CR1_E_MIGRATION_ID,
         _CR1_E_STATEMENTS,
         CR1_SOURCE_SCHEMA,
+        artifact_version=2,
+    ),
+    Migration(
+        _CR1_F_MIGRATION_ID,
+        _CR1_F_STATEMENTS,
+        CR1_F_SCHEMA,
         artifact_version=2,
     ),
 )
@@ -181,6 +218,13 @@ def _registered_migrations() -> tuple[Migration, ...]:
         raise MigrationIntegrityError("CR1-E migration artifact digest mismatch")
     if source_registry.schema_after.sha256 != CR1_SOURCE_SCHEMA_DEFINITION_SHA256:
         raise MigrationIntegrityError("CR1-E schema checkpoint digest mismatch")
+    if len(migrations) < 3 or migrations[2].migration_id != _CR1_F_MIGRATION_ID:
+        raise MigrationIntegrityError("registered migrations lack the CR1-F source-spans schema")
+    source_spans = migrations[2]
+    if source_spans.artifact_sha256 != _CR1_F_MIGRATION_ARTIFACT_SHA256:
+        raise MigrationIntegrityError("CR1-F migration artifact digest mismatch")
+    if source_spans.schema_after.sha256 != CR1_F_SCHEMA_DEFINITION_SHA256:
+        raise MigrationIntegrityError("CR1-F schema checkpoint digest mismatch")
     if any(migration.artifact_version != 2 for migration in migrations[1:]):
         raise MigrationIntegrityError("new migrations must use checkpoint-aware artifact v2")
     return migrations

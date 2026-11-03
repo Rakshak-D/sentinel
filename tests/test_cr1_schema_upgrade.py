@@ -21,6 +21,7 @@ from sentinel.storage.writer import acquire_writer_lease
 
 FOUNDATION_ID = "cr0-c-0001-schema-migrations"
 CR1_E_MIGRATION_ID = "cr1-e-0002-source-registry"
+CR1_F_MIGRATION_ID = "cr1-f-0003-source-spans"
 FOUNDATION_SHA256 = "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217"
 
 
@@ -49,7 +50,7 @@ def test_existing_cr0_database_upgrades_without_rewriting_old_metadata(
     database = tmp_path / "historical-cr0.sqlite3"
     old_row = _foundation_only_database(database)
 
-    assert initialize_storage(database) == (CR1_E_MIGRATION_ID,)
+    assert initialize_storage(database) == (CR1_E_MIGRATION_ID, CR1_F_MIGRATION_ID)
     assert initialize_storage(database) == ()
 
     with database_connection(database) as connection:
@@ -64,7 +65,13 @@ def test_existing_cr0_database_upgrades_without_rewriting_old_metadata(
     assert rows[0][2] == FOUNDATION_SHA256
     assert rows[1][0] == CR1_E_MIGRATION_ID
     assert rows[1][4] == 1
-    assert upgraded_state.applied_migration_ids == (FOUNDATION_ID, CR1_E_MIGRATION_ID)
+    assert rows[2][0] == CR1_F_MIGRATION_ID
+    assert rows[2][4] == 1
+    assert upgraded_state.applied_migration_ids == (
+        FOUNDATION_ID,
+        CR1_E_MIGRATION_ID,
+        CR1_F_MIGRATION_ID,
+    )
     assert upgraded_state.pending_migration_ids == ()
     assert upgraded_state.is_current is True
 
@@ -86,7 +93,7 @@ def test_schema_integrity_and_pending_migrations_are_distinguished_readonly(
     assert version == FOUNDATION_ID
     assert state.applied_migration_ids == applied
     assert state.schema_version == FOUNDATION_ID
-    assert state.pending_migration_ids == (CR1_E_MIGRATION_ID,)
+    assert state.pending_migration_ids == (CR1_E_MIGRATION_ID, CR1_F_MIGRATION_ID)
     assert state.is_current is False
     assert report.successful is True
     assert database.read_bytes() == before

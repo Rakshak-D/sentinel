@@ -7,7 +7,7 @@ import pytest
 
 import sentinel.storage.migrations as migration_module
 from sentinel.storage.connection import database_connection, inspect_connection
-from sentinel.storage.migrations import initialize_storage, verify_integrity
+from sentinel.storage.migrations import verify_integrity
 
 FOUNDATION_ID = "cr0-c-0001-schema-migrations"
 CR1_E_MIGRATION_ID = "cr1-e-0002-source-registry"
@@ -32,7 +32,11 @@ EXPECTED_INDEXES = {
 
 def _database(tmp_path: Path) -> Path:
     database = tmp_path / "cr1-source-schema.sqlite3"
-    initialize_storage(database, create=True)
+    with database_connection(database, create=True) as connection:
+        for migration in migration_module.MIGRATIONS[:2]:
+            migration_module._apply_migration(
+                connection, migration, app_build="synthetic-cr1-e-history"
+            )
     return database
 
 
@@ -79,7 +83,7 @@ def _insert_plugin(
     )
 
 
-def test_new_database_has_registered_v2_tables_and_migration_history(tmp_path: Path) -> None:
+def test_cr1_e_prefix_has_its_historical_tables_and_migration_history(tmp_path: Path) -> None:
     database = _database(tmp_path)
     with database_connection(database) as connection:
         tables = {
@@ -101,7 +105,7 @@ def test_new_database_has_registered_v2_tables_and_migration_history(tmp_path: P
     assert ids == (FOUNDATION_ID, CR1_E_MIGRATION_ID)
     assert tables == EXPECTED_TABLES
     assert indexes == EXPECTED_INDEXES
-    assert tuple(item.migration_id for item in migration_module.MIGRATIONS) == ids
+    assert tuple(item.migration_id for item in migration_module.MIGRATIONS[:2]) == ids
 
 
 def test_source_registry_fields_keys_and_indexes_match_declared_schema(tmp_path: Path) -> None:

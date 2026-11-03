@@ -246,6 +246,173 @@ CR1_SOURCE_SCHEMA_DEFINITION_SHA256 = (
     "38eb2f69500aa21df1002691c40759ba5acbc58b09c97de4a8ab7bfdd9c40d6a"
 )
 
+# CR1-F adds only relational foundations for configuration/run/boundary and
+# persisted span metadata. Opaque refs do not establish stored content or
+# cryptographic provenance. The nullable runs.briefing_id is retained without
+# an FK because the blueprint's briefings table is outside this migration.
+CONFIG_REVISIONS_TABLE_DDL = """CREATE TABLE config_revisions (
+    config_id TEXT NOT NULL PRIMARY KEY,
+    parent_config_id TEXT,
+    layer_set_json TEXT NOT NULL,
+    effective_schema_version TEXT NOT NULL,
+    effective_config_ref TEXT NOT NULL,
+    effective_sha256 TEXT NOT NULL CHECK (
+        length(effective_sha256) = 64 AND effective_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    unsafe_overrides_json TEXT NOT NULL,
+    activated_at TEXT,
+    created_at TEXT NOT NULL,
+    activation_state TEXT NOT NULL,
+    UNIQUE (effective_sha256),
+    FOREIGN KEY (parent_config_id) REFERENCES config_revisions(config_id)
+)"""
+CONFIG_REVISIONS_ACTIVATION_CREATED_AT_INDEX_DDL = (
+    "CREATE INDEX config_revisions_activation_created_at_idx\n"
+    "    ON config_revisions(activation_state, created_at)"
+)
+
+RUN_MANIFESTS_TABLE_DDL = """CREATE TABLE run_manifests (
+    manifest_id TEXT NOT NULL PRIMARY KEY,
+    config_id TEXT NOT NULL,
+    policy_sha256 TEXT NOT NULL CHECK (
+        length(policy_sha256) = 64 AND policy_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    graph_build TEXT NOT NULL,
+    plugin_set_sha256 TEXT NOT NULL CHECK (
+        length(plugin_set_sha256) = 64 AND plugin_set_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    prompt_set_sha256 TEXT NOT NULL CHECK (
+        length(prompt_set_sha256) = 64 AND prompt_set_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    model_profile_sha256 TEXT NOT NULL CHECK (
+        length(model_profile_sha256) = 64 AND model_profile_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    unsafe_overrides_json TEXT NOT NULL,
+    fixture_manifest_sha256 TEXT CHECK (
+        fixture_manifest_sha256 IS NULL OR (
+            length(fixture_manifest_sha256) = 64
+            AND fixture_manifest_sha256 NOT GLOB '*[^0-9a-f]*'
+        )
+    ),
+    created_at TEXT NOT NULL,
+    manifest_sha256 TEXT NOT NULL CHECK (
+        length(manifest_sha256) = 64 AND manifest_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    UNIQUE (manifest_sha256),
+    FOREIGN KEY (config_id) REFERENCES config_revisions(config_id)
+)"""
+RUN_MANIFESTS_CREATED_AT_INDEX_DDL = """CREATE INDEX run_manifests_created_at_idx
+    ON run_manifests(created_at)"""
+
+RUNS_TABLE_DDL = """CREATE TABLE runs (
+    run_id TEXT NOT NULL PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    manifest_id TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    trigger_kind TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    status TEXT NOT NULL,
+    error_code TEXT,
+    briefing_id TEXT,
+    FOREIGN KEY (principal_id) REFERENCES principals(principal_id),
+    FOREIGN KEY (manifest_id) REFERENCES run_manifests(manifest_id)
+)"""
+RUNS_THREAD_STARTED_AT_INDEX_DDL = """CREATE INDEX runs_thread_started_at_idx
+    ON runs(thread_id, started_at)"""
+RUNS_STATUS_STARTED_AT_INDEX_DDL = """CREATE INDEX runs_status_started_at_idx
+    ON runs(status, started_at)"""
+
+BOUNDARY_ENVELOPES_TABLE_DDL = """CREATE TABLE boundary_envelopes (
+    boundary_id TEXT NOT NULL PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    adapter_id TEXT NOT NULL,
+    request_ref TEXT NOT NULL,
+    response_ref TEXT,
+    request_sha256 TEXT NOT NULL CHECK (
+        length(request_sha256) = 64 AND request_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    response_sha256 TEXT CHECK (
+        response_sha256 IS NULL OR (
+            length(response_sha256) = 64 AND response_sha256 NOT GLOB '*[^0-9a-f]*'
+        )
+    ),
+    sensitivity TEXT NOT NULL,
+    source_ids_json TEXT NOT NULL,
+    replay_injected INTEGER NOT NULL CHECK (replay_injected IN (0, 1)),
+    error_code TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE (run_id, seq),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+)"""
+BOUNDARY_ENVELOPES_KIND_ADAPTER_INDEX_DDL = """CREATE INDEX boundary_envelopes_kind_adapter_idx
+    ON boundary_envelopes(kind, adapter_id)"""
+
+SOURCE_SPANS_TABLE_DDL = """CREATE TABLE source_spans (
+    span_id TEXT NOT NULL PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    start_byte INTEGER NOT NULL CHECK (
+        typeof(start_byte) = 'integer' AND start_byte >= 0
+    ),
+    end_byte INTEGER NOT NULL CHECK (
+        typeof(end_byte) = 'integer' AND end_byte > start_byte
+    ),
+    text_sha256 TEXT NOT NULL CHECK (
+        length(text_sha256) = 64 AND text_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    context_ref TEXT,
+    derived_by_boundary_id TEXT,
+    FOREIGN KEY (item_id) REFERENCES source_items(item_id),
+    FOREIGN KEY (derived_by_boundary_id) REFERENCES boundary_envelopes(boundary_id)
+)"""
+SOURCE_SPANS_ITEM_START_BYTE_INDEX_DDL = """CREATE INDEX source_spans_item_start_byte_idx
+    ON source_spans(item_id, start_byte)"""
+
+CR1_F_SCHEMA_VERSION = "cr1-f-0003-source-spans"
+CR1_F_SCHEMA = SchemaDefinition(
+    schema_version=CR1_F_SCHEMA_VERSION,
+    objects=(
+        *CR1_SOURCE_SCHEMA.objects,
+        SchemaObjectDefinition("table", "config_revisions", CONFIG_REVISIONS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index",
+            "config_revisions_activation_created_at_idx",
+            CONFIG_REVISIONS_ACTIVATION_CREATED_AT_INDEX_DDL,
+        ),
+        SchemaObjectDefinition("table", "run_manifests", RUN_MANIFESTS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index", "run_manifests_created_at_idx", RUN_MANIFESTS_CREATED_AT_INDEX_DDL
+        ),
+        SchemaObjectDefinition("table", "runs", RUNS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index", "runs_thread_started_at_idx", RUNS_THREAD_STARTED_AT_INDEX_DDL
+        ),
+        SchemaObjectDefinition(
+            "index", "runs_status_started_at_idx", RUNS_STATUS_STARTED_AT_INDEX_DDL
+        ),
+        SchemaObjectDefinition(
+            "table", "boundary_envelopes", BOUNDARY_ENVELOPES_TABLE_DDL
+        ),
+        SchemaObjectDefinition(
+            "index",
+            "boundary_envelopes_kind_adapter_idx",
+            BOUNDARY_ENVELOPES_KIND_ADAPTER_INDEX_DDL,
+        ),
+        SchemaObjectDefinition("table", "source_spans", SOURCE_SPANS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index", "source_spans_item_start_byte_idx", SOURCE_SPANS_ITEM_START_BYTE_INDEX_DDL
+        ),
+    ),
+)
+
+# Independent pin for the full post-CR1-F schema checkpoint.
+CR1_F_SCHEMA_DEFINITION_SHA256 = (
+    "26f31fe4601c67cb60c6faa324eba83ff59c611b1fa283e514f0a77e3acf44ad"
+)
+
 
 def _normalized_sql(value: object) -> str | None:
     if not isinstance(value, str):

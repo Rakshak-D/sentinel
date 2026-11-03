@@ -212,7 +212,7 @@ def test_writer_validation_does_not_apply_registered_pending_migrations(
                 "SELECT 1 FROM sqlite_master WHERE name = 'must_not_be_applied'"
             ).fetchone()
 
-    assert rows == [(migration.migration_id,) for migration in migration_module.MIGRATIONS[:2]]
+    assert rows == [(migration.migration_id,) for migration in migration_module.MIGRATIONS[:-1]]
     assert table is None
 
 
