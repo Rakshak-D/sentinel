@@ -193,7 +193,7 @@ The current initial migration, `cr0-c-0001-schema-migrations`, creates the norma
 
 Initialization selects the expected schema checkpoint from the last migration in the validated applied registry prefix. It compares all persisted schema object identities and DDL against that trusted checkpoint and verifies the normative migration metadata columns and indexes. This detects unexpected or missing objects and altered table constraints, indexes, views, and triggers. It also checks applied migration IDs/order/digests and SQLite integrity and foreign keys. Untracked schema, unknown or changed migration records, malformed metadata, partial application, and schema drift fail closed without automatic repair. Every migration runs under `BEGIN IMMEDIATE`; individual statements use `execute()` rather than `executescript()`. A failure rolls back all statements and its success record together. A failed migration does not leave a successful metadata row.
 
-These guarantees cover this local migration foundation, not application-wide ownership. WAL and `BEGIN IMMEDIATE` do not implement the §3 process-wide writer lease. Backup/restore, checkpoint workflows, encryption, redacted logs, keychain abstraction, application tables, and the rest of CR0 remain unavailable. Do not store secrets or raw private source bodies in this database. The migration registry is trusted code and is not an interface for model output, CLI SQL, or external migration files.
+These guarantees cover the migration foundation, not application-wide ownership by themselves. At CR0-C, WAL and migration-time `BEGIN IMMEDIATE` did not implement the §3 process-wide writer lease; CR1-D now adds the cooperative Windows writer lease described below. Backup/restore, checkpoint workflows, encryption, application tables, and application workflows remain unavailable. Do not store secrets or raw private source bodies in this database. The migration registry is trusted code and is not an interface for model output, CLI SQL, or external migration files.
 
 ## Windows PowerShell setup
 
@@ -247,7 +247,7 @@ If initialization fails after exclusive creation, the newly reserved file and an
 
 Exclusive creation uses `O_CREAT|O_EXCL`, which refuses an already present final-component path, and adds `O_NOFOLLOW` where the host exposes it. The symlink test could not run here because Windows denied symlink creation without elevated support. This does not establish full race-free filesystem protection: directory junctions/reparse points are not comprehensively defended against, and a process able to replace directory entries concurrently may race subsequent SQLite path opens. The implementation checks the reserved file identity before and after storage operations, but does not claim protection from a hostile process with directory write access.
 
-CR0-H adds only the `init` command. CR0-I adds read-only `doctor`; CR0-J adds a synthetic in-memory `demo`. Configuration activation, application tables, writer leases, backup/restore, credential retrieval, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.
+CR0-H adds only the `init` command. CR0-I adds read-only `doctor`; CR0-J adds a synthetic in-memory `demo`. CR1-D later adds a cooperative Windows writer lease, but the authenticated daemon/IPC ownership protocol remains unavailable. Configuration activation, application tables, backup/restore, credential retrieval, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.
 
 ## CR0-I read-only diagnostics
 
@@ -457,3 +457,28 @@ assert verify_bound_citation(message.normalized_source, citation) == "parser fla
 ```
 
 The reader makes no Gmail API, OAuth, keychain, SMTP, IMAP, network, subprocess, database, gateway, or provider calls. It does not read a real mailbox, implement attachments or general MIME support, or enable message modifications. F01's production OAuth reader, source authentication, credentials, cursor/sync state, and persistence remain unimplemented. CR1 remains in progress.
+
+## CR1-D cooperative SQLite writer lease
+
+`sentinel.storage.acquire_writer_lease(database)` provides a Windows-only cooperative writer-ownership context for one already initialized Sentinel database. It requires an explicit absolute path to an existing regular database file on a local drive. UNC paths and mapped remote drives are rejected before resolving or opening the database. The registered migration history, artifact hashes, schema checkpoint, SQLite integrity, foreign-key integrity, foreign-key setting, and existing WAL mode are checked before a lease is returned. The API never creates a database, applies a migration, or changes journal mode.
+
+```python
+from pathlib import Path
+
+from sentinel.storage import acquire_writer_lease
+
+database = Path(r"C:\SentinelData\sentinel.sqlite3")
+with acquire_writer_lease(database) as lease:
+    with lease.transaction() as connection:
+        row = connection.execute(
+            "SELECT migration_id FROM schema_migrations ORDER BY migration_id"
+        ).fetchone()
+```
+
+The current CR0 schema contains no application-data tables, so the example reads the verified migration record. Later application writers should keep their SQL static and application-controlled, and execute DML only inside `lease.transaction()`. Each transaction uses SQLite `BEGIN IMMEDIATE`, explicit commit, and rollback on failure. A connection authorizer denies transaction control outside the context, writes outside the context, schema DDL, and database attachment. Nested acquisition and nested transactions are rejected. Connections and the mutex are closed on normal and exceptional exits. The lease is bound to the thread that acquired it.
+
+On Windows, ownership uses a named mutex in the `Global\` namespace, named from a SHA-256 of the selected database's available volume/file ID (with a canonical-path fallback). A zero-millisecond mutex wait fails fast with `lock_contended`; SQLite's transaction busy timeout is 500 ms. The kernel releases mutex ownership when its owning process/thread terminates, and SQLite rolls back an uncommitted transaction when the connection closes. The named mutex is not a persistent lockfile and is not removed as a filesystem entry. Windows documents named mutex creation, global/session namespaces, and abandoned ownership in the [CreateMutexW](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createmutexw), [kernel object namespace](https://learn.microsoft.com/en-us/windows/win32/termserv/kernel-object-names), and [mutex object](https://learn.microsoft.com/en-us/windows/win32/sync/mutex-objects) references.
+
+`WriterLeaseError` exposes a fixed category in `WriterLeaseError.code`: `unsupported_platform`, `invalid_path`, `database_missing`, `database_unavailable`, `database_invalid`, `migration_invalid`, `lock_unavailable`, `lock_contended`, `reentrant`, `lease_inactive`, `thread_mismatch`, `transaction_active`, `transaction_busy`, `transaction_failed`, or `lease_release_failed`. Public exception messages omit paths and SQLite details.
+
+This is cooperative arbitration for application code that follows the API. It does not authenticate the Windows user, prevent a noncooperating process from writing SQLite directly, protect a directory against a same-user process that can replace its files, or isolate keychain credentials. Default Windows mutex ACLs may limit which user identities can share the named object. File identity and reparse-point checks reduce ordinary path aliasing, but Windows directory replacement/reparse races and filesystems without a usable file ID are not comprehensively defended. The lock and SQLite integrity checks are not a security boundary against malicious same-user code. The daemon/PID ownership protocol and authenticated local IPC described by the wider architecture are not implemented here. This slice adds no persistence tables, source ingestion, credentials, network access, or external effect; CR1 remains in progress.

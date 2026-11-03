@@ -21,6 +21,14 @@ from sentinel.storage.migrations import (
     verify_schema_checkpoint_readonly,
     verify_sqlite_integrity,
 )
+from sentinel.storage.writer import (
+    WRITER_MUTEX_WAIT_MS,
+    WRITER_SQLITE_BUSY_TIMEOUT_MS,
+    WriterLease,
+    WriterLeaseError,
+    WriterLeaseErrorCode,
+    acquire_writer_lease,
+)
 
 __all__ = [
     "DEFAULT_BUSY_TIMEOUT_MS",
@@ -36,6 +44,12 @@ __all__ = [
     "open_database",
     "open_database_readonly",
     "readonly_database_connection",
+    "WRITER_MUTEX_WAIT_MS",
+    "WRITER_SQLITE_BUSY_TIMEOUT_MS",
+    "WriterLease",
+    "WriterLeaseError",
+    "WriterLeaseErrorCode",
+    "acquire_writer_lease",
     "verify_foreign_key_integrity",
     "verify_integrity",
     "verify_schema_checkpoint_readonly",
