@@ -8,6 +8,7 @@ import typer
 from sentinel import __version__
 from sentinel.bootstrap.doctor import DoctorReport, run_doctor
 from sentinel.bootstrap.init import BootstrapInitError, initialize_new_database
+from sentinel.demo import run_demo
 
 app = typer.Typer(no_args_is_help=True, help="Sentinel local-first automation CLI.")
 
@@ -67,6 +68,18 @@ def doctor(
         typer.echo(f"{check.status.value} {check.check_id.value}: {check.message}")
     if not report.successful:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def demo() -> None:
+    """Run the deterministic credential-free synthetic DEMO flow."""
+    try:
+        report = run_demo()
+        output = report.to_json_bytes().decode("utf-8", errors="strict")
+    except Exception:
+        typer.echo("Demo failed: synthetic execution could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(output)
 
 
 if __name__ == "__main__":

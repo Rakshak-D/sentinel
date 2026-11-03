@@ -4,9 +4,9 @@ Sentinel is a planned local-first personal automation application. Its authorita
 
 ## Implemented bootstrap slices
 
-CR0-A establishes repository governance, a Python package, and an installable CLI. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. CR0-G adds a fail-closed credential broker contract; CR0-H adds explicit new-database initialization; CR0-I adds read-only diagnostics. These slices do not complete F38, F43, F46, or CR0.
+CR0-A establishes repository governance, a Python package, and an installable CLI. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. CR0-G adds a fail-closed credential broker contract; CR0-H adds explicit new-database initialization; CR0-I adds read-only diagnostics; CR0-J adds one deterministic synthetic `demo` flow through the existing gateway methods. These slices do not complete F38, F43, F46, or CR0.
 
-There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; CR0-I adds read-only diagnostics for an existing database; `demo` remains unavailable. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. The included CR0-D synthetic adapters are test fixtures and operate only in memory. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
+There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; CR0-I adds read-only diagnostics for an existing database; CR0-J adds a fixed-fixture `sentinel demo` that uses only in-memory synthetic adapters. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
 
 ## CR0-B contract API
 
@@ -245,7 +245,7 @@ If initialization fails after exclusive creation, the newly reserved file and an
 
 Exclusive creation uses `O_CREAT|O_EXCL`, which refuses an already present final-component path, and adds `O_NOFOLLOW` where the host exposes it. The symlink test could not run here because Windows denied symlink creation without elevated support. This does not establish full race-free filesystem protection: directory junctions/reparse points are not comprehensively defended against, and a process able to replace directory entries concurrently may race subsequent SQLite path opens. The implementation checks the reserved file identity before and after storage operations, but does not claim protection from a hostile process with directory write access.
 
-CR0-H adds only the `init` command. CR0-I adds read-only `doctor`; `demo`, configuration activation, application tables, writer leases, backup/restore, credentials, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.
+CR0-H adds only the `init` command. CR0-I adds read-only `doctor`; CR0-J adds a synthetic in-memory `demo`. Configuration activation, application tables, writer leases, backup/restore, credential retrieval, providers, external tools, and external writes remain unavailable. Initialization is an explicit local filesystem effect, not owner authorization or a policy decision.
 
 ## CR0-I read-only diagnostics
 
@@ -264,3 +264,32 @@ Supported checks report separate results for read-only opening, WAL mode, SQLite
 `UNAVAILABLE` is expected for the production credential backend and OS keychain. `NOT_IMPLEMENTED` is reported for authenticated owner verification, policy enforcement, live model/provider routing, MCP smoke testing, backup verification, and signed audit roots. These states are never displayed as `PASS`. The command exits 0 when every currently supported required check passes; expected unavailable or not-implemented capabilities do not make this partial CR0 diagnostic fail. A passing report is not production readiness, authorization, or proof that P00-P17 or AB01-AB18 have passed.
 
 The database connection itself is opened with SQLite `mode=ro`, and tests verify writes fail even after temporarily turning `query_only` off. Doctor does not issue application data writes or change journal mode. SQLite may still create or update its own WAL/SHM sidecars to read a WAL database. On the current Windows/SQLite 3.43.1 environment, inspecting a clean initialized database left the main database at the same 16,384-byte size and created `-wal` and `-shm` sidecars. This filesystem-side effect is SQLite-managed and is not an application-data write; the database directory must permit SQLite's WAL coordination. A mode=ro connection may fail if the needed WAL state cannot be read safely. Doctor does not use `immutable=1` to skip locking or uncheckpointed WAL data. This slice does not guarantee zero filesystem changes, defend against all directory junction/reparse-point races, or perform backups/checkpointing.
+
+## CR0-J deterministic synthetic demo
+
+Run the packaged synthetic flow without a database, provider configuration, credentials, network access, or external tool:
+
+```powershell
+.\.venv\Scripts\sentinel.exe demo
+```
+
+The trusted package contains one UTF-8 fixture, `sentinel.demo-fixture.v1`, representing a fictional public note and a fixed read-only lookup. Its exact bytes are checked against SHA-256 `365c9f02f1375c3e784138b7cdb3c2fd3ed1a0f4cf64cfec6fdef2fe5d9ecbb8` before strict schema validation. The versioned schema rejects unknown keys, malformed data, duplicate JSON keys, invalid UTF-8, inconsistent expected output, and unsupported versions. Fixture data contains no handler, plugin, destination, URL, path, or capability instruction. Application code registers the only model and read-only tool adapters; fixture data cannot install or select executable code.
+
+`sentinel demo` uses `importlib.resources` to load the wheel resource, validates and fingerprints bundled `sentinel.config.v1` defaults, creates a PUBLIC `SourceEnvelope`, and calls the actual `ModelGateway.generate()` and `ToolGateway.call()` APIs. The adapters transform or look up fixture data in memory only. It also probes an unknown model, SECRET and PRIVATE model inputs, an unknown tool, and write/approval capabilities; the demo fails if any probe is not denied or if a denied handler runs. Gateway boundary digests are checked against the exact invocation and response bytes.
+
+Stdout is exactly one sorted, compact JSON document with schema `sentinel.demo.v1`. It includes fixture/config hashes, `execution_mode`, `profile`, model/tool success statuses and boundary hashes, denial statuses, and fixed `credentials_used`, `external_effects`, and `production_readiness` booleans. It does not include source bodies, generated model/tool text, paths, timestamps, or random boundary IDs. Re-running the same installed package produces byte-identical output. A failure exits nonzero, emits no partial JSON, and prints only a fixed bounded message to stderr.
+
+Example output from this fixture version (hashes are stable for the packaged inputs):
+
+```json
+{"config_sha256":"9ba0e71e6026ecc93149cfe2052d75082528732a82c2556ce10de893e97c4256","credentials_used":false,"execution_mode":"DEMO","external_effects":false,"fixture_sha256":"365c9f02f1375c3e784138b7cdb3c2fd3ed1a0f4cf64cfec6fdef2fe5d9ecbb8","fixture_version":"sentinel.demo-fixture.v1","model":{"request_sha256":"e2fc9fc18fa242c3352399a7f896d22ad08edcfcf98756ba87c7f6549ed82c2e","response_sha256":"42fa19a1ee558e9cc6c6d983db3ab0f4366fc255f0a0d621435ce0ad1b7f1667","status":"SUCCESS"},"negative_probes":{"approval_tool":"DENIED","external_write_tool":"DENIED","private_model":"DENIED","secret_model":"DENIED","unknown_model":"DENIED","unknown_tool":"DENIED"},"production_readiness":false,"profile":"local-only","schema_version":"sentinel.demo.v1","tool":{"request_sha256":"c79832341a39653868ef4d9356091fd76cb3d04417e3b35cde9d54d20293ed00","response_sha256":"06ba4f94d418f201177452ffb6ae0e861a013f2dbc0548c56fa8316054f344f3","status":"SUCCESS"}}
+```
+
+To build and confirm the fixture is in the wheel:
+
+```powershell
+.\.venv\Scripts\python.exe -m build --wheel
+.\.venv\Scripts\python.exe -c "import glob, zipfile; wheel = zipfile.ZipFile(glob.glob('dist/*.whl')[0]); assert 'sentinel/demo/fixtures/demo-v1.json' in wheel.namelist(); print('fixture included')"
+```
+
+A successful demo proves that this fixed packaged fixture validates and that the current synthetic gateway success/denial contracts and content hashes behave as expected. It does not demonstrate LLM inference, production model/tool adapters, network or credential isolation for future code, policy authorization, human approval, production readiness, or P00-P17/AB01-AB18 compliance. The demo's source labels and gateway contract checks are not security certification. The clean offline install from locally cached pinned artifacts remains an outstanding CR0 exit gate; CR0 stays IN_PROGRESS.

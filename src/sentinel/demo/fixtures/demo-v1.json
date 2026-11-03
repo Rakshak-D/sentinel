@@ -1,0 +1,17 @@
+{
+  "fixture_version": "sentinel.demo-fixture.v1",
+  "source": {
+    "source_id": "1ef3f942-3da2-49a2-9e6c-9dd0ad6d1a8e",
+    "observed_at": "2026-11-03T00:00:00+00:00",
+    "sensitivity": "PUBLIC",
+    "content": "Fictional note: sample-card-001 is ready for a local demonstration."
+  },
+  "model": {
+    "response_prefix": "Synthetic summary",
+    "expected_output": "Synthetic summary: Fictional note: sample-card-001 is ready for a local demonstration."
+  },
+  "tool": {
+    "lookup_key": "sample-card-001",
+    "lookup_value": "Ready for the local demonstration."
+  }
+}
