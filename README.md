@@ -524,3 +524,40 @@ The Blueprint's `runs.briefing_id` is retained as a nullable field. The related 
 Fresh storage initialization applies all three registered migrations. Existing CR0 and CR1-E databases can be explicitly upgraded without rewriting their prior migration records; doctor and `acquire_writer_lease()` remain read-only with respect to schema and report/accept valid historical prefixes without migration. The new schema creates no rows containing source bodies, credentials, configs, run execution, or boundary payloads. No source ingestion, durable citation API, content-addressed blob store, config activation, run execution, provider invocation, or audit behavior is implemented.
 
 Migration maintenance remains separate from CR1-D's writer lease. Tests show an active SQLite write transaction blocks the bounded `BEGIN IMMEDIATE` migration and leaves no partial DDL. They also demonstrate the unresolved hazard: an idle lease holds no SQLite write transaction, so `initialize_storage()` can migrate while that lease is open because it does not acquire the Windows writer mutex. A production daemon must quiesce writers before maintenance. Hard-link aliases may produce distinct SQLite WAL/SHM sidecars and mutex identities; arbitrary concurrent upgrades or alias coherence are not claimed safe. CR1 remains in progress.
+
+## CR1-G synthetic GitHub fixture persistence
+
+`sentinel.ingestion` exports `ingest_packaged_github_fixture(database)`, `read_persisted_github_fixture(database)`, and `verify_persisted_github_citation(database, *, item_id, span_id)`. Ingestion accepts only an explicit absolute path to an existing Sentinel database at the current registered CR1-F schema checkpoint. It never initializes or migrates a database. It reads only the fixed `sentinel.github-issues-fixture.v1` package resource (SHA-256 `7a28c6434ad25f06f6c24a9fa912e94c44796c9e3d4d8676642b37c554a13bc1`), with the existing reader enforcing its pin.
+
+```python
+from pathlib import Path
+
+from sentinel.ingestion import (
+    ingest_packaged_github_fixture,
+    read_persisted_github_fixture,
+    verify_persisted_github_citation,
+)
+
+database = Path(r"C:\Temp\sentinel-cr1-g.sqlite3")  # must already be initialized
+report = ingest_packaged_github_fixture(database)
+assert (report.inserted_items, report.inserted_spans) == (3, 9)
+
+persisted = read_persisted_github_fixture(database)  # mode=ro; no application writes
+item = persisted.items[0]
+span = item.spans[0]
+cited_text = verify_persisted_github_citation(
+    database, item_id=item.item_id, span_id=span.span_id
+)
+```
+
+The rows use separate deterministic identities. The registry `source_id` is UUIDv5 over `NAMESPACE_URL` and `sentinel:github.fixture:source:example-owner/fixture-project`. The provider item ID is `example-owner/fixture-project#<issue-number>`. `SourceEnvelope.source_id` remains the in-memory issue identity assigned by the fixture reader. Persisted `source_items.item_id` is UUIDv5 over `NAMESPACE_URL` and `sentinel:github.fixture:item:<registry-source-uuid>:<provider-item-id>:<body-sha256>`, so a changed body digest maps to a different revision ID rather than replacing the earlier row. The original in-memory `ByteSpan.span_id` remains distinct from persisted `source_spans.span_id`, which is UUIDv5 over `NAMESPACE_URL` and `sentinel:github.fixture:span:<persisted-item-uuid>:<in-memory-span-uuid>`. The reader verifies each source-bound citation and persists its exact half-open byte offsets, slice digest, and item relationship; `derived_by_boundary_id` and `context_ref` are NULL because this fixture was not produced by a recorded model/tool boundary.
+
+Only the synthetic PUBLIC GitHub fixture is accepted. Trusted application code assigns the fixed source/plugin/principal metadata and retains `T4_EXTERNAL` and `PUBLIC`; the fixture cannot select identities, labels, content references, paths, hosts, capabilities, or SQL. The plugin manifest is registered disabled (`enabled=0`) and is not a production plugin approval; the fixed source registration is enabled (`enabled=1`) only for this fixture reader path. `source_at` and canonical `metadata_json` retain provider-like update time and fixture/source identifiers without issue body or title. The `content_ref` is a strict allowlisted fixture-and-issue identifier. It is never opened as a file, fetched as a URL, or treated as a credential/encryption reference.
+
+The batch registers one synthetic principal, plugin manifest and source, then inserts the 3 item revisions and 9 spans in one `acquire_writer_lease()` scope and one SQLite `BEGIN IMMEDIATE` transaction. Existing rows are accepted only after every stored field matches the deterministic expected values; conflicts fail and roll back. First import reports 3 new items and 9 new spans; an identical replay reports 3 existing items and 9 existing spans and does not change rows. The immutable report omits body text and titles.
+
+`read_persisted_github_fixture()` opens the selected DB read-only, validates the complete current migration/checkpoint and SQLite/FK integrity, reads the pinned packaged fixture again, and compares every expected registry, item, content digest, and citation row with the database. It reconstructs body bytes from that package fixture only; SQLite does not independently preserve those bytes. The explicit citation verifier returns a cited text slice only after the complete database/fixture/source-bound digest and offset checks succeed. Missing or altered fixture content, registration, items, or spans fails with a fixed, path-free category. SQLite integrity alone is not application-row provenance verification.
+
+CR1-G does not add a general blob store, private Gmail persistence, ingestion for arbitrary sources, content encryption, live GitHub access, cursor advancement, deletion/tombstone handling, or provider authentication. The packaged fictional fixture is not evidence that GitHub issued a record. It does not elevate content to owner intent or authorize any action. No PRIVATE/SECRET content is persisted.
+
+The writer API rejects detectable hard-linked database files, UNC paths, and Windows remote/unknown drive types; it checks visible path components for symlinks/reparse points before opening. Windows directory-entry replacement and reparse-point races, same-user direct database access, and maintenance arbitration remain limitations. The CR1-D lease arbitrates cooperating application writers, but `initialize_storage()` does not acquire it; callers must not run migration maintenance concurrently with ingestion. Current-schema and integrity checks occur under the lease before the write transaction, migration identity and exact registered schema DDL are rechecked inside `BEGIN IMMEDIATE`, and the batch has SQLite transaction atomicity. This is not a guarantee against noncooperating database writers or hostile same-user filesystem changes. CR1 and F12 remain IN_PROGRESS; live readers, source authentication, broader persistence and product workflows remain open.
