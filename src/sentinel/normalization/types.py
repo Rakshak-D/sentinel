@@ -3,9 +3,14 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, ValidationError, field_validator
 
-from sentinel.contracts.envelopes import ByteSpan, ContractIdentifier, SourceEnvelope
+from sentinel.contracts.envelopes import (
+    ByteSpan,
+    ContractIdentifier,
+    Sha256Digest,
+    SourceEnvelope,
+)
 from sentinel.contracts.labels import SensitivityLabel, TrustLabel
 
 
@@ -117,3 +122,38 @@ class NormalizedPlainTextSource:
     def citations(self) -> tuple[ByteSpan, ...]:
         """Return the source's typed byte spans, without a raw-body serializer."""
         return self.envelope.byte_spans
+
+
+class SourceBoundCitation(BaseModel):
+    """Immutable source identity, full content digest, and existing byte-span record."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        revalidate_instances="always",
+    )
+
+    source_id: UUID
+    content_sha256: Sha256Digest
+    span: ByteSpan
+
+    def __init__(self, **data: Any) -> None:
+        try:
+            super().__init__(**data)
+        except (TypeError, ValueError):
+            raise ValueError("Source-bound citation is invalid.") from None
+
+    @field_validator("span", mode="before")
+    @classmethod
+    def revalidate_span(cls, value: object) -> ByteSpan:
+        if type(value) is ByteSpan:
+            candidate: object = value.model_dump(mode="python")
+        elif type(value) is dict:
+            candidate = value
+        else:
+            raise ValueError("Source-bound citation span is invalid.")
+        try:
+            return ByteSpan.model_validate(candidate)
+        except (TypeError, ValidationError):
+            raise ValueError("Source-bound citation span is invalid.") from None

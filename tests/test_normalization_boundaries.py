@@ -12,7 +12,10 @@ from sentinel.contracts.labels import SensitivityLabel, TrustLabel
 from sentinel.normalization import (
     NormalizationError,
     PlainTextSourceDescriptor,
+    add_citation,
+    bind_citation,
     normalize_plain_text,
+    verify_bound_citation,
 )
 from sentinel.observability.events import (
     DiagnosticComponent,
@@ -117,3 +120,38 @@ def test_normalization_uses_no_database_network_or_subprocess(tmp_path, monkeypa
     assert normalized.text == "synthetic only"
     assert calls == []
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("sensitivity", [SensitivityLabel.PRIVATE, SensitivityLabel.SECRET])
+def test_bound_sensitive_source_content_is_not_serialized_or_logged(sensitivity) -> None:
+    canary = "synthetic-sensitive-source-canary"
+    normalized = normalize_plain_text(
+        PlainTextSourceDescriptor(
+            source_id=UUID("45bb302b-6d41-4c68-ae34-cab685a86e98"),
+            provider_id="synthetic-reader",
+            observed_at=datetime(2026, 11, 3, tzinfo=UTC),
+            trust=TrustLabel.T4_EXTERNAL,
+            sensitivity=sensitivity,
+        ),
+        canary.encode(),
+        "text/plain",
+    )
+    cited = add_citation(
+        normalized,
+        span_id=UUID("d307b720-0e5b-4618-a0c9-5f819b2e5d25"),
+        start_byte=0,
+        end_byte=len(canary.encode()),
+    )
+    bound = bind_citation(cited, cited.citations[0])
+    event = DiagnosticEvent(
+        event_code=DiagnosticEventCode.STORAGE_OPERATION_RESULT,
+        timestamp=datetime(2026, 11, 3, tzinfo=UTC),
+        severity=DiagnosticSeverity.INFO,
+        outcome=DiagnosticOutcome.SUCCESS,
+        component=DiagnosticComponent.STORAGE,
+        sensitivity=sensitivity,
+    )
+
+    assert verify_bound_citation(cited, bound) == canary
+    assert canary not in bound.model_dump_json()
+    assert canary not in event.model_dump_json()

@@ -33,6 +33,7 @@ class NormalizationErrorCode(StrEnum):
     TOO_LARGE = "too_large"
     INVALID_UTF8 = "invalid_utf8"
     INVALID_CITATION = "invalid_citation"
+    INVALID_BOUND_CITATION = "invalid_bound_citation"
     SOURCE_DIGEST_MISMATCH = "source_digest_mismatch"
     CITATION_DIGEST_MISMATCH = "citation_digest_mismatch"
     CITATION_SOURCE_MISMATCH = "citation_source_mismatch"
@@ -49,6 +50,7 @@ _ERROR_MESSAGES: Final[dict[NormalizationErrorCode, str]] = {
     NormalizationErrorCode.TOO_LARGE: "Source content exceeds the configured size limit.",
     NormalizationErrorCode.INVALID_UTF8: "Source content is not valid UTF-8.",
     NormalizationErrorCode.INVALID_CITATION: "Citation byte range or identifier is invalid.",
+    NormalizationErrorCode.INVALID_BOUND_CITATION: "Source-bound citation is invalid.",
     NormalizationErrorCode.SOURCE_DIGEST_MISMATCH: "Source content digest does not match.",
     NormalizationErrorCode.CITATION_DIGEST_MISMATCH: (
         "Citation digest does not match its source bytes."
