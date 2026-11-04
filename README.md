@@ -561,3 +561,44 @@ The batch registers one synthetic principal, plugin manifest and source, then in
 CR1-G does not add a general blob store, private Gmail persistence, ingestion for arbitrary sources, content encryption, live GitHub access, cursor advancement, deletion/tombstone handling, or provider authentication. The packaged fictional fixture is not evidence that GitHub issued a record. It does not elevate content to owner intent or authorize any action. No PRIVATE/SECRET content is persisted.
 
 The writer API rejects detectable hard-linked database files, UNC paths, and Windows remote/unknown drive types; it checks visible path components for symlinks/reparse points before opening. Windows directory-entry replacement and reparse-point races, same-user direct database access, and maintenance arbitration remain limitations. The CR1-D lease arbitrates cooperating application writers, but `initialize_storage()` does not acquire it; callers must not run migration maintenance concurrently with ingestion. Current-schema and integrity checks occur under the lease before the write transaction, migration identity and exact registered schema DDL are rechecked inside `BEGIN IMMEDIATE`, and the batch has SQLite transaction atomicity. This is not a guarantee against noncooperating database writers or hostile same-user filesystem changes. CR1 and F12 remain IN_PROGRESS; live readers, source authentication, broader persistence and product workflows remain open.
+
+## CR1-H PUBLIC fixture content store
+
+`sentinel.content` provides three APIs for one fixed data set:
+
+- `initialize_public_fixture_store(root)` creates the explicitly selected store root and its fixed subdirectories. The root path must be absolute, on an existing Windows fixed local drive, and its parent must already exist. No implicit/default path or parent tree is selected. An existing unknown or partial nonempty directory is rejected.
+- `store_packaged_github_public_bodies(root)` accepts no caller-supplied body or fixture path. It reads the existing hash-pinned `sentinel.github-issues-fixture.v1` package resource and stores only the three fictional PUBLIC issue-body byte strings.
+- `read_public_fixture_blob(root, *, content_sha256)` returns exact verified bytes for one of the three allowlisted body SHA-256 identities. It validates the store and blob files and does not call the fixture reader or reconstruct bytes from the JSON resource.
+
+```python
+from pathlib import Path
+
+from sentinel.content import (
+    initialize_public_fixture_store,
+    read_public_fixture_blob,
+    store_packaged_github_public_bodies,
+)
+
+store_root = Path(r"C:\Temp\sentinel-public-fixture-store")
+initialize_public_fixture_store(store_root)
+report = store_packaged_github_public_bodies(store_root)
+blob = report.blobs[0]
+body_bytes = read_public_fixture_blob(
+    store_root, content_sha256=blob.content_sha256
+)
+assert len(body_bytes) == blob.payload_byte_length
+```
+
+The store format is `sentinel.public-fixture-store.v1`; blobs use `sentinel.public-fixture-blob.v1` at `public-v1/sha256/<lowercase-content-sha256>.blob`. Each blob contains a fixed magic value, a four-byte big-endian metadata length, canonical sorted compact UTF-8 JSON, then the exact original body bytes. The bounded header records format version, fixture version/hash, content SHA-256, payload byte length, `sensitivity=PUBLIC`, `retention_class=fixture_public`, and `trust_provenance=T4 EXTERNAL`. It contains no issue title or body. The payload hash covers the raw UTF-8 body bytes, not the fixture JSON or its encoded string. The reader accepts only the three pinned body digests:
+
+| Issue | Body SHA-256 |
+|---|---|
+| 101 | `4ed9123596eda8d6095d288d39f3ee267faef342e515da10d22cd2013a9509b2` |
+| 102 | `58485f7f640572778e5938f992eb20b4ae23481b35dcb7b94c714856727876d3` |
+| 103 | `0d8f518b261850fb65ac0ec792b60e3abb3407659410a84fd390196c978e2ef2` |
+
+Each payload is limited to 32 KiB, matching the existing fixture reader's body limit; metadata is limited to 1 KiB, and the selected root path to 160 characters. Files are created as unique temporary entries, written in bounded chunks, flushed and `fsync()`ed, then published with Windows `os.rename()` in the same directory. On Windows, Python documents that `os.rename()` raises `FileExistsError` when the destination exists, unlike `os.replace()`; CR1-H tests this on the host's NTFS volume. A valid existing blob is fully verified and reused without overwrite; a corrupt existing blob fails without repair. Each blob is individually published and read back. The three-file collection is not one atomic batch: a failure can leave earlier complete blobs, and a retry verifies and reuses them. The [Python 3.11 `os.rename` documentation](https://docs.python.org/3.11/library/os.html#os.rename) describes the Windows destination-exists behavior used here.
+
+A process exit before rename can leave a uniquely named `.tmp-<random>.part` file, but not a partial `.blob` at the digest path. Unknown temporary files are not garbage-collected. After rename, the final file is complete and is verified on read. File `fsync()` and rename do not establish survival across abrupt power loss; this code does not flush directory metadata or claim power-loss atomicity. A same-user process able to replace directory entries can still race path checks; detectable reparse components and hard-linked final blobs are rejected, but this is not protection against a malicious same-user filesystem actor. On this Windows host, C: is a fixed NTFS volume; actual symlink creation is unavailable in the existing test environment, so new reparse tests also exercise the detection boundary with a controlled mock. Other fixed Windows filesystems are not independently certified.
+
+This store is unencrypted and is scoped to synthetic PUBLIC fixture data. SHA-256 verifies payload integrity relative to the requested trusted digest; it does not authenticate GitHub, provide confidentiality, prove authorization, or prevent a same-user process from replacing both blob and trusted references. It does not store PRIVATE Gmail bodies, use OS credentials, or integrate with SQLite `source_items.content_ref`. CR1-G continues to reconstruct its content from the pinned fixture; this new store is an independent primitive, not a cross-filesystem SQLite transaction or general content store.
