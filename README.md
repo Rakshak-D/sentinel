@@ -642,3 +642,24 @@ The blob-backed read APIs use the fixed, metadata-only expectation manifest `sen
 The original CR1-G fixture-backed APIs remain for unpromoted databases and reject promoted refs. There is no implicit mode switch or fixture fallback. This fixed-fixture check requires exactly the pinned three revisions, so additional revisions under this one synthetic registry source are conflicts; it is not a general revision-aware synchronizer. Other unrelated registered sources are left outside its comparison. Only fictional PUBLIC GitHub fixture content is eligible; PRIVATE Gmail and SECRET data are rejected by scope. The plugin remains a disabled synthetic manifest, and labels do not authenticate GitHub or grant authority.
 
 SQLite writes use the existing cooperative writer lease. It does not coordinate schema maintenance while an idle lease is held; maintenance and promotion must not be run concurrently. The lease does not prevent a noncooperating same-user process from changing database or blob files. Windows directory-entry/reparse-point replacement races and filesystem-to-SQLite atomicity remain limitations. The CR1-H store is unencrypted and protects content integrity only relative to the trusted digest; it does not provide confidentiality, provider authentication, authorization, or malicious-same-user protection. CR1-H1 is not general content storage and does not implement live GitHub/Gmail, cursor updates, or CR1 completion.
+
+## CR1-I synthetic GitHub evidence brief
+
+Once the fixed GitHub fixture has been ingested and promoted, the installed CLI can display its complete verified evidence after restart:
+
+```powershell
+sentinel brief github-fixture `
+  --database C:\Temp\sentinel-cr1-current.sqlite3 `
+  --store-root C:\Temp\sentinel-public-fixture-store `
+  --format text
+```
+
+Use `--format json` for the deterministic `sentinel.synthetic-evidence-brief.v1` document. Both options are required for the existing database and the explicitly initialized PUBLIC blob-store root. The command does not initialize a database, ingest or promote a fixture, create a store, synchronize a source, or choose implicit paths. An unpromoted database fails without modification.
+
+The brief is a deterministic presentation of the three pinned fictional GitHub issue records and their nine source-bound citations. It is not AI summarization, live GitHub data, or a complete daily briefing. Items are ordered by `source_at` ascending after conversion to UTC, with the canonical provider item ID as a stable tie-breaker. `source_at` remains the provider-like issue update time; the fixed `observed_at` value remains separate. Neither timestamp authenticates a provider or says that an item is current today.
+
+The text and JSON outputs include the fixture and metadata-manifest versions and hashes, item and citation counts, provider item IDs, persisted item UUIDs, original in-memory source-envelope UUIDs, complete body digests, both timestamps, `T4 EXTERNAL`/`PUBLIC` labels, and each persisted citation UUID, half-open UTF-8 byte range, slice digest, and display-safe cited text. Citation bytes are verified from the explicitly selected blob store against the pinned H1 expectations before output. This path does not load the GitHub JSON fixture or fall back to it when a blob is missing. It requires the exact complete promoted database state; all evidence is assembled and formatted before the command writes success output.
+
+Excerpt text is untrusted source data. The terminal renderer visibly escapes CR, LF, tabs, control characters, bidirectional formatting marks, and other Unicode format controls (while preserving joiners used in some scripts and emoji) so an excerpt cannot add terminal lines or alter display direction. JSON uses the same display-safe excerpt representation; these escapes affect presentation only. Stored byte ranges and SHA-256 values always refer to the exact original blob bytes. The source phrase “ignore prior instructions” is displayed only as quoted `T4 EXTERNAL` evidence and does not affect labels or trigger tools. A successful result does not claim that GitHub authenticated the content, that an issue has a particular status/priority/deadline/owner, or that the content implies an action.
+
+On any database, reference, blob, item, or citation verification failure the command exits nonzero, prints no partial briefing to stdout, and emits one fixed error to stderr without paths or source text. It performs read-only database inspection and does not write or repair blobs. This remains synthetic PUBLIC evidence presentation only: live GitHub/Gmail readers, task and briefing workflows, incremental synchronization, model summaries, policy/approval handling, credentials, and external actions are not implemented.

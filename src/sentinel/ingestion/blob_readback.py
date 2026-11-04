@@ -32,6 +32,9 @@ from sentinel.ingestion.types import (
     GithubFixtureIngestionErrorCode,
     PersistedGithubItem,
     PersistedGithubSpan,
+    VerifiedBlobBackedGithubEvidence,
+    VerifiedGithubEvidenceCitation,
+    VerifiedGithubEvidenceItem,
 )
 from sentinel.normalization import (
     NormalizationError,
@@ -255,6 +258,68 @@ def read_blob_backed_github_fixture(
         _map_store_error(error)
 
 
+def read_blob_backed_github_evidence(
+    database: str | Path,
+    *,
+    store_root: str | Path,
+) -> VerifiedBlobBackedGithubEvidence:
+    """Return all fixed-fixture metadata and citations from one verified snapshot."""
+    try:
+        report, body_data = _verified_snapshot(database, store_root=store_root)
+        verified_items = []
+        for expected in EXPECTED_MANIFEST.items:
+            body, normalized, citation_map = body_data[expected.item_id]
+            expected_row = expected.values
+            source_at = datetime.fromisoformat(str(expected_row[10]))
+            observed_at = datetime.fromisoformat(str(expected_row[9]))
+            if source_at.utcoffset() is None or observed_at.utcoffset() is None:
+                fail(GithubBlobIntegrationErrorCode.ITEM_CONFLICT)
+            trust = TrustLabel(str(expected_row[7]))
+            sensitivity = SensitivityLabel(str(expected_row[8]))
+            if trust is not TrustLabel.T4_EXTERNAL or sensitivity is not SensitivityLabel.PUBLIC:
+                fail(GithubBlobIntegrationErrorCode.ITEM_CONFLICT)
+
+            citations: list[VerifiedGithubEvidenceCitation] = []
+            for expected_span in expected.spans:
+                citation = citation_map.get(expected_span.span_id)
+                if citation is None:
+                    fail(GithubBlobIntegrationErrorCode.SPAN_CONFLICT)
+                cited_text = verify_bound_citation(normalized, citation, original_bytes=body)
+                citations.append(
+                    VerifiedGithubEvidenceCitation(
+                        span_id=expected_span.span_id,
+                        start_byte=expected_span.start_byte,
+                        end_byte=expected_span.end_byte,
+                        text_sha256=expected_span.text_sha256,
+                        cited_text=cited_text,
+                    )
+                )
+            verified_items.append(
+                VerifiedGithubEvidenceItem(
+                    provider_item_id=expected.provider_item_id,
+                    item_id=expected.item_id,
+                    source_envelope_id=expected.source_envelope_id,
+                    content_sha256=expected.content_sha256,
+                    source_at=source_at,
+                    observed_at=observed_at,
+                    trust=trust,
+                    sensitivity=sensitivity,
+                    citations=tuple(citations),
+                )
+            )
+        return VerifiedBlobBackedGithubEvidence(
+            provider_id="github.fixture",
+            fixture_version=report.fixture_version,
+            fixture_sha256=report.fixture_sha256,
+            manifest_sha256=report.manifest_sha256,
+            items=tuple(verified_items),
+        )
+    except GithubBlobIntegrationError:
+        raise
+    except (KeyError, TypeError, ValueError, NormalizationError):
+        fail(GithubBlobIntegrationErrorCode.PROMOTION_INCOMPLETE)
+
+
 def read_blob_backed_github_body(
     database: str | Path,
     *,
@@ -299,6 +364,7 @@ def verify_blob_backed_github_citation(
 
 __all__ = [
     "read_blob_backed_github_body",
+    "read_blob_backed_github_evidence",
     "read_blob_backed_github_fixture",
     "verify_blob_backed_github_citation",
 ]

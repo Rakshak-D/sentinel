@@ -1,8 +1,11 @@
 """Immutable, body-free results for the synthetic GitHub ingestion API."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
+
+from sentinel.contracts.labels import SensitivityLabel, TrustLabel
 
 
 class GithubFixtureIngestionErrorCode(StrEnum):
@@ -207,3 +210,40 @@ class BlobBackedGithubFixture:
     fixture_sha256: str
     manifest_sha256: str
     items: tuple[PersistedGithubItem, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedGithubEvidenceCitation:
+    """One source-bound citation already verified against a PUBLIC blob."""
+
+    span_id: UUID
+    start_byte: int
+    end_byte: int
+    text_sha256: str
+    cited_text: str = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedGithubEvidenceItem:
+    """Pinned item provenance and citations from one verified readback."""
+
+    provider_item_id: str
+    item_id: UUID
+    source_envelope_id: UUID
+    content_sha256: str
+    source_at: datetime
+    observed_at: datetime
+    trust: TrustLabel
+    sensitivity: SensitivityLabel
+    citations: tuple[VerifiedGithubEvidenceCitation, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedBlobBackedGithubEvidence:
+    """Complete fixed-fixture evidence verified from SQLite and PUBLIC blobs."""
+
+    provider_id: str
+    fixture_version: str
+    fixture_sha256: str
+    manifest_sha256: str
+    items: tuple[VerifiedGithubEvidenceItem, ...]
