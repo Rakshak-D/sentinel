@@ -773,3 +773,103 @@ The writer lease is cooperative and does not prevent a noncooperating same-user
 process from modifying SQLite. CR1-J does not implement source ingestion,
 incremental sync, policy, approvals, external actions, a daemon, or CR1 release
 completion.
+
+## CR1-K synthetic incremental fixture replay
+
+CR1-K exercises a persistent cursor transition against the existing
+`sentinel.github-issues-fixture.v1` package resource. Its fixed resource hash is
+`7a28c6434ad25f06f6c24a9fa912e94c44796c9e3d4d8676642b37c554a13bc1`; no new
+fixture collection or migration is added. The isolated registry source has
+UUID `28d81af7-dac5-58c1-9dbe-dbad88440cb5`, distinct from CR1-G's source
+`9338577b-4f6d-5507-9422-598c6ffc16bd`. Its account alias is
+`example-owner/fixture-project::incremental-fixture-v1`, and its trusted code
+scope marks it as a **synthetic incremental fixture replay**. It is not a
+second real GitHub account. The source remains `T4_EXTERNAL` and `PUBLIC` and
+reuses the disabled `github.fixture` manifest and fictional fixture principal.
+
+An explicit setup requires an existing current CR1-J database, the complete
+promoted CR1-H1 source, and the initialized PUBLIC fixture store:
+
+```powershell
+sentinel fixture-sync setup `
+  --database C:\Temp\sentinel.sqlite3 `
+  --store-root C:\Temp\sentinel-public-fixture-store
+```
+
+Each call to `advance` processes at most one fixed page, in fixture order
+`#101`, `#102`, `#103` (not provider timestamp order):
+
+```powershell
+sentinel fixture-sync advance --database C:\Temp\sentinel.sqlite3 `
+  --store-root C:\Temp\sentinel-public-fixture-store --expected-generation 0
+sentinel fixture-sync status --database C:\Temp\sentinel.sqlite3 `
+  --store-root C:\Temp\sentinel-public-fixture-store
+```
+
+The corresponding Python APIs in `sentinel.sync` are
+`setup_incremental_github_fixture(database, *, store_root)`,
+`advance_incremental_github_fixture(database, *, store_root,
+expected_generation)`, and `read_incremental_github_fixture_state(database, *,
+store_root)`. All paths are explicit. There is no implicit database/store
+creation, migration, URL, fixture path, cursor token, body, or label input. The
+status API is read-only and verifies the entire committed prefix against the
+body-free pinned H1 expectation manifest and existing blobs; it does not load
+the packaged GitHub JSON fixture. Advancement uses that pinned package
+resource and rejects any invalid fixture, citation, source, blob, cursor, or
+row state.
+
+The UUID mappings use `uuid5(NAMESPACE_URL, name)`. The incremental registry
+source name is
+`sentinel:github.fixture:incremental-fixture:v1:example-owner/fixture-project`,
+which yields `28d81af7-dac5-58c1-9dbe-dbad88440cb5`. Provider items use
+canonical `example-owner/fixture-project#<number>` values. The persisted item
+name is
+`sentinel:github.fixture:incremental-item:v1:<registry-source-uuid>:<provider-item-id>:<body-sha256>`.
+The in-memory source UUID comes from the fixture reader. The persisted span
+name is
+`sentinel:github.fixture:incremental-span:v1:<persisted-item-uuid>:<in-memory-span-uuid>`.
+The cursor ID name is
+`sentinel:github.fixture:incremental-cursor:v1:<registry-source-uuid>:github_fixture_page_v1`,
+which yields `7860e3f9-7b4a-5b7d-9efd-aa04a08b9598`. Cursor kind is
+`github_fixture_page_v1`. Cursor references use the closed grammar
+`sentinel-github-fixture-cursor-v1:sha256:<lowercase-digest>`. The digest pins
+canonical JSON containing the fixture version/hash, incremental source UUID,
+cursor schema, and sequence number 0 through 3. These are synthetic page
+checkpoints, not encrypted provider tokens; future sensitive live cursors need
+a separate protected design.
+
+One `BEGIN IMMEDIATE` transaction inserts the expected item revision and all
+of its verified spans, advances the cursor exactly once, and checks the full
+post-transition state before commit. Replays do not insert duplicates:
+generation progresses 0→1→2→3 with item/span counts 0/0→1/3→2/8→3/9. A replay
+of the immediately previous generation returns `ALREADY_APPLIED`; an older
+request returns `STALE`, a future generation returns `OUT_OF_ORDER`, and
+generation 3 returns `COMPLETE` without another advance. Setup verifies and
+reuses an existing registration without rewinding it. `last_commit_at` is a
+local UTC timestamp assigned to the cursor transition; `last_full_sync_at` and
+`etag` remain NULL because this is not a provider full sync and the fixture has
+no ETag.
+`source_at` remains the fixture's untrusted provider-like timestamp, while
+`observed_at` is the fixture reader's fixed local observation value. Neither
+one authenticates a provider event.
+
+The synthetic body phrase “ignore prior instructions” remains
+`T4_EXTERNAL` source data. Only the explicit local API/CLI call processes a
+page; this does not create a task, approve an action, or invoke a model, tool,
+provider, credential broker, network, or MCP process. Page advancement does not
+change the original CR1-G/H1 rows or manual tasks. It reuses the three existing
+PUBLIC blobs and stores no PRIVATE Gmail material.
+
+Real child-process termination tests cover death before item insertion, after
+item insertion, during span insertion, after all spans before cursor update,
+after cursor update before commit, and immediately after commit. Before commit,
+SQLite recovery presents the prior complete page prefix; after commit it
+presents the next complete prefix. A retry then applies or verifies the page
+without duplication. This is process-crash/SQLite transaction evidence, not a
+sudden power-loss guarantee or cross-file atomicity. The Windows writer lease
+coordinates cooperating app writers only. A noncooperating same-user process
+can still modify SQLite/files, and migration maintenance does not share the
+writer-session mutex; do not run schema maintenance concurrently. This is a
+fixed synthetic replay, not live GitHub pagination, OAuth, Gmail sync, cursor
+encryption, scheduling, deletion/tombstones, automatic task creation, or full
+F18/CR1 implementation. CR1 remains IN_PROGRESS.

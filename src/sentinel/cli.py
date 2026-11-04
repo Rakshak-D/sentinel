@@ -1,5 +1,6 @@
 """Minimal command-line entry point for the Sentinel package."""
 
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,15 @@ from sentinel.briefing.formatters import escape_display_text
 from sentinel.briefing.types import BriefingError
 from sentinel.demo import run_demo
 from sentinel.ingestion.types import GithubBlobIntegrationError
+from sentinel.sync import (
+    FixtureSyncAdvanceReport,
+    FixtureSyncError,
+    IncrementalGithubFixtureState,
+    advance_incremental_github_fixture,
+    read_incremental_github_fixture_state,
+    setup_incremental_github_fixture,
+)
+from sentinel.sync.github_fixture import INCREMENTAL_CURSOR_KIND, INCREMENTAL_SOURCE_LABEL
 from sentinel.tasks import (
     UNCHANGED,
     TaskStatus,
@@ -32,6 +42,10 @@ from sentinel.tasks.types import LocalTask
 app = typer.Typer(no_args_is_help=True, help="Sentinel local-first automation CLI.")
 brief_app = typer.Typer(no_args_is_help=True, help="Read verified, source-cited evidence.")
 task_app = typer.Typer(no_args_is_help=True, help="Manage manually entered local tasks.")
+fixture_sync_app = typer.Typer(
+    no_args_is_help=True,
+    help="Replay the fixed synthetic GitHub issue fixture one page at a time.",
+)
 
 
 def _write_brief_stdout(output: str) -> None:
@@ -340,6 +354,98 @@ def task_reopen(
 
 
 app.add_typer(task_app, name="task")
+
+
+def _fixture_sync_payload(
+    state: IncrementalGithubFixtureState,
+    *,
+    result: str | None = None,
+) -> str:
+    payload: dict[str, object] = {
+        "completed_pages": state.completed_pages,
+        "cursor_id": str(state.cursor_id),
+        "cursor_kind": INCREMENTAL_CURSOR_KIND,
+        "fixture_sha256": state.fixture_sha256,
+        "fixture_version": state.fixture_version,
+        "generation": state.generation,
+        "item_count": state.item_count,
+        "source": INCREMENTAL_SOURCE_LABEL,
+        "source_id": str(state.source_id),
+        "span_count": state.span_count,
+        "status": state.cursor_status.value,
+        "synthetic": True,
+        "total_pages": state.total_pages,
+    }
+    if result is not None:
+        payload["result"] = result
+    return json.dumps(payload, allow_nan=False, separators=(",", ":"), sort_keys=True)
+
+
+@fixture_sync_app.command("setup")
+def fixture_sync_setup(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    store_root: Annotated[
+        Path, typer.Option("--store-root", help="Initialized PUBLIC blob store.")
+    ],
+) -> None:
+    """Register the isolated synthetic incremental source and generation-zero cursor."""
+    try:
+        state = setup_incremental_github_fixture(database, store_root=store_root)
+    except FixtureSyncError as exc:
+        typer.echo(f"Fixture sync setup failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(_fixture_sync_payload(state))
+
+
+@fixture_sync_app.command("advance")
+def fixture_sync_advance(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    store_root: Annotated[
+        Path, typer.Option("--store-root", help="Initialized PUBLIC blob store.")
+    ],
+    expected_generation: Annotated[
+        int,
+        typer.Option(
+            "--expected-generation", min=0, max=3, help="Generation observed before this call."
+        ),
+    ],
+) -> None:
+    """Atomically apply at most the next fixed synthetic issue page."""
+    try:
+        report: FixtureSyncAdvanceReport = advance_incremental_github_fixture(
+            database,
+            store_root=store_root,
+            expected_generation=expected_generation,
+        )
+    except FixtureSyncError as exc:
+        typer.echo(f"Fixture sync advance failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(_fixture_sync_payload(report.state, result=report.result.value))
+
+
+@fixture_sync_app.command("status")
+def fixture_sync_status(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    store_root: Annotated[
+        Path, typer.Option("--store-root", help="Initialized PUBLIC blob store.")
+    ],
+) -> None:
+    """Read and fully verify the synthetic cursor, items, spans and blobs."""
+    try:
+        state = read_incremental_github_fixture_state(database, store_root=store_root)
+    except FixtureSyncError as exc:
+        typer.echo(f"Fixture sync status failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(_fixture_sync_payload(state))
+
+
+app.add_typer(fixture_sync_app, name="fixture-sync")
 
 
 if __name__ == "__main__":
