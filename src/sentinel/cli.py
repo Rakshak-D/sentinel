@@ -17,6 +17,13 @@ from sentinel.briefing.formatters import escape_display_text
 from sentinel.briefing.types import BriefingError
 from sentinel.demo import run_demo
 from sentinel.ingestion.types import GithubBlobIntegrationError
+from sentinel.overview import (
+    OverviewError,
+    build_local_overview,
+    format_json_local_overview,
+    format_text_local_overview,
+)
+from sentinel.overview.assembly import parse_as_of_timestamp
 from sentinel.sync import (
     FixtureSyncAdvanceReport,
     FixtureSyncError,
@@ -156,6 +163,44 @@ def github_fixture_brief(
         raise typer.Exit(code=1) from None
     except Exception:
         typer.echo("Brief failed: verified synthetic evidence is unavailable.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@brief_app.command("local-overview")
+def local_overview_brief(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing current Sentinel database."),
+    ],
+    store_root: Annotated[
+        Path,
+        typer.Option("--store-root", help="Initialized PUBLIC blob store."),
+    ],
+    as_of: Annotated[
+        str,
+        typer.Option("--as-of", help="ISO-8601 timestamp with an explicit UTC offset."),
+    ],
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Show verified local tasks, synthetic evidence, and replay status for one selected day."""
+
+    try:
+        selected_time = parse_as_of_timestamp(as_of)
+        overview = build_local_overview(database, store_root=store_root, as_of=selected_time)
+        output = (
+            format_text_local_overview(overview)
+            if output_format == "text"
+            else format_json_local_overview(overview)
+        )
+    except OverviewError as exc:
+        typer.echo(f"Local overview failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Local overview failed: required local state could not be verified.", err=True)
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 

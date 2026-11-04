@@ -873,3 +873,91 @@ writer-session mutex; do not run schema maintenance concurrently. This is a
 fixed synthetic replay, not live GitHub pagination, OAuth, Gmail sync, cursor
 encryption, scheduling, deletion/tombstones, automatic task creation, or full
 F18/CR1 implementation. CR1 remains IN_PROGRESS.
+
+## CR1-L explicit local overview
+
+`sentinel brief local-overview` displays three separately labeled sections:
+manually entered local tasks, the existing verified three-item/nine-citation
+synthetic GitHub evidence briefing, and the CR1-K synthetic cursor status. It
+does not combine them into source claims, repeat the three issues as if they
+were new observations, create tasks from source text, or generate an AI summary.
+The selected date is explicit; this is not an automatically scheduled daily
+briefing.
+
+The command requires an existing current CR1-J database, a fully promoted and
+valid CR1-H1 GitHub fixture source, an initialized unauthenticated local task
+operator, an initialized CR1-K fixture cursor at generation 0 through 3, and an
+initialized PUBLIC blob store containing all three verified bodies. It does
+not initialize or repair state, apply migrations, ingest or promote source
+data, publish blobs, create tasks, or advance a cursor. Prepare the H1 database
+and PUBLIC blobs through their existing explicit APIs first; the overview has
+no setup path. The separate local operator and cursor setup commands are:
+
+```powershell
+sentinel task setup --database C:\Data\sentinel.sqlite3
+sentinel fixture-sync setup --database C:\Data\sentinel.sqlite3 `
+  --store-root C:\Data\sentinel-public-fixture-store
+```
+
+Then run the overview:
+
+```powershell
+sentinel brief local-overview `
+  --database C:\Data\sentinel.sqlite3 `
+  --store-root C:\Data\sentinel-public-fixture-store `
+  --as-of 2026-11-04T18:00:00+05:30 `
+  --format text
+```
+
+`--database`, `--store-root`, and `--as-of` have no defaults. `--as-of` must be
+an ISO-8601 timestamp with an explicit offset (UTC `Z` is accepted). Sentinel
+reports its UTC instant, the supplied offset, and the resulting local calendar
+day. This slice treats that offset as fixed for the whole day; it does not
+provide IANA timezone or daylight-saving transitions. The day uses the
+half-open interval `[local midnight, next local midnight)`. Thus an OPEN task
+whose due time has already passed earlier on the selected day remains
+`DUE_TODAY`; it becomes `OVERDUE` only before that day's beginning.
+
+OPEN tasks appear in `OVERDUE`, `DUE_TODAY`, `UPCOMING`, or `NO_DUE_DATE`;
+completed tasks appear in their own `COMPLETED` section. Dated OPEN tasks sort
+by due instant ascending, then creation time and task UUID. Undated tasks sort
+by creation time and UUID; completed tasks sort by completion time and UUID.
+Displayed due times use the selected fixed offset. These are calendar buckets,
+not inferred urgency or task-title analysis. Task entries are manual local
+data owned by an unauthenticated CLI identity; they are not verified owner
+intent. SQLite task titles are unencrypted, so do not store credentials or
+confidential information in them.
+
+The synthetic GitHub section reuses CR1-I's complete verified briefing and
+preserves its three item identities, nine byte-accurate citations, source
+digests, manifest pin, timestamps, and `T4 EXTERNAL` / `PUBLIC` labels. Its body
+bytes are verified from the PUBLIC blob store, independently of the original
+GitHub JSON fixture. The fixture text, including instruction-like excerpts,
+remains untrusted evidence. It creates no tasks, deadline, priority,
+recommendation, resolution, or project status. The separate sync section
+reports the synthetic source/cursor UUIDs, fixture pin, generation, page/item/
+span counts, and `READY`/`COMPLETE` fixture replay state. It is not live GitHub
+freshness and does not duplicate incremental items into the original evidence
+count. In JSON the version is `sentinel.local-overview.v1`; `synthetic_data`
+describes the fixture evidence and replay only, while manual tasks have their
+own provenance label.
+
+The text formatter reuses CR1-I's terminal escaping. It renders control,
+newline, and bidi characters visibly without changing the verified citation
+bytes, offsets, or digests. JSON output is deterministic and path-free; it is
+not digitally signed. Sentinel completes every read, check, and render before
+writing success output. A missing task operator, cursor, promoted source,
+blob, or citation, or any corrupt stored record, fails the whole command with
+no partial stdout and a bounded stderr message.
+
+The overview reads tasks and cursor state, builds the verified evidence, then
+rereads tasks and cursor state and compares their complete returned records.
+A detectable change rejects the output. These existing readers use separate
+SQLite connections, so this check is not a single atomic cross-component
+snapshot and cannot rule out every race by a noncooperating process. The
+overview itself is read-only: it does not acquire the writer lease, issue DML,
+write or repair blobs, migrate schema, change cursor state, or modify tasks.
+There is no network, live GitHub/Gmail integration, credential access, model,
+tool, MCP, task extraction, or scheduling in this slice. CR1 remains
+IN_PROGRESS; the broader source readers, authorization, privacy, policy,
+daemon, and release requirements remain open.
