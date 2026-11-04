@@ -76,6 +76,7 @@ def test_json_is_deterministic_versioned_and_contains_only_display_safe_text() -
     document = json.loads(first)
 
     assert first == second
+    assert document["briefing_type"] == "Synthetic GitHub evidence briefing"
     assert document["schema_version"] == "sentinel.synthetic-evidence-brief.v1"
     assert document["synthetic_data"] is True
     assert document["item_count"] == 1

@@ -654,7 +654,7 @@ sentinel brief github-fixture `
   --format text
 ```
 
-Use `--format json` for the deterministic `sentinel.synthetic-evidence-brief.v1` document. Both options are required for the existing database and the explicitly initialized PUBLIC blob-store root. The command does not initialize a database, ingest or promote a fixture, create a store, synchronize a source, or choose implicit paths. An unpromoted database fails without modification.
+Use `--format json` for the deterministic `sentinel.synthetic-evidence-brief.v1` document. Its fixed `briefing_type` is `Synthetic GitHub evidence briefing`. Both options are required for the existing database and the explicitly initialized PUBLIC blob-store root. The command does not initialize a database, ingest or promote a fixture, create a store, synchronize a source, or choose implicit paths. An unpromoted database fails without modification.
 
 The brief is a deterministic presentation of the three pinned fictional GitHub issue records and their nine source-bound citations. It is not AI summarization, live GitHub data, or a complete daily briefing. Items are ordered by `source_at` ascending after conversion to UTC, with the canonical provider item ID as a stable tie-breaker. `source_at` remains the provider-like issue update time; the fixed `observed_at` value remains separate. Neither timestamp authenticates a provider or says that an item is current today.
 

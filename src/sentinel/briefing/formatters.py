@@ -9,7 +9,7 @@ import unicodedata
 from datetime import datetime
 from uuid import UUID
 
-from sentinel.briefing.evidence import ORDERING_DESCRIPTION
+from sentinel.briefing.evidence import BRIEFING_TYPE, ORDERING_DESCRIPTION
 from sentinel.briefing.types import (
     BriefingError,
     BriefingErrorCode,
@@ -136,7 +136,7 @@ def _validate_briefing(briefing: EvidenceBriefing) -> tuple[int, ...]:
 def format_text_brief(briefing: EvidenceBriefing) -> str:
     citation_counts = _validate_briefing(briefing)
     lines = [
-        "Sentinel - Synthetic GitHub evidence briefing",
+        f"Sentinel - {BRIEFING_TYPE}",
         "Data: fictional, fixed packaged fixture",
         f"Fixture origin: {briefing.fixture_origin}",
         f"Fixture version: {briefing.fixture_version}",
@@ -174,6 +174,7 @@ def format_text_brief(briefing: EvidenceBriefing) -> str:
 def format_json_brief(briefing: EvidenceBriefing) -> str:
     citation_counts = _validate_briefing(briefing)
     document = {
+        "briefing_type": BRIEFING_TYPE,
         "schema_version": briefing.schema_version,
         "fixture_origin": briefing.fixture_origin,
         "fixture_version": briefing.fixture_version,

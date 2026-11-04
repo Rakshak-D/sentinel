@@ -16,6 +16,7 @@ from sentinel.ingestion.blob_readback import read_blob_backed_github_evidence
 from sentinel.ingestion.types import VerifiedGithubEvidenceItem
 
 BRIEF_SCHEMA_VERSION = "sentinel.synthetic-evidence-brief.v1"
+BRIEFING_TYPE = "Synthetic GitHub evidence briefing"
 FIXTURE_ORIGIN = "Packaged synthetic GitHub issue fixture"
 ORDERING_DESCRIPTION = "source_at ascending as a UTC instant, then provider item ID"
 
