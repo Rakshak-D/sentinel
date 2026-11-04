@@ -16,6 +16,15 @@ from sentinel.readers.gmail_fixture import (
     GmailFixtureErrorCode,
     read_packaged_gmail_fixture,
 )
+from sentinel.readers.local_text import read_allowlisted_local_text, verify_local_text_span
+from sentinel.readers.local_text_types import (
+    LocalFileMetadata,
+    LocalTextCitation,
+    LocalTextError,
+    LocalTextErrorCode,
+    LocalTextFormat,
+    LocalTextRead,
+)
 from sentinel.readers.types import (
     GithubFixtureIssue,
     GithubFixtureRead,
@@ -38,6 +47,14 @@ __all__ = [
     "GmailFixtureErrorCode",
     "GmailFixtureMessage",
     "GmailFixtureRead",
+    "LocalFileMetadata",
+    "LocalTextCitation",
+    "LocalTextError",
+    "LocalTextErrorCode",
+    "LocalTextFormat",
+    "LocalTextRead",
     "read_packaged_gmail_fixture",
     "read_packaged_github_fixture",
+    "read_allowlisted_local_text",
+    "verify_local_text_span",
 ]

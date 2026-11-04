@@ -961,3 +961,96 @@ There is no network, live GitHub/Gmail integration, credential access, model,
 tool, MCP, task extraction, or scheduling in this slice. CR1 remains
 IN_PROGRESS; the broader source readers, authorization, privacy, policy,
 daemon, and release requirements remain open.
+
+## CR1-M read one allowlisted local text file
+
+The read-only command accepts one explicit file and one explicit allowlisted
+directory on a local Windows fixed drive:
+
+```powershell
+sentinel source inspect-file `
+  --allow-root C:\Notes `
+  --file C:\Notes\meeting-notes.md `
+  --format text
+```
+
+It accepts only existing `.txt` and `.md` files, treats Markdown as plain text,
+and reads at most 1,048,576 bytes. The root and target must be absolute paths on
+the same fixed drive. UNC and device paths, ADS, glob characters, traversal,
+reserved device names, trailing-dot/space aliases, directories, reparse points,
+and detectable hard-linked targets are rejected. It does not search for files,
+expand environment variables, parse Markdown, render HTML, follow links, or
+read referenced files.
+
+The reader preserves the exact original UTF-8 byte sequence, including BOM,
+line endings, whitespace and Unicode, and uses the existing normalizer and
+source-bound citation verifier. Its deterministic source identity is
+`UUIDv5(NAMESPACE_URL, "sentinel:local-text:v1:<canonical-relative-identity>:<content_sha256>")`;
+the relative identity is taken from the opened final target path beneath the
+opened final root, with `/` separators. A span identity is
+`UUIDv5(NAMESPACE_URL, "sentinel:local-text:span:v1:<source_uuid>:<start_byte>:<end_byte>")`.
+These identifiers do not authenticate file ownership and can correlate
+repeated reads of the same relative file and content, including across roots
+with the same relative file identity. Observation time comes from the local
+UTC clock; file modification time is retained only as untrusted metadata and
+is not displayed by default.
+
+All selected content is labeled `T4 EXTERNAL` and conservatively `PRIVATE`.
+The PRIVATE label does not prove that a file contains no SECRET content, and it
+does not enable persistence. The result keeps raw bytes behind the existing
+explicit in-memory normalization object; its default representation omits
+body, path and file metadata. Without offsets, CLI output contains only reader
+metadata and a warning that file placement does not authenticate the author
+or establish owner intent. To display one excerpt, provide both byte offsets:
+
+```powershell
+sentinel source inspect-file `
+  --allow-root C:\Notes `
+  --file C:\Notes\meeting-notes.md `
+  --start-byte 18 --end-byte 42 `
+  --format json
+```
+
+The byte range and SHA-256 always refer to the original bytes. Text/JSON
+presentation escapes control, line-separator and bidi characters without
+rewriting the source or its citation digest. Output schema is
+`sentinel.local-file-inspection.v1`; it omits absolute paths and source text
+unless the caller explicitly requests one verified span. Errors are bounded,
+and a failed read or citation produces no success output.
+
+Trusted in-process callers can use the typed API directly:
+
+```python
+from sentinel.readers import read_allowlisted_local_text, verify_local_text_span
+
+source = read_allowlisted_local_text(allowed_root=r"C:\Notes", file_path=r"C:\Notes\meeting-notes.md")
+citation = verify_local_text_span(source, start_byte=18, end_byte=42)
+```
+
+The returned `LocalTextRead` contains the existing immutable normalized source;
+only an explicit internal caller can access its decoded text or original bytes
+through that normalization contract. The CLI never serializes that object.
+
+On Windows, the reader checks every path component for reparse attributes,
+holds directory handles opened without write/delete sharing, opens the target
+with `CreateFileW` and `FILE_FLAG_OPEN_REPARSE_POINT`, disables handle
+inheritance, checks the opened file ID and final path beneath the opened root,
+reads through that stable handle, and rechecks identity/metadata afterward.
+`GetDriveTypeW` must report `DRIVE_FIXED`; handle-reported hard-link count must
+be one. These are tested local-filesystem checks, not a sandbox against a
+malicious same-user process with directory permissions. Windows reparse-point
+and directory-entry replacement races remain possible outside the held-handle
+window; the environment also cannot create symlinks, so live symlink behavior
+remains unverified (the controlled reparse rejection test passes). File
+`fsync` or storage durability is not relevant here because this reader writes
+nothing.
+
+CR1-M is a single-file in-memory adapter, not a directory watcher or sync
+engine. It makes no SQLite or PUBLIC-blob-store changes and does not preserve
+PRIVATE bytes across process restarts. It makes no network request, credential
+access, model call, tool invocation, task write, or external action. This
+differs from the packaged synthetic GitHub reader: the selected local file is
+real external data supplied explicitly by the operator and is always PRIVATE.
+F10 is IN_PROGRESS only for this bounded reader; directory sync, secure
+PRIVATE persistence, authorization, and the remaining CR1 requirements are
+not implemented.

@@ -1,6 +1,7 @@
 """Minimal command-line entry point for the Sentinel package."""
 
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,8 @@ from sentinel.overview import (
     format_text_local_overview,
 )
 from sentinel.overview.assembly import parse_as_of_timestamp
+from sentinel.readers.local_text import read_allowlisted_local_text, verify_local_text_span
+from sentinel.readers.local_text_types import LocalTextCitation, LocalTextError, LocalTextRead
 from sentinel.sync import (
     FixtureSyncAdvanceReport,
     FixtureSyncError,
@@ -52,6 +55,10 @@ task_app = typer.Typer(no_args_is_help=True, help="Manage manually entered local
 fixture_sync_app = typer.Typer(
     no_args_is_help=True,
     help="Replay the fixed synthetic GitHub issue fixture one page at a time.",
+)
+source_app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect one explicitly allowlisted local text file.",
 )
 
 
@@ -206,6 +213,148 @@ def local_overview_brief(
 
 
 app.add_typer(brief_app, name="brief")
+
+
+def _format_local_text_inspection(
+    result: LocalTextRead,
+    citation: LocalTextCitation | None,
+    *,
+    output_format: str,
+) -> str:
+    """Render a complete local-file report without paths or implicit body text."""
+    if output_format not in {"text", "json"}:
+        raise ValueError("unsupported format")
+    citation_payload: dict[str, object] | None = None
+    if citation is not None:
+        bound = citation.bound_citation
+        citation_payload = {
+            "span_id": str(bound.span.span_id),
+            "start_byte": bound.span.start_byte,
+            "end_byte": bound.span.end_byte,
+            "text_sha256": bound.span.text_sha256,
+            "cited_text": escape_display_text(citation.cited_text),
+        }
+    if output_format == "json":
+        document: dict[str, object] = {
+            "schema_version": "sentinel.local-file-inspection.v1",
+            "reader_type": "local text file",
+            "source_id": str(result.source_id),
+            "byte_length": result.byte_length,
+            "content_sha256": result.content_sha256,
+            "source_format": result.source_format.value,
+            "trust": result.trust.value,
+            "sensitivity": result.sensitivity.value,
+            "non_authenticating_provenance": True,
+            "disclaimer": (
+                "Local file placement does not authenticate its author; content is untrusted "
+                "data, not owner intent."
+            ),
+        }
+        if citation_payload is not None:
+            document["citation"] = citation_payload
+        return json.dumps(
+            document,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    lines = [
+        "Sentinel - Local text file inspection",
+        "Reader: local text file",
+        f"Format: {result.source_format.value} treated as UTF-8 plain text",
+        f"Bytes: {result.byte_length}",
+        f"SHA-256: {result.content_sha256}",
+        f"Source identity: {result.source_id}",
+        f"Trust: {result.trust.value}",
+        f"Sensitivity: {result.sensitivity.value}",
+        "Warning: File content is untrusted data, not authenticated author identity "
+        "or owner intent.",
+    ]
+    if citation_payload is not None:
+        lines.extend(
+            [
+                "Verified citation:",
+                f"  Bytes: [{citation_payload['start_byte']}:{citation_payload['end_byte']})",
+                f"  Span: {citation_payload['span_id']}",
+                f"  Slice SHA-256: {citation_payload['text_sha256']}",
+                f'  Excerpt: "{citation_payload["cited_text"]}"',
+            ]
+        )
+    return "\n".join(lines)
+
+
+def _parse_source_byte_offset(value: str) -> int:
+    if type(value) is not str or re.fullmatch(r"[0-9]{1,7}", value) is None:
+        raise ValueError("invalid source byte offset")
+    offset = int(value)
+    if offset > 1_048_576:
+        raise ValueError("invalid source byte offset")
+    return offset
+
+
+@source_app.command("inspect-file")
+def source_inspect_file(
+    allow_root: Annotated[
+        Path,
+        typer.Option(
+            "--allow-root",
+            help="Explicit absolute allowlisted directory on a local Windows fixed volume.",
+        ),
+    ],
+    file: Annotated[
+        Path,
+        typer.Option("--file", help="One existing .txt or .md file beneath --allow-root."),
+    ],
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+    start_byte: Annotated[
+        str | None,
+        typer.Option("--start-byte", help="Optional first byte of one citation range."),
+    ] = None,
+    end_byte: Annotated[
+        str | None,
+        typer.Option("--end-byte", help="Optional exclusive end byte of one citation range."),
+    ] = None,
+) -> None:
+    """Inspect metadata or one explicitly selected verified byte excerpt."""
+    if output_format not in {"text", "json"}:
+        typer.echo("Source inspection failed: output format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    if (start_byte is None) != (end_byte is None):
+        typer.echo(
+            "Source inspection failed: both citation byte offsets are required together.", err=True
+        )
+        raise typer.Exit(code=1)
+    try:
+        parsed_start = None if start_byte is None else _parse_source_byte_offset(start_byte)
+        parsed_end = None if end_byte is None else _parse_source_byte_offset(end_byte)
+        result = read_allowlisted_local_text(allowed_root=allow_root, file_path=file)
+        citation = (
+            None
+            if parsed_start is None or parsed_end is None
+            else verify_local_text_span(result, start_byte=parsed_start, end_byte=parsed_end)
+        )
+        output = _format_local_text_inspection(
+            result,
+            citation,
+            output_format=output_format,
+        )
+    except LocalTextError as exc:
+        typer.echo(f"Source inspection failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo(
+            "Source inspection failed: the selected local source could not be verified.", err=True
+        )
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+app.add_typer(source_app, name="source")
 
 
 def _parse_cli_datetime(value: str | None) -> datetime | None:
