@@ -602,3 +602,43 @@ Each payload is limited to 32 KiB, matching the existing fixture reader's body l
 A process exit before rename can leave a uniquely named `.tmp-<random>.part` file, but not a partial `.blob` at the digest path. Unknown temporary files are not garbage-collected. After rename, the final file is complete and is verified on read. File `fsync()` and rename do not establish survival across abrupt power loss; this code does not flush directory metadata or claim power-loss atomicity. A same-user process able to replace directory entries can still race path checks; detectable reparse components and hard-linked final blobs are rejected, but this is not protection against a malicious same-user filesystem actor. On this Windows host, C: is a fixed NTFS volume; actual symlink creation is unavailable in the existing test environment, so new reparse tests also exercise the detection boundary with a controlled mock. Other fixed Windows filesystems are not independently certified.
 
 This store is unencrypted and is scoped to synthetic PUBLIC fixture data. SHA-256 verifies payload integrity relative to the requested trusted digest; it does not authenticate GitHub, provide confidentiality, prove authorization, or prevent a same-user process from replacing both blob and trusted references. It does not store PRIVATE Gmail bodies, use OS credentials, or integrate with SQLite `source_items.content_ref`. CR1-G continues to reconstruct its content from the pinned fixture; this new store is an independent primitive, not a cross-filesystem SQLite transaction or general content store.
+
+## CR1-H1 SQLite reference promotion
+
+CR1-H1 explicitly connects the existing fixed CR1-G rows to the separate CR1-H store. It does not add a schema migration or change the blob format. The public APIs are:
+
+```python
+from pathlib import Path
+
+from sentinel.ingestion import (
+    promote_github_fixture_to_public_blobs,
+    read_blob_backed_github_fixture,
+    read_blob_backed_github_body,
+    verify_blob_backed_github_citation,
+)
+
+database = Path(r"C:\Temp\sentinel-cr1-g.sqlite3")  # existing, current CR1-F database
+store_root = Path(r"C:\Temp\sentinel-public-fixture-store")  # initialized explicitly
+
+promotion = promote_github_fixture_to_public_blobs(database, store_root=store_root)
+snapshot = read_blob_backed_github_fixture(database, store_root=store_root)
+body = read_blob_backed_github_body(
+    database, store_root=store_root, item_id=snapshot.items[0].item_id
+)
+cited_text = verify_blob_backed_github_citation(
+    database,
+    store_root=store_root,
+    item_id=snapshot.items[0].item_id,
+    span_id=snapshot.items[0].spans[0].span_id,
+)
+```
+
+Promotion accepts only an existing database at the exact current registered schema, the complete verified CR1-G fixture state, and an explicitly initialized CR1-H store root. It promotes exactly the three pinned fixture items and nine spans. The reference changes from `fixture:sentinel.github-issues-fixture.v1:<repository>#<issue>` to the closed grammar `sentinel-public-blob-v1:sha256:<lowercase-body-sha256>`. The digest is checked against the expected item revision before it is passed to the fixed content-store API; a value from SQLite is never opened as a path, URL, or generic resource. No body bytes are written to SQLite.
+
+The promotion order is validate the complete old or fully promoted state, publish and read back all three blobs, then acquire the CR1-D writer lease and update all three `content_ref` fields in one `BEGIN IMMEDIATE` transaction. The transaction rechecks current migration identity, registrations, exact item and span sets, and all three blob payloads before updating. It compares the complete promoted state again before commit. A database error or failed postcondition rolls back all three reference changes. If a process stops after blob publication but before commit, the old references remain and complete orphan blobs are harmless; no automatic orphan cleanup is performed. A retry verifies and reuses them. A crash after commit leaves references to blobs that were already published. This is not one atomic transaction across SQLite and the filesystem, and no sudden power-loss guarantee is claimed.
+
+The blob-backed read APIs use the fixed, metadata-only expectation manifest `sentinel.github-fixture-persistence-manifest.v1`, pinned at SHA-256 `645aecaedd14d8e6c6071b9d8c32a5d91f664c715799191303eac315d6f9c08f`. It records expected registration and item metadata, stable in-memory source IDs, content digests, persisted span IDs, original span IDs, byte ranges, and slice digests; it contains no issue titles or bodies. The reader validates SQLite rows against that manifest, resolves only the exact blob-reference grammar through the explicitly selected store, reconstructs normalized sources under fixed `github.fixture` / `T4_EXTERNAL` / `PUBLIC` labels, and revalidates all nine citation associations against exact blob bytes. It does not load the packaged GitHub JSON fixture and fails if a blob is missing or corrupted. `read_blob_backed_github_body()` and `verify_blob_backed_github_citation()` are explicit internal byte/text access APIs; the default report omits source bodies and titles.
+
+The original CR1-G fixture-backed APIs remain for unpromoted databases and reject promoted refs. There is no implicit mode switch or fixture fallback. This fixed-fixture check requires exactly the pinned three revisions, so additional revisions under this one synthetic registry source are conflicts; it is not a general revision-aware synchronizer. Other unrelated registered sources are left outside its comparison. Only fictional PUBLIC GitHub fixture content is eligible; PRIVATE Gmail and SECRET data are rejected by scope. The plugin remains a disabled synthetic manifest, and labels do not authenticate GitHub or grant authority.
+
+SQLite writes use the existing cooperative writer lease. It does not coordinate schema maintenance while an idle lease is held; maintenance and promotion must not be run concurrently. The lease does not prevent a noncooperating same-user process from changing database or blob files. Windows directory-entry/reparse-point replacement races and filesystem-to-SQLite atomicity remain limitations. The CR1-H store is unencrypted and protects content integrity only relative to the trusted digest; it does not provide confidentiality, provider authentication, authorization, or malicious-same-user protection. CR1-H1 is not general content storage and does not implement live GitHub/Gmail, cursor updates, or CR1 completion.
