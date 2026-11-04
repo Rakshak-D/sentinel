@@ -393,9 +393,7 @@ CR1_F_SCHEMA = SchemaDefinition(
         SchemaObjectDefinition(
             "index", "runs_status_started_at_idx", RUNS_STATUS_STARTED_AT_INDEX_DDL
         ),
-        SchemaObjectDefinition(
-            "table", "boundary_envelopes", BOUNDARY_ENVELOPES_TABLE_DDL
-        ),
+        SchemaObjectDefinition("table", "boundary_envelopes", BOUNDARY_ENVELOPES_TABLE_DDL),
         SchemaObjectDefinition(
             "index",
             "boundary_envelopes_kind_adapter_idx",
@@ -409,9 +407,93 @@ CR1_F_SCHEMA = SchemaDefinition(
 )
 
 # Independent pin for the full post-CR1-F schema checkpoint.
-CR1_F_SCHEMA_DEFINITION_SHA256 = (
-    "26f31fe4601c67cb60c6faa324eba83ff59c611b1fa283e514f0a77e3acf44ad"
+CR1_F_SCHEMA_DEFINITION_SHA256 = "26f31fe4601c67cb60c6faa324eba83ff59c611b1fa283e514f0a77e3acf44ad"
+
+# CR1-J adds a schema-only proposal parent required by the normative task FK,
+# the local task table, and a minimal immutable request receipt. The receipt is
+# needed because the normative task row has no request-id field while F11
+# requires replay conflict detection to survive later task edits.
+ACTION_PROPOSALS_TABLE_DDL = """CREATE TABLE action_proposals (
+    proposal_id TEXT NOT NULL PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    capability TEXT NOT NULL,
+    canonical_args_ref TEXT NOT NULL,
+    canonical_args_sha256 TEXT NOT NULL CHECK (
+        length(canonical_args_sha256) = 64
+        AND canonical_args_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    display_sha256 TEXT NOT NULL CHECK (
+        length(display_sha256) = 64 AND display_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    owner_intent_id TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    credential_alias TEXT,
+    UNIQUE (display_sha256, run_id),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id),
+    FOREIGN KEY (principal_id) REFERENCES principals(principal_id)
+)"""
+ACTION_PROPOSALS_STATUS_EXPIRES_AT_INDEX_DDL = (
+    "CREATE INDEX action_proposals_status_expires_at_idx\n"
+    "    ON action_proposals(status, expires_at)"
 )
+
+TASKS_TABLE_DDL = """CREATE TABLE tasks (
+    task_id TEXT NOT NULL PRIMARY KEY,
+    owner_principal_id TEXT NOT NULL,
+    source_item_id TEXT,
+    proposal_id TEXT,
+    title TEXT NOT NULL,
+    body_ref TEXT,
+    due_at TEXT,
+    status TEXT NOT NULL CHECK (status IN ('OPEN', 'COMPLETED')),
+    revision INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision >= 1),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY (owner_principal_id) REFERENCES principals(principal_id),
+    FOREIGN KEY (source_item_id) REFERENCES source_items(item_id),
+    FOREIGN KEY (proposal_id) REFERENCES action_proposals(proposal_id)
+)"""
+TASKS_STATUS_DUE_AT_INDEX_DDL = """CREATE INDEX tasks_status_due_at_idx
+    ON tasks(status, due_at)"""
+TASKS_PROPOSAL_ID_UNIQUE_INDEX_DDL = """CREATE UNIQUE INDEX tasks_proposal_id_unique_idx
+    ON tasks(proposal_id) WHERE proposal_id IS NOT NULL"""
+
+TASK_CREATION_REQUESTS_TABLE_DDL = """CREATE TABLE task_creation_requests (
+    request_id TEXT NOT NULL PRIMARY KEY,
+    task_id TEXT NOT NULL UNIQUE,
+    request_sha256 TEXT NOT NULL CHECK (
+        length(request_sha256) = 64 AND request_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    FOREIGN KEY (task_id) REFERENCES tasks(task_id)
+)"""
+
+CR1_J_SCHEMA_VERSION = "cr1-j-0004-local-tasks"
+CR1_J_SCHEMA = SchemaDefinition(
+    schema_version=CR1_J_SCHEMA_VERSION,
+    objects=(
+        *CR1_F_SCHEMA.objects,
+        SchemaObjectDefinition("table", "action_proposals", ACTION_PROPOSALS_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index",
+            "action_proposals_status_expires_at_idx",
+            ACTION_PROPOSALS_STATUS_EXPIRES_AT_INDEX_DDL,
+        ),
+        SchemaObjectDefinition("table", "tasks", TASKS_TABLE_DDL),
+        SchemaObjectDefinition("index", "tasks_status_due_at_idx", TASKS_STATUS_DUE_AT_INDEX_DDL),
+        SchemaObjectDefinition(
+            "index", "tasks_proposal_id_unique_idx", TASKS_PROPOSAL_ID_UNIQUE_INDEX_DDL
+        ),
+        SchemaObjectDefinition("table", "task_creation_requests", TASK_CREATION_REQUESTS_TABLE_DDL),
+    ),
+)
+
+# Independent pin for the complete post-CR1-J schema checkpoint.
+CR1_J_SCHEMA_DEFINITION_SHA256 = "659d0643a9e1c85f839a107d4e8d1d944c38972bb0416d094cd5a73ad355979d"
 
 
 def _normalized_sql(value: object) -> str | None:
@@ -448,9 +530,7 @@ def _verify_foundation_metadata_table(
     primary_key_indexes = [row for row in all_indexes if str(row[1]).startswith("sqlite_")]
     if len(primary_key_indexes) != 1:
         raise SchemaIntegrityError("schema_migrations indexes do not match the normative schema")
-    expected_index_names = {
-        item.name for item in expected.objects if item.object_type == "index"
-    }
+    expected_index_names = {item.name for item in expected.objects if item.object_type == "index"}
     if any(str(row[1]) not in expected_index_names for row in indexes):
         raise SchemaIntegrityError("schema_migrations contains an unregistered index")
     migration_index = next(
@@ -489,9 +569,7 @@ def verify_schema(connection: sqlite3.Connection, expected: SchemaDefinition) ->
              AND type IN ('table', 'index', 'view', 'trigger')"""
     ).fetchall()
     actual = {(str(object_type), str(name)): sql for object_type, name, sql in rows}
-    expected_objects = {
-        (item.object_type, item.name): item.sql for item in expected.objects
-    }
+    expected_objects = {(item.object_type, item.name): item.sql for item in expected.objects}
     if actual.keys() != expected_objects.keys():
         raise SchemaIntegrityError("SQLite schema objects do not match the registered checkpoint")
 

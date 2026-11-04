@@ -16,7 +16,13 @@ CR1_F_SCHEMA_SHA256 = "26f31fe4601c67cb60c6faa324eba83ff59c611b1fa283e514f0a77e3
 
 def _database(tmp_path: Path, name: str = "schema-integrity.sqlite3") -> Path:
     database = tmp_path / name
-    initialize_storage(database, create=True)
+    with database_connection(database, create=True) as connection:
+        for migration in migration_module.MIGRATIONS[:3]:
+            migration_module._apply_migration(
+                connection,
+                migration,
+                app_build="synthetic-cr1-f-history",
+            )
     return database
 
 
@@ -33,12 +39,12 @@ def test_cr1_f_artifact_and_complete_checkpoint_have_independent_pins(
     assert migration_module.MIGRATIONS[1].schema_after.sha256 == (
         "38eb2f69500aa21df1002691c40759ba5acbc58b09c97de4a8ab7bfdd9c40d6a"
     )
-    assert tuple(item.migration_id for item in migration_module.MIGRATIONS) == (
+    assert tuple(item.migration_id for item in migration_module.MIGRATIONS[:3]) == (
         "cr0-c-0001-schema-migrations",
         "cr1-e-0002-source-registry",
         CR1_F_ID,
     )
-    migration = migration_module.MIGRATIONS[-1]
+    migration = migration_module.MIGRATIONS[2]
     assert migration.artifact_sha256 == CR1_F_ARTIFACT_SHA256
     assert migration.schema_after.sha256 == CR1_F_SCHEMA_SHA256
     assert migration.schema_after.schema_version == CR1_F_ID
@@ -54,7 +60,7 @@ def test_f_checkpoint_contains_complete_prior_and_new_schema_inventory(
     tmp_path: Path,
 ) -> None:
     database = _database(tmp_path)
-    migration = migration_module.MIGRATIONS[-1]
+    migration = migration_module.MIGRATIONS[2]
     objects = {(item.object_type, item.name) for item in migration.schema_after.objects}
     assert {
         ("table", "schema_migrations"),
@@ -188,7 +194,7 @@ def test_changed_cr1_f_migration_artifact_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = _database(tmp_path)
-    migration = migration_module.MIGRATIONS[-1]
+    migration = migration_module.MIGRATIONS[2]
     changed = Migration(
         migration.migration_id,
         (*migration.statements, "SELECT 1"),
@@ -197,7 +203,7 @@ def test_changed_cr1_f_migration_artifact_is_rejected(
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",
-        (*migration_module.MIGRATIONS[:-1], changed),
+        (*migration_module.MIGRATIONS[:2], changed, *migration_module.MIGRATIONS[3:]),
     )
     with pytest.raises(MigrationIntegrityError, match="CR1-F migration artifact"):
         initialize_storage(database)
@@ -208,7 +214,7 @@ def test_changed_cr1_f_schema_checkpoint_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = _database(tmp_path)
-    migration = migration_module.MIGRATIONS[-1]
+    migration = migration_module.MIGRATIONS[2]
     altered_schema = SchemaDefinition(
         migration.migration_id,
         (
@@ -228,7 +234,7 @@ def test_changed_cr1_f_schema_checkpoint_is_rejected(
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",
-        (*migration_module.MIGRATIONS[:-1], changed),
+        (*migration_module.MIGRATIONS[:2], changed, *migration_module.MIGRATIONS[3:]),
     )
     monkeypatch.setattr(
         migration_module,

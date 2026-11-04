@@ -12,6 +12,7 @@ from sentinel.storage.migrations import initialize_storage, verify_integrity
 
 CR1_F_MIGRATION_ID = "cr1-f-0003-source-spans"
 CR1_E_MIGRATION_ID = "cr1-e-0002-source-registry"
+CR1_J_MIGRATION_ID = "cr1-j-0004-local-tasks"
 
 
 def _database(tmp_path: Path) -> Path:
@@ -77,6 +78,7 @@ def test_fresh_initialization_registers_cr1_f_and_source_spans(tmp_path: Path) -
         "cr0-c-0001-schema-migrations",
         CR1_E_MIGRATION_ID,
         CR1_F_MIGRATION_ID,
+        CR1_J_MIGRATION_ID,
     )
     with database_connection(database) as connection:
         row = connection.execute(
@@ -89,7 +91,7 @@ def test_fresh_initialization_registers_cr1_f_and_source_spans(tmp_path: Path) -
             )
         }
         verify_integrity(connection)
-    assert [item[0] for item in row][-1] == CR1_F_MIGRATION_ID
+    assert [item[0] for item in row][-2:] == [CR1_F_MIGRATION_ID, CR1_J_MIGRATION_ID]
     assert {
         "config_revisions",
         "run_manifests",

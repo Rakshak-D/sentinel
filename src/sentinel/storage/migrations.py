@@ -12,12 +12,16 @@ from typing import Final
 from sentinel import __version__
 from sentinel.storage.connection import database_connection
 from sentinel.storage.schema import (
+    ACTION_PROPOSALS_STATUS_EXPIRES_AT_INDEX_DDL,
+    ACTION_PROPOSALS_TABLE_DDL,
     BOUNDARY_ENVELOPES_KIND_ADAPTER_INDEX_DDL,
     BOUNDARY_ENVELOPES_TABLE_DDL,
     CONFIG_REVISIONS_ACTIVATION_CREATED_AT_INDEX_DDL,
     CONFIG_REVISIONS_TABLE_DDL,
     CR1_F_SCHEMA,
     CR1_F_SCHEMA_DEFINITION_SHA256,
+    CR1_J_SCHEMA,
+    CR1_J_SCHEMA_DEFINITION_SHA256,
     CR1_SOURCE_SCHEMA,
     CR1_SOURCE_SCHEMA_DEFINITION_SHA256,
     FOUNDATION_SCHEMA,
@@ -42,6 +46,10 @@ from sentinel.storage.schema import (
     SOURCES_TABLE_DDL,
     SYNC_CURSORS_STATUS_INDEX_DDL,
     SYNC_CURSORS_TABLE_DDL,
+    TASK_CREATION_REQUESTS_TABLE_DDL,
+    TASKS_PROPOSAL_ID_UNIQUE_INDEX_DDL,
+    TASKS_STATUS_DUE_AT_INDEX_DDL,
+    TASKS_TABLE_DDL,
     SchemaDefinition,
     SchemaIntegrityError,
     verify_schema,
@@ -60,6 +68,10 @@ _CR1_E_MIGRATION_ARTIFACT_SHA256: Final = (
 _CR1_F_MIGRATION_ID: Final = "cr1-f-0003-source-spans"
 _CR1_F_MIGRATION_ARTIFACT_SHA256: Final = (
     "6e6b98e60cff17f0eac94b942533964588344fdd0d8342567962ac4a1c3304b7"
+)
+_CR1_J_MIGRATION_ID: Final = "cr1-j-0004-local-tasks"
+_CR1_J_MIGRATION_ARTIFACT_SHA256: Final = (
+    "a75bfcff37255e1fb0cc49eb72254c8e83d049828faa2653a8495ca2f749120a"
 )
 
 
@@ -103,8 +115,7 @@ class Migration:
         if not isinstance(self.statements, tuple) or not self.statements:
             raise ValueError("migration statements must be a non-empty tuple")
         if any(
-            not isinstance(statement, str) or not statement.strip()
-            for statement in self.statements
+            not isinstance(statement, str) or not statement.strip() for statement in self.statements
         ):
             raise ValueError("migration statements must contain non-empty SQL strings")
         if self.artifact_version not in {1, 2}:
@@ -170,6 +181,15 @@ _CR1_F_STATEMENTS: tuple[str, ...] = (
     SOURCE_SPANS_ITEM_START_BYTE_INDEX_DDL,
 )
 
+_CR1_J_STATEMENTS: tuple[str, ...] = (
+    ACTION_PROPOSALS_TABLE_DDL,
+    TASKS_TABLE_DDL,
+    TASK_CREATION_REQUESTS_TABLE_DDL,
+    ACTION_PROPOSALS_STATUS_EXPIRES_AT_INDEX_DDL,
+    TASKS_STATUS_DUE_AT_INDEX_DDL,
+    TASKS_PROPOSAL_ID_UNIQUE_INDEX_DDL,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         _FOUNDATION_MIGRATION_ID,
@@ -187,6 +207,12 @@ MIGRATIONS: tuple[Migration, ...] = (
         _CR1_F_MIGRATION_ID,
         _CR1_F_STATEMENTS,
         CR1_F_SCHEMA,
+        artifact_version=2,
+    ),
+    Migration(
+        _CR1_J_MIGRATION_ID,
+        _CR1_J_STATEMENTS,
+        CR1_J_SCHEMA,
         artifact_version=2,
     ),
 )
@@ -225,6 +251,13 @@ def _registered_migrations() -> tuple[Migration, ...]:
         raise MigrationIntegrityError("CR1-F migration artifact digest mismatch")
     if source_spans.schema_after.sha256 != CR1_F_SCHEMA_DEFINITION_SHA256:
         raise MigrationIntegrityError("CR1-F schema checkpoint digest mismatch")
+    if len(migrations) < 4 or migrations[3].migration_id != _CR1_J_MIGRATION_ID:
+        raise MigrationIntegrityError("registered migrations lack the CR1-J task schema")
+    local_tasks = migrations[3]
+    if local_tasks.artifact_sha256 != _CR1_J_MIGRATION_ARTIFACT_SHA256:
+        raise MigrationIntegrityError("CR1-J migration artifact digest mismatch")
+    if local_tasks.schema_after.sha256 != CR1_J_SCHEMA_DEFINITION_SHA256:
+        raise MigrationIntegrityError("CR1-J schema checkpoint digest mismatch")
     if any(migration.artifact_version != 2 for migration in migrations[1:]):
         raise MigrationIntegrityError("new migrations must use checkpoint-aware artifact v2")
     return migrations

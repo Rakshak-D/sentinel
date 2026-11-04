@@ -21,6 +21,7 @@ from sentinel.storage.writer import acquire_writer_lease
 CR0_ID = "cr0-c-0001-schema-migrations"
 CR1_E_ID = "cr1-e-0002-source-registry"
 CR1_F_ID = "cr1-f-0003-source-spans"
+CR1_J_ID = "cr1-j-0004-local-tasks"
 
 
 def _prefix_database(database: Path, count: int) -> Path:
@@ -69,9 +70,9 @@ def test_cr1_e_database_upgrades_once_without_rewriting_history_or_existing_data
         )
     old_rows = _history(database)
 
-    assert initialize_storage(database) == (CR1_F_ID,)
+    assert initialize_storage(database) == (CR1_F_ID, CR1_J_ID)
     new_rows = _history(database)
-    assert [row[0] for row in new_rows] == [CR0_ID, CR1_E_ID, CR1_F_ID]
+    assert [row[0] for row in new_rows] == [CR0_ID, CR1_E_ID, CR1_F_ID, CR1_J_ID]
     assert new_rows[:2] == old_rows
     assert initialize_storage(database) == ()
     assert _history(database) == new_rows
@@ -96,8 +97,8 @@ def test_cr0_only_database_upgrades_through_cr1_e_and_cr1_f_in_order(
     before = _history(database)
     assert before[0][0] == CR0_ID
 
-    assert initialize_storage(database) == (CR1_E_ID, CR1_F_ID)
-    assert [row[0] for row in _history(database)] == [CR0_ID, CR1_E_ID, CR1_F_ID]
+    assert initialize_storage(database) == (CR1_E_ID, CR1_F_ID, CR1_J_ID)
+    assert [row[0] for row in _history(database)] == [CR0_ID, CR1_E_ID, CR1_F_ID, CR1_J_ID]
     assert _history(database)[0] == before[0]
     with database_connection(database) as connection:
         assert connection.execute("PRAGMA foreign_keys").fetchone() == (1,)
@@ -114,7 +115,7 @@ def test_readonly_state_reports_valid_cr1_e_prefix_pending_cr1_f(tmp_path: Path)
         state = inspect_migration_state_readonly(connection)
     assert state.applied_migration_ids == (CR0_ID, CR1_E_ID)
     assert state.schema_version == CR1_E_ID
-    assert state.pending_migration_ids == (CR1_F_ID,)
+    assert state.pending_migration_ids == (CR1_F_ID, CR1_J_ID)
     assert state.is_current is False
     assert CR1_F_ID not in tuple(row[0] for row in _history(database))
 
@@ -215,6 +216,6 @@ def test_idle_writer_lease_does_not_arbitrate_maintenance_upgrade(tmp_path: Path
     with acquire_writer_lease(database):
         # A lease without an active SQLite transaction does not lock out the
         # existing maintenance path. This is a known orchestration hazard.
-        assert initialize_storage(database) == (CR1_F_ID,)
+        assert initialize_storage(database) == (CR1_F_ID, CR1_J_ID)
 
-    assert [row[0] for row in _history(database)] == [CR0_ID, CR1_E_ID, CR1_F_ID]
+    assert [row[0] for row in _history(database)] == [CR0_ID, CR1_E_ID, CR1_F_ID, CR1_J_ID]

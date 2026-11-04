@@ -1,8 +1,10 @@
 """Minimal command-line entry point for the Sentinel package."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from uuid import UUID, uuid4
 
 import typer
 
@@ -10,12 +12,26 @@ from sentinel import __version__
 from sentinel.bootstrap.doctor import DoctorReport, run_doctor
 from sentinel.bootstrap.init import BootstrapInitError, initialize_new_database
 from sentinel.briefing import build_github_fixture_brief, format_json_brief, format_text_brief
+from sentinel.briefing.formatters import escape_display_text
 from sentinel.briefing.types import BriefingError
 from sentinel.demo import run_demo
 from sentinel.ingestion.types import GithubBlobIntegrationError
+from sentinel.tasks import (
+    UNCHANGED,
+    TaskStatus,
+    TaskStoreError,
+    complete_local_task,
+    create_local_task,
+    edit_local_task,
+    list_local_tasks,
+    reopen_local_task,
+    setup_local_task_operator,
+)
+from sentinel.tasks.types import LocalTask
 
 app = typer.Typer(no_args_is_help=True, help="Sentinel local-first automation CLI.")
 brief_app = typer.Typer(no_args_is_help=True, help="Read verified, source-cited evidence.")
+task_app = typer.Typer(no_args_is_help=True, help="Manage manually entered local tasks.")
 
 
 def _write_brief_stdout(output: str) -> None:
@@ -119,9 +135,7 @@ def github_fixture_brief(
     try:
         briefing = build_github_fixture_brief(database, store_root=store_root)
         output = (
-            format_text_brief(briefing)
-            if output_format == "text"
-            else format_json_brief(briefing)
+            format_text_brief(briefing) if output_format == "text" else format_json_brief(briefing)
         )
     except (BriefingError, GithubBlobIntegrationError):
         typer.echo("Brief failed: verified synthetic evidence is unavailable.", err=True)
@@ -133,6 +147,199 @@ def github_fixture_brief(
 
 
 app.add_typer(brief_app, name="brief")
+
+
+def _parse_cli_datetime(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError
+        return parsed
+    except (OverflowError, ValueError):
+        typer.echo(
+            "Task operation failed: due-at must be an ISO-8601 timestamp with an offset.", err=True
+        )
+        raise typer.Exit(code=1) from None
+
+
+def _parse_cli_uuid(value: str, *, field_name: str) -> UUID:
+    try:
+        return UUID(value)
+    except (ValueError, TypeError, AttributeError):
+        typer.echo(f"Task operation failed: {field_name} must be a UUID.", err=True)
+        raise typer.Exit(code=1) from None
+
+
+def _task_output(task: LocalTask, *, prefix: str = "Task") -> str:
+    due_display = "none" if task.due_at is None else task.due_at.isoformat()
+    return (
+        f"{prefix}: {task.task_id} [{task.status.value}, revision {task.revision}] "
+        f"due={due_display} {escape_display_text(task.title)}"
+    )
+
+
+@task_app.command("setup")
+def task_setup(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+) -> None:
+    """Initialize the dedicated unauthenticated local task operator."""
+    try:
+        operator = setup_local_task_operator(database)
+    except TaskStoreError as exc:
+        typer.echo(f"Task setup failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Local task operator initialized (unauthenticated): {operator.principal_id}")
+
+
+@task_app.command("add")
+def task_add(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    title: Annotated[str, typer.Option("--title", help="Non-sensitive manual task title.")],
+    due_at: Annotated[
+        str | None,
+        typer.Option("--due-at", help="Optional ISO-8601 timestamp with an explicit UTC offset."),
+    ] = None,
+    request_id: Annotated[
+        str | None,
+        typer.Option(
+            "--request-id", help="Optional UUID for an explicitly identified create request."
+        ),
+    ] = None,
+) -> None:
+    """Add one manually entered local task."""
+    request_uuid = (
+        uuid4() if request_id is None else _parse_cli_uuid(request_id, field_name="request-id")
+    )
+    try:
+        result = create_local_task(
+            database,
+            request_id=request_uuid,
+            title=title,
+            due_at=_parse_cli_datetime(due_at),
+        )
+    except TaskStoreError as exc:
+        typer.echo(f"Task creation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    prefix = "Task created" if result.created else "Task already exists for request"
+    typer.echo(
+        f"{prefix}: {result.task.task_id} request={result.request_id} "
+        f"revision={result.task.revision}"
+    )
+
+
+@task_app.command("list")
+def task_list(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    status: Annotated[
+        Literal["OPEN", "COMPLETED"] | None,
+        typer.Option("--status", help="Optional task status filter."),
+    ] = None,
+) -> None:
+    """List local tasks in deterministic due/creation/ID order."""
+    try:
+        task_status = None if status is None else TaskStatus(status)
+        tasks = list_local_tasks(database, status=task_status)
+    except TaskStoreError as exc:
+        typer.echo(f"Task listing failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    if not tasks:
+        typer.echo("No tasks.")
+        return
+    for task in tasks:
+        typer.echo(_task_output(task))
+
+
+@task_app.command("edit")
+def task_edit(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    task_id: Annotated[str, typer.Option("--task-id", help="Task UUID from task list/add.")],
+    expected_revision: Annotated[int, typer.Option("--expected-revision", min=1)],
+    title: Annotated[
+        str | None, typer.Option("--title", help="Replacement non-sensitive title.")
+    ] = None,
+    due_at: Annotated[
+        str | None,
+        typer.Option("--due-at", help="Replacement ISO-8601 timestamp with explicit offset."),
+    ] = None,
+    clear_due_at: Annotated[
+        bool,
+        typer.Option("--clear-due-at", help="Clear the current due date."),
+    ] = False,
+) -> None:
+    """Edit the title and/or due date with an expected revision."""
+    task_uuid = _parse_cli_uuid(task_id, field_name="task-id")
+    if clear_due_at and due_at is not None:
+        typer.echo("Task edit failed: choose either --due-at or --clear-due-at.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        updated = edit_local_task(
+            database,
+            task_id=task_uuid,
+            expected_revision=expected_revision,
+            title=UNCHANGED if title is None else title,
+            due_at=(None if clear_due_at else _parse_cli_datetime(due_at))
+            if clear_due_at or due_at is not None
+            else UNCHANGED,
+        )
+    except TaskStoreError as exc:
+        typer.echo(f"Task edit failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(_task_output(updated, prefix="Task updated"))
+
+
+@task_app.command("complete")
+def task_complete(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    task_id: Annotated[str, typer.Option("--task-id", help="Task UUID from task list/add.")],
+    expected_revision: Annotated[int, typer.Option("--expected-revision", min=1)],
+) -> None:
+    """Complete one OPEN task at the expected revision."""
+    try:
+        task = complete_local_task(
+            database,
+            task_id=_parse_cli_uuid(task_id, field_name="task-id"),
+            expected_revision=expected_revision,
+        )
+    except TaskStoreError as exc:
+        typer.echo(f"Task completion failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(_task_output(task, prefix="Task completed"))
+
+
+@task_app.command("reopen")
+def task_reopen(
+    database: Annotated[
+        Path, typer.Option("--database", help="Existing current Sentinel database.")
+    ],
+    task_id: Annotated[str, typer.Option("--task-id", help="Task UUID from task list/add.")],
+    expected_revision: Annotated[int, typer.Option("--expected-revision", min=1)],
+) -> None:
+    """Reopen one COMPLETED task at the expected revision."""
+    try:
+        task = reopen_local_task(
+            database,
+            task_id=_parse_cli_uuid(task_id, field_name="task-id"),
+            expected_revision=expected_revision,
+        )
+    except TaskStoreError as exc:
+        typer.echo(f"Task reopening failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(_task_output(task, prefix="Task reopened"))
+
+
+app.add_typer(task_app, name="task")
 
 
 if __name__ == "__main__":

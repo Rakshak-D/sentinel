@@ -39,8 +39,7 @@ _EXPANSION_TABLE_SQL = """CREATE TABLE test_migration_items (
     item_value TEXT NOT NULL CHECK (length(item_value) > 0)
 )"""
 _EXPANSION_INDEX_SQL = (
-    "CREATE INDEX test_migration_items_value_idx "
-    "ON test_migration_items(item_value)"
+    "CREATE INDEX test_migration_items_value_idx ON test_migration_items(item_value)"
 )
 
 
@@ -61,9 +60,7 @@ def _schema_expansion_migration() -> Migration:
         _schema_checkpoint(
             "test-0002-schema-expansion",
             SchemaObjectDefinition("table", "test_migration_items", _EXPANSION_TABLE_SQL),
-            SchemaObjectDefinition(
-                "index", "test_migration_items_value_idx", _EXPANSION_INDEX_SQL
-            ),
+            SchemaObjectDefinition("index", "test_migration_items_value_idx", _EXPANSION_INDEX_SQL),
         ),
     )
 
@@ -129,6 +126,7 @@ def test_registry_migrations_apply_in_declared_order(
         "cr0-c-0001-schema-migrations",
         "cr1-e-0002-source-registry",
         "cr1-f-0003-source-spans",
+        "cr1-j-0004-local-tasks",
         "test-0002",
         "test-0003",
     ]
@@ -151,6 +149,7 @@ def test_trusted_schema_expansion_creates_a_real_table_and_index(
         "cr0-c-0001-schema-migrations",
         "cr1-e-0002-source-registry",
         "cr1-f-0003-source-spans",
+        "cr1-j-0004-local-tasks",
         migration.migration_id,
     )
     with database_connection(database) as connection:
@@ -355,7 +354,7 @@ def test_new_artifact_hash_covers_its_expected_schema_checkpoint(
     monkeypatch.setattr(
         migration_module,
         "MIGRATIONS",
-        (*migration_module.MIGRATIONS[:3], altered),
+        (*migration_module.MIGRATIONS[:4], altered),
     )
 
     with pytest.raises(MigrationIntegrityError, match="artifact digest mismatch"):
@@ -373,8 +372,7 @@ def test_foundation_migration_artifact_hash_remains_unchanged() -> None:
     (
         "CREATE TABLE unauthorized_table (item_id TEXT PRIMARY KEY)",
         "CREATE INDEX unauthorized_index ON schema_migrations(app_build)",
-        "CREATE TRIGGER unauthorized_trigger AFTER INSERT ON schema_migrations "
-        "BEGIN SELECT 1; END",
+        "CREATE TRIGGER unauthorized_trigger AFTER INSERT ON schema_migrations BEGIN SELECT 1; END",
         "CREATE VIEW unauthorized_view AS SELECT migration_id FROM schema_migrations",
     ),
 )
@@ -410,9 +408,7 @@ def test_altered_table_constraints_are_rejected_as_schema_drift(tmp_path: Path) 
                FROM schema_migrations"""
         )
         connection.execute("DROP TABLE schema_migrations")
-        connection.execute(
-            "ALTER TABLE replacement_schema_migrations RENAME TO schema_migrations"
-        )
+        connection.execute("ALTER TABLE replacement_schema_migrations RENAME TO schema_migrations")
         connection.execute(
             "CREATE INDEX schema_migrations_applied_at_idx ON schema_migrations(applied_at)"
         )
@@ -598,10 +594,13 @@ def test_operational_migration_failure_is_not_reported_as_success(
     assert isinstance(error.value.__cause__, sqlite3.Error)
 
     with database_connection(database) as connection:
-        assert connection.execute(
-            "SELECT success FROM schema_migrations WHERE migration_id = ?",
-            (failing.migration_id,),
-        ).fetchone() is None
+        assert (
+            connection.execute(
+                "SELECT success FROM schema_migrations WHERE migration_id = ?",
+                (failing.migration_id,),
+            ).fetchone()
+            is None
+        )
 
 
 def test_existing_user_schema_without_metadata_is_not_repaired(tmp_path: Path) -> None:
@@ -631,8 +630,6 @@ def test_foreign_key_check_and_integrity_check_run(tmp_path: Path) -> None:
         assert any("PRAGMA integrity_check" in statement for statement in traced_statements)
         assert any("PRAGMA foreign_key_check" in statement for statement in traced_statements)
         connection.execute("CREATE TABLE fk_parent (id TEXT PRIMARY KEY)")
-        connection.execute(
-            "CREATE TABLE fk_child (parent_id TEXT REFERENCES fk_parent(id))"
-        )
+        connection.execute("CREATE TABLE fk_child (parent_id TEXT REFERENCES fk_parent(id))")
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute("INSERT INTO fk_child VALUES ('missing-parent')")

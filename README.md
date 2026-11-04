@@ -662,4 +662,114 @@ The text and JSON outputs include the fixture and metadata-manifest versions and
 
 Excerpt text is untrusted source data. The terminal renderer visibly escapes CR, LF, tabs, control characters, bidirectional formatting marks, and other Unicode format controls (while preserving joiners used in some scripts and emoji) so an excerpt cannot add terminal lines or alter display direction. JSON uses the same display-safe excerpt representation; these escapes affect presentation only. Stored byte ranges and SHA-256 values always refer to the exact original blob bytes. The source phrase “ignore prior instructions” is displayed only as quoted `T4 EXTERNAL` evidence and does not affect labels or trigger tools. A successful result does not claim that GitHub authenticated the content, that an issue has a particular status/priority/deadline/owner, or that the content implies an action.
 
-On any database, reference, blob, item, or citation verification failure the command exits nonzero, prints no partial briefing to stdout, and emits one fixed error to stderr without paths or source text. It performs read-only database inspection and does not write or repair blobs. This remains synthetic PUBLIC evidence presentation only: live GitHub/Gmail readers, task and briefing workflows, incremental synchronization, model summaries, policy/approval handling, credentials, and external actions are not implemented.
+On any database, reference, blob, item, or citation verification failure the command exits nonzero, prints no partial briefing to stdout, and emits one fixed error to stderr without paths or source text. It performs read-only database inspection and does not write or repair blobs. This remains synthetic PUBLIC evidence presentation only: live GitHub/Gmail readers, automatic task extraction, incremental synchronization, model summaries, policy/approval handling, credentials, and external actions are not implemented. CR1-J below adds a separate manual local-task workflow.
+
+## CR1-J manual local tasks
+
+CR1-J adds the checkpoint-aware migration `cr1-j-0004-local-tasks`. Its
+canonical migration artifact SHA-256 is
+`a75bfcff37255e1fb0cc49eb72254c8e83d049828faa2653a8495ca2f749120a`; the
+complete post-CR1-J schema checkpoint SHA-256 is
+`659d0643a9e1c85f839a107d4e8d1d944c38972bb0416d094cd5a73ad355979d`. The
+historical CR0, CR1-E, and CR1-F migration artifacts/checkpoints are unchanged.
+
+The migration adds the normative `action_proposals` schema parent and `tasks`
+table. `action_proposals` references `runs` and `principals`, with a unique
+`(display_sha256, run_id)` pair and a `(status, expires_at)` index. It is schema
+only: the manual task workflow never inserts proposal rows, evaluates policy,
+requests approval, or enables external writes. `tasks` references
+`principals`, `source_items`, and `action_proposals`; it has `OPEN`/`COMPLETED`
+state checks, a positive revision check, a `(status, due_at)` index, and a
+partial unique index for non-NULL `proposal_id` values.
+
+The task row follows the blueprint and has no request-key field. To retain
+create-request idempotency even after later edits change the title or due date,
+the migration also adds the small `task_creation_requests` receipt table. It
+binds one request UUID to one task UUID and a digest of the original canonical
+arguments. See [ADR-0004](docs/adr/0004-cr1-j-task-request-receipts.md). The
+receipt stores no duplicate title/body. Its digest is an integrity value, not
+authentication or protection against direct database modification.
+
+### Explicit schema maintenance
+
+Task commands and `sentinel doctor` never apply migrations. A database at the
+CR1-F schema must be upgraded explicitly during a quiescent maintenance window.
+For example, after stopping all Sentinel writers and confirming no task or
+other application writer is active:
+
+```powershell
+.\.venv\Scripts\python.exe -c "from sentinel.storage.migrations import initialize_storage; initialize_storage(r'C:\Temp\sentinel.sqlite3')"
+```
+
+For a new database, `sentinel init --database <absolute-path>` applies all
+currently registered migrations. The existing writer lease coordinates
+cooperating application writers, but migration maintenance does not acquire
+that writer-session mutex. An active SQLite write transaction blocks a DDL
+migration and the migration rolls back; an idle lease does not block it. Do not
+run maintenance concurrently with the CLI or another application writer.
+
+### Manual commands
+
+Initialize the dedicated task operator once, then add, list, edit, complete,
+and reopen tasks. Every command requires the existing database path explicitly:
+
+```powershell
+sentinel task setup --database C:\Temp\sentinel.sqlite3
+sentinel task add --database C:\Temp\sentinel.sqlite3 --title "Review release notes" --request-id 7cb7306e-77d8-4762-84cb-3af481d485c8 --due-at 2027-05-01T12:00:00+05:30
+sentinel task list --database C:\Temp\sentinel.sqlite3
+sentinel task edit --database C:\Temp\sentinel.sqlite3 --task-id <task-uuid> --expected-revision 1 --title "Review revised notes"
+sentinel task complete --database C:\Temp\sentinel.sqlite3 --task-id <task-uuid> --expected-revision 2
+sentinel task reopen --database C:\Temp\sentinel.sqlite3 --task-id <task-uuid> --expected-revision 3
+```
+
+`setup` registers a deterministic `local-task-operator` principal. It is an
+unauthenticated local CLI identity, not a Windows logon proof, cryptographic
+owner identity, or approval actor. Repeating setup reuses the exact row;
+conflicting metadata fails closed. It is separate from the synthetic GitHub
+fixture principal.
+
+The Python API is `setup_local_task_operator(database)`,
+`create_local_task(database, *, request_id, title, due_at=None)`,
+`list_local_tasks(database, *, status=None)`, `edit_local_task(...)`,
+`complete_local_task(...)`, and `reopen_local_task(...)` in
+`sentinel.tasks`. It returns frozen `LocalTaskOperator`, `LocalTask`, and
+`TaskCreateResult` values; it never exposes a SQLite connection. Writes use one
+CR1-D writer-lease transaction each; reads use the existing read-only database
+connection and do not run DML. All APIs require the exact current registered
+schema and refuse a missing database, historical prefix, or schema drift.
+
+Task titles are supplied directly by the caller; no GitHub/Gmail text or CR1-I
+evidence is converted into a task. Titles must contain 1-200 Unicode code
+points and at most 800 UTF-8 bytes. NUL, terminal controls, ANSI escape, line
+separators, unpaired surrogates, and bidirectional controls are rejected
+without silently rewriting the title. International text is preserved. Due
+dates require an explicit ISO-8601 UTC offset and are stored in UTC. Creation
+and update timestamps come from the local aware UTC clock, never a source
+timestamp or caller-supplied creation time.
+
+If `--request-id` is omitted, `sentinel task add` generates and prints a UUIDv4
+for that new intent. Repeating the command with a new automatic ID creates a
+new request; it does not deduplicate a manually repeated command. Reuse the
+same request ID to retry: the identical normalized title/due date returns the
+same task, while changed arguments fail. The task UUID is stable UUIDv5 over
+the fixed application namespace, the local operator principal, and request ID.
+
+Every task mutation requires `--task-id` and `--expected-revision`. Successful
+edits and transitions increment the revision exactly once and preserve
+`created_at`. Editing with no changed fields, setting the same value, or
+repeating a completion/reopen transition is rejected without incrementing the
+revision. The only transitions are `OPEN -> COMPLETED` and
+`COMPLETED -> OPEN`; completion sets `completed_at` and reopening clears it.
+There is no deletion. Lists sort by due date ascending with undated tasks last,
+then creation time and task UUID.
+
+Manual rows always use `source_item_id=NULL`, `proposal_id=NULL`, and
+`body_ref=NULL`; CR1-J creates no `action_proposals` rows. Task titles are
+stored as ordinary unencrypted SQLite text. Do not put passwords, credentials,
+or confidential records in them. This is a single local CLI workflow, not
+authenticated owner intent, multi-user isolation, encrypted private storage,
+AI planning, a source-derived task mechanism, or a full personal task manager.
+The writer lease is cooperative and does not prevent a noncooperating same-user
+process from modifying SQLite. CR1-J does not implement source ingestion,
+incremental sync, policy, approvals, external actions, a daemon, or CR1 release
+completion.
