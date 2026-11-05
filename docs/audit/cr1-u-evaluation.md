@@ -33,9 +33,12 @@ contract cases, not an independently collected benchmark.
   counts, not included in classification-accuracy's in-bound denominator.
 - Candidate and per-signal positives are exact tuples of signal kind and the
   ordered required field IDs. A signal with different kind/field IDs is not a
-  match. The aggregate micro score is computed over all three registered
-  signal kinds. Macro F1 is the arithmetic mean of the three per-kind F1
-  scores.
+  match. **Signal true positives are matched within the same evaluation case.**
+  Each case's expected and predicted signal multisets are matched first;
+  case-local TP/FP/FN counts are then accumulated. A prediction in one case
+  cannot satisfy an expected signal in another case. The aggregate micro score
+  is computed over all three registered signal kinds. Macro F1 is the
+  arithmetic mean of the three per-kind F1 scores.
 - TP is the count of exact expected/predicted signal matches. FP is predicted
   count minus TP; FN is expected count minus TP. Candidate false positives
   and false negatives are the corresponding candidate-signal FP/FN.
@@ -110,3 +113,54 @@ F13, not F13 completion. Blueprint F13/§7 ModelGateway work remains gated for
 these PRIVATE inputs until a separately reviewed execution path is approved.
 The CR1 exit-matrix row D therefore remains `PARTIAL` and blocks the separate
 CR1 release-exit decision. CR1 remains `IN_PROGRESS`.
+
+## CR1-V case-local signal matching correction
+
+CR1-V fixed a metric-integrity defect in the evaluator. The earlier scorer
+aggregated signal keys globally before counting true positives, allowing
+signals from different cases to satisfy each other. The behavioral regression
+uses actual CR1-O/P-validated triage results from two disposable local files:
+case A expects a candidate and URL but emits only the candidate; case B expects
+only the candidate but also emits a URL. Before the correction, URL metrics
+were TP/FP/FN `1/0/0` (F1 `1.0`); case-local matching correctly reports
+`0/1/1` (F1 `0.0`). Candidate and deadline swap tests cover the same defect.
+
+The corrected signal rule identifier is
+`case_local_kind_and_required_field_ids`, replacing
+`kind_and_required_field_ids`. The JSON schema and fields are unchanged; the
+existing `exact_signal_rule` value changes. Consumers that validate that
+literal must accept the new identifier. The evaluation/corpus version remains
+`cr1-u-job-alert-triage-v1`; the frozen cases and gold labels were not changed.
+
+### Previously reported versus corrected metrics
+
+| Metric | Development previously | Development corrected | Difference | Holdout previously | Holdout corrected | Difference |
+|---|---:|---:|---:|---:|---:|---:|
+| Classification accuracy | 21/22 (95.45%) | 21/22 (95.45%) | 0 | 26/28 (92.86%) | 26/28 (92.86%) | 0 |
+| Candidate TP/FP/FN | 12/0/1 | 12/0/1 | 0/0/0 | 12/0/2 | 12/0/2 | 0/0/0 |
+| Candidate precision/recall/F1 | 1.0000/0.9231/0.9600 | 1.0000/0.9231/0.9600 | 0.0000 each | 1.0000/0.8571/0.9231 | 1.0000/0.8571/0.9231 | 0.0000 each |
+| URL TP/FP/FN/F1 | 9/0/0/1.0000 | 9/0/0/1.0000 | 0/0/0/0.0000 | 10/0/0/1.0000 | 10/0/0/1.0000 | 0/0/0/0.0000 |
+| Deadline TP/FP/FN/F1 | 2/0/0/1.0000 | 2/0/0/1.0000 | 0/0/0/0.0000 | 3/0/0/1.0000 | 3/0/0/1.0000 | 0/0/0/0.0000 |
+| Micro TP/FP/FN/F1 | 23/0/1/0.9787 | 23/0/1/0.9787 | 0/0/0/0.0000 | 25/0/2/0.9615 | 25/0/2/0.9615 | 0/0/0/0.0000 |
+| Macro F1 | 0.9867 | 0.9867 | 0.0000 | 0.9744 | 0.9744 | 0.0000 |
+| Incorrect abstentions | 1 | 1 | 0 | 2 | 2 | 0 |
+| Unexpected failures | 0 | 0 | 0 | 0 | 0 | 0 |
+| Citation references verified/missing/invalid/cross-source | 35/0/0/0 | 35/0/0/0 | 0/0/0/0 | 37/0/0/0 | 37/0/0/0 | 0/0/0/0 |
+
+The frozen classification confusion counts are also unchanged (prediction
+column order: CANDIDATE, INCOMPLETE, AMBIGUOUS, NO_MATCH, INPUT_REJECTED):
+
+- Development: CANDIDATE `[12, 0, 0, 1, 0]`; INCOMPLETE `[0, 4, 0, 0, 0]`;
+  AMBIGUOUS `[0, 0, 3, 0, 0]`; NO_MATCH `[0, 0, 0, 2, 0]`.
+- Holdout: CANDIDATE `[12, 0, 0, 2, 0]`; INCOMPLETE `[0, 5, 0, 0, 0]`;
+  AMBIGUOUS `[0, 0, 5, 0, 0]`; NO_MATCH `[0, 0, 0, 4, 0]`.
+
+The lack of changed pinned-corpus metrics does not negate the defect: that
+corpus contains no compensating cross-case signal swaps. CR1-V's new standalone
+regressions verify URL, candidate, and deadline swaps independently, along
+with partial matches, unexpected acceptance/rejection, zero-positive
+denominators, micro/macro arithmetic, paired reordering, malformed IDs and
+labels, and citation tampering. Invalid observations earn no positive signal
+credit; verified, missing, invalid and cross-source citation-reference counts
+remain separately reported. The full CR1-U corpus remains byte-identical to
+the SHA-256 pins above.
