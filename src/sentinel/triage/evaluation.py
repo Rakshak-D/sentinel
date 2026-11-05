@@ -7,7 +7,8 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import Final, Literal, NoReturn, cast
 
-from sentinel.extraction.types import JobAlertFieldName, JobAlertStatus
+from sentinel.extraction import format_json_job_alert
+from sentinel.extraction.types import JobAlertFieldName, JobAlertParseResult, JobAlertStatus
 from sentinel.triage.job_alert import validate_job_alert_triage
 from sentinel.triage.types import (
     JobAlertConfusionRow,
@@ -18,8 +19,12 @@ from sentinel.triage.types import (
     JobAlertMetric,
     JobAlertPerSignalMetric,
     JobAlertSignalKind,
+    JobAlertTriage,
     JobAlertTriageError,
     JobAlertTriageErrorCode,
+    JobAlertTriageEvidence,
+    JobAlertTriageItem,
+    JobAlertTriageSignal,
 )
 
 _DATASETS: Final = {"development", "holdout"}
@@ -42,6 +47,8 @@ _REQUIRED_FIELDS: Final = {
     JobAlertSignalKind.APPLICATION_URL_DECLARED: (JobAlertFieldName.APPLICATION_URL,),
     JobAlertSignalKind.DEADLINE_DATE_DECLARED: (JobAlertFieldName.DEADLINE,),
 }
+_FAILURE_CODES: Final = frozenset(code.value for code in JobAlertTriageErrorCode)
+_CASE_ID_CHARS: Final = frozenset("abcdefghijklmnopqrstuvwxyz0123456789_-")
 
 
 def _fail() -> NoReturn:
@@ -55,71 +62,128 @@ def _metric(tp: int, fp: int, fn: int) -> JobAlertMetric:
     return JobAlertMetric(tp, fp, fn, precision, recall, f1)
 
 
+def _valid_case_id(value: object) -> bool:
+    return (
+        type(value) is str
+        and 1 <= len(value) <= 128
+        and value.isascii()
+        and value[0] in "abcdefghijklmnopqrstuvwxyz0123456789"
+        and all(character in _CASE_ID_CHARS for character in value)
+    )
+
+
 def _label_signals(label: JobAlertEvaluationLabel) -> Counter[tuple[str, tuple[str, ...]]]:
+    if type(label.expected_signals) is not tuple:
+        _fail()
     output: Counter[tuple[str, tuple[str, ...]]] = Counter()
+    seen_kinds: set[JobAlertSignalKind] = set()
     for signal in label.expected_signals:
-        if type(signal) is not JobAlertExpectedSignal or signal.kind not in _SIGNALS:
+        if (
+            type(signal) is not JobAlertExpectedSignal
+            or type(signal.kind) is not JobAlertSignalKind
+            or signal.kind not in _SIGNALS
+            or type(signal.evidence_fields) is not tuple
+            or any(type(field) is not JobAlertFieldName for field in signal.evidence_fields)
+            or signal.kind in seen_kinds
+        ):
             _fail()
         expected_fields = _REQUIRED_FIELDS[signal.kind]
         if signal.evidence_fields != expected_fields:
             _fail()
+        seen_kinds.add(signal.kind)
         output[(signal.kind.value, tuple(field.value for field in signal.evidence_fields))] += 1
     return output
 
 
-def _predicted_signals(
-    observation: JobAlertEvaluationObservation,
-) -> tuple[Counter[tuple[str, tuple[str, ...]]], int, int, int, int]:
-    if observation.triage is None:
-        return Counter(), 0, 0, 0, 0
-    triage = validate_job_alert_triage(observation.triage)
-    predictions: Counter[tuple[str, tuple[str, ...]]] = Counter()
-    verified = 0
-    invalid = 0
-    cross_source = 0
-    missing = 0
-    for item in triage.items:
-        for signal in item.signals:
-            if not signal.evidence:
+def _invalid_reference_counts(
+    value: object,
+) -> tuple[int, int, int, int]:
+    """Diagnose references after rejection without allowing them scoring credit."""
+    if type(value) is not JobAlertTriage or type(value.items) is not tuple:
+        return 0, 0, 0, 1
+    verified = invalid = cross_source = missing = 0
+    try:
+        for item in value.items:
+            if type(item) is not JobAlertTriageItem or type(item.result) is not JobAlertParseResult:
                 missing += 1
                 continue
-            fields: list[str] = []
-            valid_signal = True
-            for evidence in signal.evidence:
-                fields.append(evidence.field_id.value)
-                field = next(
-                    (
-                        candidate
-                        for candidate in item.result.fields
-                        if candidate.field_id is evidence.field_id
-                    ),
-                    None,
-                )
-                if (
-                    evidence.source_id != item.source_id
-                    or evidence.content_sha256 != item.content_sha256
-                ):
-                    cross_source += 1
-                if field is None or field.evidence is None:
+            try:
+                # Reuse CR1-O's strict validation of its source and bound field citations.
+                format_json_job_alert(item.result, show_fields=False)
+                source_valid = True
+            except Exception:
+                source_valid = False
+            if type(item.signals) is not tuple:
+                missing += 1
+                continue
+            for signal in item.signals:
+                if type(signal) is not JobAlertTriageSignal or type(signal.evidence) is not tuple:
                     missing += 1
-                    valid_signal = False
                     continue
-                if (
-                    evidence.source_id != field.evidence.source_id
-                    or evidence.content_sha256 != field.evidence.content_sha256
-                    or evidence.span_id != field.evidence.span_id
-                    or evidence.start_byte != field.evidence.start_byte
-                    or evidence.end_byte != field.evidence.end_byte
-                    or evidence.text_sha256 != field.evidence.text_sha256
-                    or field.state.value != "present"
-                ):
-                    invalid += 1
-                    valid_signal = False
-                else:
-                    verified += 1
-            if valid_signal:
-                predictions[(signal.kind.value, tuple(fields))] += 1
-    return predictions, verified, invalid, cross_source, missing
+                if not signal.evidence:
+                    missing += 1
+                    continue
+                for evidence in signal.evidence:
+                    if type(evidence) is not JobAlertTriageEvidence:
+                        invalid += 1
+                        continue
+                    if (
+                        evidence.source_id != item.result.source_id
+                        or evidence.content_sha256 != item.result.content_sha256
+                    ):
+                        cross_source += 1
+                        invalid += 1
+                        continue
+                    if type(evidence.field_id) is not JobAlertFieldName:
+                        invalid += 1
+                        continue
+                    field = next(
+                        (
+                            candidate
+                            for candidate in item.result.fields
+                            if candidate.field_id is evidence.field_id
+                        ),
+                        None,
+                    )
+                    if field is None:
+                        missing += 1
+                        continue
+                    if field.evidence is None:
+                        invalid += 1
+                        continue
+                    source_evidence = field.evidence
+                    if (
+                        not source_valid
+                        or field.state.value != "present"
+                        or evidence.source_id != source_evidence.source_id
+                        or evidence.content_sha256 != source_evidence.content_sha256
+                        or evidence.span_id != source_evidence.span_id
+                        or evidence.start_byte != source_evidence.start_byte
+                        or evidence.end_byte != source_evidence.end_byte
+                        or evidence.text_sha256 != source_evidence.text_sha256
+                    ):
+                        invalid += 1
+                    else:
+                        verified += 1
+    except Exception:
+        return verified, invalid + 1, cross_source, missing
+    return verified, invalid, cross_source, missing
+
+
+def _predicted_signals(
+    triage: JobAlertTriage,
+) -> tuple[Counter[tuple[str, tuple[str, ...]]], int]:
+    """Return only a strictly validated, single-source case prediction."""
+    if len(triage.items) != 1:
+        _fail()
+    item = triage.items[0]
+    predictions: Counter[tuple[str, tuple[str, ...]]] = Counter()
+    verified = 0
+    for signal in item.signals:
+        fields = tuple(evidence.field_id.value for evidence in signal.evidence)
+        predictions[(signal.kind.value, fields)] += 1
+        verified += len(signal.evidence)
+    return predictions, verified
 
 
 def evaluate_job_alert_triage(
@@ -128,7 +192,7 @@ def evaluate_job_alert_triage(
     labels: Sequence[JobAlertEvaluationLabel],
     observations: Sequence[JobAlertEvaluationObservation],
 ) -> JobAlertEvaluationReport:
-    """Score actual typed projections with exact signal-kind/field-set matches."""
+    """Score exact typed signals, matching each prediction only within its case."""
     if (
         dataset_id not in _DATASETS
         or type(labels) not in (tuple, list)
@@ -143,8 +207,9 @@ def evaluate_job_alert_triage(
         _fail()
     case_ids = [label.case_id for label in labels]
     if (
-        any(type(case_id) is not str or not case_id or len(case_id) > 128 for case_id in case_ids)
+        any(not _valid_case_id(case_id) for case_id in case_ids)
         or len(set(case_ids)) != len(case_ids)
+        or any(not _valid_case_id(observation.case_id) for observation in observations)
         or [observation.case_id for observation in observations] != case_ids
     ):
         _fail()
@@ -157,10 +222,9 @@ def evaluate_job_alert_triage(
     rejected_count = 0
     unexpected_failures = 0
     incorrect_abstentions = 0
-    candidate_gold: Counter[tuple[str, tuple[str, ...]]] = Counter()
-    candidate_pred: Counter[tuple[str, tuple[str, ...]]] = Counter()
-    all_gold: Counter[tuple[str, tuple[str, ...]]] = Counter()
-    all_pred: Counter[tuple[str, tuple[str, ...]]] = Counter()
+    signal_totals: dict[JobAlertSignalKind, list[int]] = {
+        kind: [0, 0, 0] for kind in _SIGNALS
+    }
     total_verified = total_invalid = total_cross = total_missing = 0
 
     for label, observation in zip(labels, observations, strict=True):
@@ -169,78 +233,98 @@ def evaluate_job_alert_triage(
             or type(observation) is not JobAlertEvaluationObservation
             or (
                 label.expected_classification is not None
-                and label.expected_classification not in _CLASSES
+                and type(label.expected_classification) is not JobAlertStatus
             )
-            or type(label.expected_signals) is not tuple
+            or (
+                label.expected_error_code is not None
+                and (
+                    type(label.expected_error_code) is not str
+                    or label.expected_error_code not in _FAILURE_CODES
+                )
+            )
+            or (
+                observation.failure_code is not None
+                and (
+                    type(observation.failure_code) is not str
+                    or observation.failure_code not in _FAILURE_CODES
+                )
+            )
+            or (observation.triage is not None and observation.failure_code is not None)
         ):
             _fail()
         gold = _label_signals(label)
-        all_gold.update(gold)
-        candidate_gold.update(
-            {
-                key: count
-                for key, count in gold.items()
-                if key[0] == JobAlertSignalKind.JOB_ALERT_CANDIDATE.value
-            }
-        )
         if label.expected_classification is None:
             if label.expected_error_code is None or gold:
                 _fail()
-            if observation.triage is None:
-                rejected_count += 1
-                if observation.failure_code != label.expected_error_code:
-                    unexpected_failures += 1
-            else:
-                # An unexpectedly accepted out-of-contract input has no gold signals;
-                # any produced signal is scored as a false positive below.
-                unexpected_failures += 1
-            predicted_class: JobAlertStatus | None = None
         else:
+            if (
+                label.expected_error_code is not None
+                or label.expected_classification not in _CLASSES
+            ):
+                _fail()
+            candidate_key = (
+                JobAlertSignalKind.JOB_ALERT_CANDIDATE.value,
+                tuple(
+                    field.value
+                    for field in _REQUIRED_FIELDS[JobAlertSignalKind.JOB_ALERT_CANDIDATE]
+                ),
+            )
+            if (
+                (
+                    label.expected_classification is JobAlertStatus.CANDIDATE
+                    and gold[candidate_key] != 1
+                )
+                or (
+                    label.expected_classification is not JobAlertStatus.CANDIDATE and gold
+                )
+            ):
+                _fail()
             classified_count += 1
-            predicted_class = None
+
+        predicted_class: JobAlertStatus | None = None
+        predicted: Counter[tuple[str, tuple[str, ...]]] = Counter()
+        verified = invalid = cross = missing = 0
         if observation.triage is None:
-            if label.expected_classification is not None:
-                rejected_count += 1
+            rejected_count += 1
+            if (
+                label.expected_classification is not None
+                or observation.failure_code != label.expected_error_code
+            ):
                 unexpected_failures += 1
         else:
             try:
                 triage = validate_job_alert_triage(observation.triage)
+                predicted, verified = _predicted_signals(triage)
+                predicted_class = triage.items[0].classification
             except JobAlertTriageError:
-                predicted_class = None
+                verified, invalid, cross, missing = _invalid_reference_counts(
+                    observation.triage
+                )
                 rejected_count += 1
                 unexpected_failures += 1
             else:
-                if len(triage.items) != 1:
-                    predicted_class = None
-                    rejected_count += 1
+                if label.expected_classification is None:
+                    # A valid result for a gold rejection is an unexpected acceptance;
+                    # its signals remain false positives in this same case.
                     unexpected_failures += 1
-                else:
-                    predicted_class = triage.items[0].classification
         if label.expected_classification is not None:
             confusion[label.expected_classification][predicted_class] += 1
             if predicted_class is label.expected_classification:
                 classification_correct += 1
-        if observation.triage is None:
-            predicted: Counter[tuple[str, tuple[str, ...]]] = Counter()
-            verified = invalid = cross = missing = 0
-        else:
-            try:
-                predicted, verified, invalid, cross, missing = _predicted_signals(observation)
-            except JobAlertTriageError:
-                predicted = Counter()
-                verified = 0
-                invalid = 0
-                cross = 0
-                missing = 1
-                unexpected_failures += 1
-        all_pred.update(predicted)
-        candidate_pred.update(
-            {
-                key: count
-                for key, count in predicted.items()
-                if key[0] == JobAlertSignalKind.JOB_ALERT_CANDIDATE.value
-            }
-        )
+
+        # Match this case's exact signals before accumulating aggregate totals.
+        for kind in _SIGNALS:
+            case_gold = Counter({key: count for key, count in gold.items() if key[0] == kind.value})
+            case_predicted = Counter(
+                {key: count for key, count in predicted.items() if key[0] == kind.value}
+            )
+            true_positive = sum(
+                min(count, case_predicted[key]) for key, count in case_gold.items()
+            )
+            signal_counts = signal_totals[kind]
+            signal_counts[0] += true_positive
+            signal_counts[1] += sum(case_predicted.values()) - true_positive
+            signal_counts[2] += sum(case_gold.values()) - true_positive
         total_verified += verified
         total_invalid += invalid
         total_cross += cross
@@ -248,25 +332,18 @@ def evaluate_job_alert_triage(
         if gold and not predicted:
             incorrect_abstentions += 1
 
-    def scored(
-        gold: Counter[tuple[str, tuple[str, ...]]], pred: Counter[tuple[str, tuple[str, ...]]]
-    ) -> JobAlertMetric:
-        tp = sum(min(count, pred[key]) for key, count in gold.items())
-        fp = sum(pred.values()) - tp
-        fn = sum(gold.values()) - tp
-        return _metric(tp, fp, fn)
-
     per_signal = tuple(
         JobAlertPerSignalMetric(
             kind=kind,
-            metric=scored(
-                Counter({key: count for key, count in all_gold.items() if key[0] == kind.value}),
-                Counter({key: count for key, count in all_pred.items() if key[0] == kind.value}),
-            ),
+            metric=_metric(*signal_totals[kind]),
         )
         for kind in _SIGNALS
     )
-    micro = scored(all_gold, all_pred)
+    micro = _metric(
+        sum(counts[0] for counts in signal_totals.values()),
+        sum(counts[1] for counts in signal_totals.values()),
+        sum(counts[2] for counts in signal_totals.values()),
+    )
     macro_f1 = sum(metric.metric.f1 for metric in per_signal) / len(per_signal)
     rows_list: list[JobAlertConfusionRow] = []
     for expected in _CLASSES:
@@ -279,7 +356,7 @@ def evaluate_job_alert_triage(
         )
         rows_list.append(JobAlertConfusionRow(expected=expected, predicted_counts=counts))
     rows = tuple(rows_list)
-    candidate_metric = scored(candidate_gold, candidate_pred)
+    candidate_metric = _metric(*signal_totals[JobAlertSignalKind.JOB_ALERT_CANDIDATE])
     return JobAlertEvaluationReport(
         schema_version="sentinel.job-alert-triage-evaluation.v1",
         evaluation_version="cr1-u-job-alert-triage-v1",
@@ -327,6 +404,8 @@ def format_json_job_alert_evaluation(report: JobAlertEvaluationReport) -> str:
         or type(report.classification_confusion) is not tuple
         or type(report.per_signal_metrics) is not tuple
         or len(report.per_signal_metrics) != len(_SIGNALS)
+        or report.zero_denominator_convention != "metric_is_zero"
+        or report.exact_signal_rule != "case_local_kind_and_required_field_ids"
     ):
         _fail()
     document: dict[str, object] = {

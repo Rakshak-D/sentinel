@@ -79,6 +79,15 @@ def test_fixed_development_and_holdout_evaluation_uses_actual_triage(tmp_path) -
         assert results[dataset_id]["invalid_citation_count"] == 0
         assert results[dataset_id]["cross_source_evidence_error_count"] == 0
         assert results[dataset_id]["verified_citation_count"] > 0
+        assert (
+            results[dataset_id]["exact_signal_rule"]
+            == "case_local_kind_and_required_field_ids"
+        )
+        for row in report.classification_confusion:
+            expected_row_count = sum(
+                label.expected_classification is row.expected for label in labels
+            )
+            assert sum(row.predicted_counts) == expected_row_count
 
     holdout_report = results["holdout"]
     assert holdout_report["candidate_signal_metric"]["true_positive"] == 12

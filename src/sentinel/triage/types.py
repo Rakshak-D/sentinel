@@ -216,7 +216,9 @@ class JobAlertEvaluationReport:
     cross_source_evidence_error_count: int
     unexpected_failure_count: int
     zero_denominator_convention: Literal["metric_is_zero"] = "metric_is_zero"
-    exact_signal_rule: Literal["kind_and_required_field_ids"] = "kind_and_required_field_ids"
+    exact_signal_rule: Literal[
+        "case_local_kind_and_required_field_ids"
+    ] = "case_local_kind_and_required_field_ids"
 
 
 __all__ = [
