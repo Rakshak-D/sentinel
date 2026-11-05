@@ -1,5 +1,24 @@
 """Credential-free readers for fixtures and explicitly selected local sources."""
 
+from sentinel.readers.calendar_fixture import (
+    CALENDAR_FIXTURE_SCHEMA_VERSION,
+    CALENDAR_FIXTURE_SHA256,
+    CALENDAR_FIXTURE_VERSION,
+    read_packaged_calendar_fixture,
+)
+from sentinel.readers.calendar_formatters import (
+    format_json_calendar_fixture,
+    format_text_calendar_fixture,
+)
+from sentinel.readers.calendar_types import (
+    CalendarFixtureDateRange,
+    CalendarFixtureError,
+    CalendarFixtureErrorCode,
+    CalendarFixtureEvent,
+    CalendarFixtureEventStatus,
+    CalendarFixtureRead,
+    CalendarFixtureTimedRange,
+)
 from sentinel.readers.github_fixture import (
     FIXTURE_OBSERVED_AT,
     FIXTURE_SCHEMA_VERSION,
@@ -46,6 +65,16 @@ from sentinel.readers.types import (
 )
 
 __all__ = [
+    "CALENDAR_FIXTURE_SCHEMA_VERSION",
+    "CALENDAR_FIXTURE_SHA256",
+    "CALENDAR_FIXTURE_VERSION",
+    "CalendarFixtureDateRange",
+    "CalendarFixtureError",
+    "CalendarFixtureErrorCode",
+    "CalendarFixtureEvent",
+    "CalendarFixtureEventStatus",
+    "CalendarFixtureRead",
+    "CalendarFixtureTimedRange",
     "FIXTURE_OBSERVED_AT",
     "FIXTURE_SCHEMA_VERSION",
     "FIXTURE_SHA256",
@@ -74,9 +103,12 @@ __all__ = [
     "LocalTextRead",
     "read_packaged_gmail_fixture",
     "read_packaged_github_fixture",
+    "read_packaged_calendar_fixture",
     "read_allowlisted_local_text",
     "verify_local_text_span",
     "search_selected_local_text_files",
     "format_text_local_file_search",
     "format_json_local_file_search",
+    "format_json_calendar_fixture",
+    "format_text_calendar_fixture",
 ]

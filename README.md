@@ -1277,3 +1277,61 @@ recorded host. `--show-fields` can disclose personal data, and metadata can be
 correlatable. F05 and F10 remain IN_PROGRESS only for their bounded parser and
 selected-file workflows; this is not model triage, live email review, vacancy
 verification, automatic task extraction, or full F10/CR1 functionality.
+
+## CR1-Q inspect the pinned Calendar fixture
+
+`sentinel source calendar-fixture --format text` reads one packaged fictional
+Calendar-style collection. Use `--format json` for deterministic
+`sentinel.calendar-fixture-inspection.v1` output. `--show-details` is an
+explicit disclosure of the fixture's PRIVATE summaries, date/time metadata,
+and verified description excerpts:
+
+```powershell
+sentinel source calendar-fixture --format text
+sentinel source calendar-fixture --show-details --format json
+```
+
+The only resource is `sentinel/readers/fixtures/calendar-events-v1.json`,
+schema `sentinel.calendar-events-fixture.v1`, pinned at SHA-256
+`e879838ea32430497160bacbdedde1c4ffd98b1906bcdddc1c77c776f756575a`. It
+contains four fictional event records in package order: three `confirmed` and
+one `cancelled`, with two timed events, one date-only all-day interval, and a
+cancelled timed event. The event shape is a deliberately small Calendar-style
+subset; descriptions use canonical unpadded base64url of exact UTF-8 bytes.
+Unknown fields, duplicate JSON keys and IDs, invalid shapes, oversized values,
+unsupported statuses, and malformed citations fail closed. Each citation
+records its span UUID, half-open byte range, exact expected text, and SHA-256
+of the original cited bytes.
+
+Timed endpoints must be strict ISO-8601 values with explicit `Z` or numeric
+UTC offsets. The reader normalizes timed values to aware UTC instants for
+comparison while retaining the original timestamp strings. It does not infer
+a timezone or interpret an arbitrary `timeZone` field. All-day events remain
+date intervals: the start date is included and the end date is exclusive; an
+all-day range is never converted to UTC. There is no recurrence expansion,
+exception handling, attendee/RSVP data, DST database, timezone inference,
+provider pagination, or live Calendar synchronization.
+
+Event IDs, status, summaries, and start/end values are validated fixture
+metadata, not description-body citations. UUIDv5 event source identities bind
+the trusted synthetic calendar alias and event ID; span identities bind the
+same event identity and exact byte range. Descriptions are normalized with
+`provider_id=calendar.fixture`, `T4_EXTERNAL`, and `PRIVATE`. The instruction-
+like text in the cancelled event is ordinary external source data. Event
+metadata and descriptions do not establish a real Calendar account, event,
+owner action, or provider-authenticated cancellation.
+
+Default output shows fixture identity, event IDs, status/type, digest and
+citation counts, and the `T4_EXTERNAL` / `PRIVATE` labels. It omits summaries,
+descriptions and cited text. `--show-details` displays escaped summaries,
+original timed strings plus normalized UTC instants, explicit exclusive
+all-day end dates, and only the verified cited excerpts with byte ranges and
+slice digests. Escaping changes display only, not source bytes or provenance.
+Identifiers and hashes can be correlatable; neither the pin nor a digest is a
+confidentiality or real-provider authenticity guarantee.
+
+The reader uses no database, blob store, credential, Google client, network,
+model, tool, task or scheduling path. It does not modify events and does not
+persist the PRIVATE descriptions. The installed wheel includes the pinned
+resource. CR1-Q verifies this bounded fixture reader only; live F09 Calendar
+OAuth/read remains NOT_STARTED for CR4, and CR1 remains IN_PROGRESS.

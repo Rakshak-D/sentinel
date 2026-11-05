@@ -34,6 +34,12 @@ from sentinel.overview import (
     format_text_local_overview,
 )
 from sentinel.overview.assembly import parse_as_of_timestamp
+from sentinel.readers.calendar_fixture import read_packaged_calendar_fixture
+from sentinel.readers.calendar_formatters import (
+    format_json_calendar_fixture,
+    format_text_calendar_fixture,
+)
+from sentinel.readers.calendar_types import CalendarFixtureError
 from sentinel.readers.local_search import (
     format_json_local_file_search,
     format_text_local_file_search,
@@ -467,6 +473,45 @@ def source_parse_job_alert(
     except Exception:
         typer.echo(
             "Job-alert extraction failed: the selected source could not be verified.", err=True
+        )
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@source_app.command("calendar-fixture")
+def source_calendar_fixture(
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+    show_details: Annotated[
+        bool,
+        typer.Option(
+            "--show-details",
+            help="Explicitly display fictional PRIVATE fixture details.",
+        ),
+    ] = False,
+) -> None:
+    """Inspect the pinned fictional Calendar fixture without provider access."""
+    if output_format not in {"text", "json"}:
+        typer.echo(
+            "Calendar fixture inspection failed: output format must be text or json.", err=True
+        )
+        raise typer.Exit(code=1)
+    try:
+        fixture = read_packaged_calendar_fixture()
+        output = (
+            format_text_calendar_fixture(fixture, show_details=show_details)
+            if output_format == "text"
+            else format_json_calendar_fixture(fixture, show_details=show_details)
+        )
+    except CalendarFixtureError as exc:
+        typer.echo(f"Calendar fixture inspection failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo(
+            "Calendar fixture inspection failed: the packaged data could not be verified.",
+            err=True,
         )
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
