@@ -17,7 +17,14 @@ from sentinel.briefing import build_github_fixture_brief, format_json_brief, for
 from sentinel.briefing.formatters import escape_display_text
 from sentinel.briefing.types import BriefingError
 from sentinel.demo import run_demo
-from sentinel.extraction import JobAlertError, parse_local_job_alert
+from sentinel.extraction import (
+    JobAlertError,
+    JobAlertReviewError,
+    format_json_job_alert_batch,
+    format_text_job_alert_batch,
+    parse_local_job_alert,
+    review_selected_job_alerts,
+)
 from sentinel.extraction.formatters import format_json_job_alert, format_text_job_alert
 from sentinel.ingestion.types import GithubBlobIntegrationError
 from sentinel.overview import (
@@ -461,6 +468,48 @@ def source_parse_job_alert(
         typer.echo(
             "Job-alert extraction failed: the selected source could not be verified.", err=True
         )
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@source_app.command("review-job-alerts")
+def source_review_job_alerts(
+    allow_root: Annotated[
+        Path,
+        typer.Option(
+            "--allow-root",
+            help="Explicit absolute allowlisted directory on a supported local Windows volume.",
+        ),
+    ],
+    files: Annotated[
+        list[Path],
+        typer.Option("--file", help="One explicit .txt or .md alert file; repeat up to eight."),
+    ],
+    show_fields: Annotated[
+        bool,
+        typer.Option("--show-fields", help="Explicitly disclose verified field values."),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Review a bounded set of explicitly selected local job-alert files."""
+    if output_format not in {"text", "json"}:
+        typer.echo("Job-alert review failed: output format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        review = review_selected_job_alerts(allowed_root=allow_root, file_paths=files)
+        output = (
+            format_text_job_alert_batch(review, show_fields=show_fields)
+            if output_format == "text"
+            else format_json_job_alert_batch(review, show_fields=show_fields)
+        )
+    except JobAlertReviewError as exc:
+        typer.echo(f"Job-alert review failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Job-alert review failed: selected sources could not be verified.", err=True)
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 

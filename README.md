@@ -1213,3 +1213,67 @@ listing templates, relative deadlines, eligibility, or unmodeled job details;
 such content is ignored, incomplete, or ambiguous rather than guessed. F05
 and CR1 remain IN_PROGRESS; live Gmail access, task creation, application
 submission, and broader extraction remain unimplemented.
+
+## CR1-P review a bounded set of local job alerts
+
+`sentinel source review-job-alerts` applies the existing CR1-O labeled-field
+parser to one through eight files explicitly selected with repeated `--file`
+options beneath one explicit CR1-M allowlisted root:
+
+```powershell
+sentinel source review-job-alerts `
+  --allow-root C:\Notes `
+  --file C:\Notes\alert-one.md `
+  --file C:\Notes\alert-two.txt `
+  --format text
+```
+
+The command also accepts `--format json`. Its deterministic schema is
+`sentinel.job-alert-batch-review.v1`. `--show-fields` is the only opt-in for
+displaying accepted `PRESENT` field values; those values retain their
+CR1-O-verified citations and pass through its display escaping. The default
+output includes file ordinals, source identities and digests, classifications,
+field states, citation metadata and correlation group identifiers, but no
+filenames, paths, source bodies, company/role/location values, URLs, or
+deadlines. Metadata hashes and UUIDs remain correlatable and are not
+confidentiality proofs.
+
+Every selected file remains a separate record in the supplied order. The
+batch reports exact counts for `CANDIDATE`, `INCOMPLETE`, `AMBIGUOUS`, and
+`NO_MATCH`; unreadable, invalid, oversized, or changed input rejects the whole
+operation instead of being omitted. A `CANDIDATE` is only the CR1-O bounded
+classification, not a verified vacancy, legitimate employer, open role,
+eligibility result, salary, application readiness, or ranking. Incomplete,
+ambiguous, and non-matching files remain visible. No fields are copied from
+one alert to another.
+
+Two non-authoritative correlation signals are reported without deduplication.
+`EXACT_SOURCE_CONTENT` groups separately selected files only when both their
+body SHA-256 and bytes match; each file keeps its own root-relative source
+UUID and citations. `SHARED_APPLICATION_URL` groups only `CANDIDATE` records
+with a `PRESENT` application URL whose original strings are exactly equal.
+The URL is not fetched, opened, normalized, or treated as evidence that the
+records describe one vacancy; employer, role, similarity, and hostname are not
+deduplication keys. Group membership lists selected file ordinals and source
+UUIDs, not filenames or URL values.
+
+CR1-P reuses CR1-M's explicit local Windows `.txt`/`.md` reader and CR1-O's
+64 KiB source, 256-line, 1 KiB-per-line, 12-field, and per-field limits. It
+does no crawling, globbing, mailbox access, Markdown-link following, network
+lookup, model call, application action, task creation, database write, blob
+write, or PRIVATE-content persistence. All local source material is
+`T4_EXTERNAL` / `PRIVATE`; a note or alert on the local disk is not authenticated
+owner intent. Instruction-like text remains source data. Optional displayed
+values are an explicit disclosure to the terminal or JSON consumer.
+
+The output is fully parsed, citation-checked, correlation-checked, and
+formatted under a fixed 128 KiB output cap before stdout is written. One
+bounded CR1-M reread of every selected source rejects detectable source-ID,
+root-relative identity, digest, length, or byte changes during assembly. This
+does not provide an atomic snapshot across files and cannot rule out every ABA
+or malicious same-user filesystem race. CR1-M's Windows reparse/hard-link
+limitations still apply; live symlink creation remains unavailable on the
+recorded host. `--show-fields` can disclose personal data, and metadata can be
+correlatable. F05 and F10 remain IN_PROGRESS only for their bounded parser and
+selected-file workflows; this is not model triage, live email review, vacancy
+verification, automatic task extraction, or full F10/CR1 functionality.
