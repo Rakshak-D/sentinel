@@ -57,6 +57,24 @@ from sentinel.readers.local_text_types import (
     LocalTextFormat,
     LocalTextRead,
 )
+from sentinel.readers.notes_registry import (
+    LOCAL_NOTES_REGISTRY_SCHEMA_VERSION,
+    LOCAL_NOTES_VERIFICATION_SCHEMA_VERSION,
+    build_local_notes_registry,
+    format_json_local_notes_registry,
+    format_json_local_notes_verification,
+    format_text_local_notes_verification,
+    verify_local_notes_registry,
+)
+from sentinel.readers.notes_registry_types import (
+    LocalNotesEntryStatus,
+    LocalNotesRegistry,
+    LocalNotesRegistryEntry,
+    LocalNotesRegistryError,
+    LocalNotesRegistryErrorCode,
+    LocalNotesVerification,
+    LocalNotesVerificationEntry,
+)
 from sentinel.readers.types import (
     GithubFixtureIssue,
     GithubFixtureRead,
@@ -101,6 +119,15 @@ __all__ = [
     "LocalTextErrorCode",
     "LocalTextFormat",
     "LocalTextRead",
+    "LOCAL_NOTES_REGISTRY_SCHEMA_VERSION",
+    "LOCAL_NOTES_VERIFICATION_SCHEMA_VERSION",
+    "LocalNotesEntryStatus",
+    "LocalNotesRegistry",
+    "LocalNotesRegistryEntry",
+    "LocalNotesRegistryError",
+    "LocalNotesRegistryErrorCode",
+    "LocalNotesVerification",
+    "LocalNotesVerificationEntry",
     "read_packaged_gmail_fixture",
     "read_packaged_github_fixture",
     "read_packaged_calendar_fixture",
@@ -109,6 +136,11 @@ __all__ = [
     "search_selected_local_text_files",
     "format_text_local_file_search",
     "format_json_local_file_search",
+    "build_local_notes_registry",
+    "verify_local_notes_registry",
+    "format_json_local_notes_registry",
+    "format_text_local_notes_verification",
+    "format_json_local_notes_verification",
     "format_json_calendar_fixture",
     "format_text_calendar_fixture",
 ]

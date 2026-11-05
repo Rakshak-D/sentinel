@@ -48,6 +48,17 @@ from sentinel.readers.local_search import (
 from sentinel.readers.local_search_types import LocalSearchError
 from sentinel.readers.local_text import read_allowlisted_local_text, verify_local_text_span
 from sentinel.readers.local_text_types import LocalTextCitation, LocalTextError, LocalTextRead
+from sentinel.readers.notes_registry import (
+    build_local_notes_registry,
+    format_json_local_notes_registry,
+    format_json_local_notes_verification,
+    format_text_local_notes_verification,
+    verify_local_notes_registry,
+)
+from sentinel.readers.notes_registry_types import (
+    LocalNotesEntryStatus,
+    LocalNotesRegistryError,
+)
 from sentinel.readers.source_status import (
     build_source_status_report,
     format_json_source_status,
@@ -93,7 +104,11 @@ fixture_sync_app = typer.Typer(
 )
 source_app = typer.Typer(
     no_args_is_help=True,
-    help="Inspect or search explicitly allowlisted local text files.",
+    help="Inspect, search, and register explicitly allowlisted local text files.",
+)
+notes_registry_app = typer.Typer(
+    no_args_is_help=True,
+    help="Build or verify a metadata-only baseline for explicitly selected local notes.",
 )
 fixture_workspace_app = typer.Typer(
     no_args_is_help=True,
@@ -609,6 +624,73 @@ def source_review_job_alerts(
     _write_brief_stdout(output)
 
 
+@notes_registry_app.command("build")
+def source_notes_registry_build(
+    allow_root: Annotated[
+        Path,
+        typer.Option("--allow-root", help="Explicit absolute allowlisted local directory."),
+    ],
+    files: Annotated[
+        list[Path],
+        typer.Option("--file", help="One explicit .txt or .md note; repeat up to eight."),
+    ],
+) -> None:
+    """Emit registry metadata for explicitly selected notes; save it yourself."""
+    try:
+        registry = build_local_notes_registry(allowed_root=allow_root, file_paths=files)
+        output = format_json_local_notes_registry(registry)
+    except LocalNotesRegistryError as exc:
+        typer.echo(f"Notes registry build failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Notes registry build failed: selected notes could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@notes_registry_app.command("verify")
+def source_notes_registry_verify(
+    allow_root: Annotated[
+        Path,
+        typer.Option("--allow-root", help="Explicit absolute allowlisted local directory."),
+    ],
+    registry: Annotated[
+        Path,
+        typer.Option("--registry", help="Explicit .txt registry file beneath --allow-root."),
+    ],
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ],
+) -> None:
+    """Compare registered notes with their explicitly saved metadata baseline."""
+    if output_format not in {"text", "json"}:
+        typer.echo("Notes registry verification failed: format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        verification = verify_local_notes_registry(
+            allowed_root=allow_root,
+            registry_path=registry,
+        )
+        output = (
+            format_text_local_notes_verification(verification)
+            if output_format == "text"
+            else format_json_local_notes_verification(verification)
+        )
+    except LocalNotesRegistryError as exc:
+        typer.echo(f"Notes registry verification failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo(
+            "Notes registry verification failed: selected files could not be verified.", err=True
+        )
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+    if verification.overall_status is LocalNotesEntryStatus.CHANGED:
+        raise typer.Exit(code=1)
+
+
+source_app.add_typer(notes_registry_app, name="notes-registry")
 app.add_typer(source_app, name="source")
 
 
