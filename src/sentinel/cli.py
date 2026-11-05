@@ -48,6 +48,13 @@ from sentinel.readers.local_search import (
 from sentinel.readers.local_search_types import LocalSearchError
 from sentinel.readers.local_text import read_allowlisted_local_text, verify_local_text_span
 from sentinel.readers.local_text_types import LocalTextCitation, LocalTextError, LocalTextRead
+from sentinel.readers.source_status import (
+    build_source_status_report,
+    format_json_source_status,
+    format_text_source_status,
+    is_source_status_healthy,
+)
+from sentinel.readers.source_status_types import SourceStatusError
 from sentinel.sync import (
     FixtureSyncAdvanceReport,
     FixtureSyncError,
@@ -526,6 +533,38 @@ def source_calendar_fixture(
         )
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
+
+
+@source_app.command("status")
+def source_status(
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Report validated fixture, explicit local, live, terms and credential capabilities."""
+    if output_format not in {"text", "json"}:
+        typer.echo("Source status failed: output format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        report = build_source_status_report()
+        output = (
+            format_text_source_status(report)
+            if output_format == "text"
+            else format_json_source_status(report)
+        )
+        healthy = is_source_status_healthy(report)
+    except SourceStatusError:
+        typer.echo("Source status failed: capability report could not be validated.", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo(
+            "Source status failed: local capability checks could not be completed.", err=True
+        )
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+    if not healthy:
+        raise typer.Exit(code=1)
 
 
 @source_app.command("review-job-alerts")

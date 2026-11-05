@@ -9,6 +9,7 @@ from sentinel.credentials.backends import (
     _CredentialBackend,
 )
 from sentinel.credentials.types import (
+    BackendAvailability,
     CredentialBrokerError,
     CredentialFailureCode,
     CredentialStatus,
@@ -57,6 +58,20 @@ class CredentialBroker:
             raise
         except Exception:
             raise CredentialBrokerError(CredentialFailureCode.BACKEND_FAILURE) from None
+
+    @property
+    def backend_availability(self) -> BackendAvailability:
+        """Return backend capability without validating or probing any credential."""
+
+        try:
+            availability = self._backend.availability
+        except Exception:
+            return BackendAvailability.UNAVAILABLE
+        return (
+            availability
+            if type(availability) is BackendAvailability
+            else BackendAvailability.UNAVAILABLE
+        )
 
     def put_for_test(self, reference: object, value: bytes) -> None:
         """Register synthetic bytes in the explicit test backend only."""

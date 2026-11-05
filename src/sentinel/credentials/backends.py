@@ -18,6 +18,9 @@ from sentinel.credentials.types import (
 class _CredentialBackend(Protocol):
     """Private broker backend contract; not injectable through public construction."""
 
+    @property
+    def availability(self) -> BackendAvailability: ...
+
     def status(self, reference: SecretRef) -> CredentialStatus: ...
 
 
@@ -25,6 +28,12 @@ class UnavailableCredentialBackend:
     """Fail-closed production default until an OS-protected backend is verified."""
 
     __slots__ = ()
+
+    @property
+    def availability(self) -> BackendAvailability:
+        """Report backend capability without looking up a credential reference."""
+
+        return BackendAvailability.UNAVAILABLE
 
     def status(self, reference: SecretRef) -> CredentialStatus:
         del reference
@@ -72,6 +81,12 @@ class InMemoryTestBackend:
 
     def __init__(self) -> None:
         self._entries: dict[str, _TestEntry] = {}
+
+    @property
+    def availability(self) -> BackendAvailability:
+        """Report synthetic test-backend capability, not real credential presence."""
+
+        return BackendAvailability.AVAILABLE
 
     def status(self, reference: SecretRef) -> CredentialStatus:
         if reference.revoked_at is not None:
