@@ -1466,3 +1466,74 @@ remaining blockers are recorded in
 [`docs/audit/cr1-release-exit-matrix.md`](docs/audit/cr1-release-exit-matrix.md).
 CR1 remains `IN_PROGRESS`; this matrix is evidence for a separate release
 decision, not an automatic release approval.
+
+## CR1-T build and verify a local notes registry
+
+Build a baseline from one to eight notes selected explicitly beneath one
+allowlisted Windows local root:
+
+```powershell
+sentinel source notes-registry build `
+  --allow-root C:\Notes `
+  --file C:\Notes\meeting.md `
+  --file C:\Notes\research.txt
+```
+
+`build` writes one deterministic UTF-8 JSON document to stdout and never saves
+it. The operator may deliberately save those bytes as a `.txt` registry under
+the same root, encoded as UTF-8 without a byte-order mark. For example, native
+`cmd.exe` stdout redirection can save the CLI output:
+
+```text
+cmd.exe /d /c "sentinel source notes-registry build --allow-root C:\Notes --file C:\Notes\meeting.md --file C:\Notes\research.txt > C:\Notes\registered-notes.txt"
+```
+
+Sentinel itself does not create or modify the registry file. The registry uses the closed
+`sentinel.local-notes-registry.v1` schema with only `schema_version` and
+`entries`; each entry contains a canonical root-relative path, exact byte
+length, and SHA-256 of the original UTF-8 bytes. Selected order is preserved.
+
+Verify a saved baseline in a later process:
+
+```powershell
+sentinel source notes-registry verify `
+  --allow-root C:\Notes `
+  --registry C:\Notes\registered-notes.txt `
+  --format text
+```
+
+Use `--format json` for the deterministic
+`sentinel.local-notes-verification.v1` report. Verification returns only
+ordinal/status records, counts, `T4_EXTERNAL` / `PRIVATE` labels, and the
+explicit statement that hashes do not authenticate file authors. It does not
+show registered names, current hashes, excerpts, or note bodies. A complete
+valid registry with changed notes produces a complete `CHANGED` report and a
+nonzero exit; missing, malformed, oversized, or unsafe input fails before
+stdout. Verification never updates the baseline.
+
+Registry generation explicitly discloses relative filenames and content
+digests. This metadata can be sensitive or correlatable; it is not encrypted,
+signed, anonymous, or tamperproof. A digest checks bytes against the saved
+baseline, not who authored them. The notes remain untrusted `T4_EXTERNAL` and
+`PRIVATE`. Sentinel does not persist their bodies in SQLite or the PUBLIC blob
+store, and it does not create tasks or proposals.
+
+Both commands reuse CR1-M's allowlisted reader for each file, including the
+existing `.txt` / `.md`, strict UTF-8, one-MiB, local fixed-volume, reparse,
+hard-link, and path-boundary checks. The registry is itself selected and
+validated through that reader, must be `.txt`, and is capped at 16 KiB. The
+closed schema rejects duplicate JSON keys, unknown fields, duplicate/case-alias
+entries, traversal, absolute paths, device names, alternate streams, and a
+registry that references itself. Verification resolves only validated
+root-relative components and asks CR1-M to validate each resulting file; it
+does not use a string-prefix check as a containment boundary.
+
+Build rereads the selected metadata before rendering. Verify reads the
+registry and all notes, then rereads them once to reject detectable ordinary
+changes. These independent filesystem handles do not form one atomic snapshot
+and cannot rule out every ABA or malicious same-user replacement race. The two
+existing Windows symlink-creation tests remain skipped on hosts where the OS
+denies their creation; CR1-M's controlled boundary tests and existing reader
+checks remain in force. No watcher, directory discovery, network, provider,
+database, blob write, or private-content storage is added. F10 remains
+`IN_PROGRESS`; CR1 remains `IN_PROGRESS` pending the separate release review.
