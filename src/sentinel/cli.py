@@ -17,6 +17,8 @@ from sentinel.briefing import build_github_fixture_brief, format_json_brief, for
 from sentinel.briefing.formatters import escape_display_text
 from sentinel.briefing.types import BriefingError
 from sentinel.demo import run_demo
+from sentinel.extraction import JobAlertError, parse_local_job_alert
+from sentinel.extraction.formatters import format_json_job_alert, format_text_job_alert
 from sentinel.ingestion.types import GithubBlobIntegrationError
 from sentinel.overview import (
     OverviewError,
@@ -412,6 +414,53 @@ def source_search_files(
         raise typer.Exit(code=1) from None
     except Exception:
         typer.echo("File search failed: selected local sources could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@source_app.command("parse-job-alert")
+def source_parse_job_alert(
+    allow_root: Annotated[
+        Path,
+        typer.Option(
+            "--allow-root",
+            help="Explicit absolute allowlisted directory on a local Windows fixed volume.",
+        ),
+    ],
+    file: Annotated[
+        Path,
+        typer.Option("--file", help="One explicitly selected .txt or .md message body."),
+    ],
+    show_fields: Annotated[
+        bool,
+        typer.Option("--show-fields", help="Explicitly disclose accepted cited field values."),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Extract only explicitly labeled fields from one selected local message body."""
+    if output_format not in {"text", "json"}:
+        typer.echo("Job-alert extraction failed: output format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        result = parse_local_job_alert(allowed_root=allow_root, file_path=file)
+        output = (
+            format_text_job_alert(result, show_fields=show_fields)
+            if output_format == "text"
+            else format_json_job_alert(result, show_fields=show_fields)
+        )
+    except LocalTextError as exc:
+        typer.echo(f"Job-alert extraction failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except JobAlertError as exc:
+        typer.echo(f"Job-alert extraction failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo(
+            "Job-alert extraction failed: the selected source could not be verified.", err=True
+        )
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 

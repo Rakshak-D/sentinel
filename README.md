@@ -1130,3 +1130,86 @@ Windows reparse, hard-link and same-user limitations remain. CR1-N adds literal
 multi-file search only; it does not complete F10 or CR1 and does not provide
 directory synchronization, semantic search, RAG, automatic task extraction,
 or PRIVATE persistence.
+
+## CR1-O extract explicitly labeled job-alert fields
+
+`sentinel source parse-job-alert` reads exactly one explicitly selected local
+`.txt` or `.md` body through the CR1-M allowlisted Windows reader. It does not
+parse Markdown, inspect a subject, search a mailbox, or contact Gmail. A
+trusted in-process caller may also pass one existing immutable
+`GmailFixtureMessage` to `parse_gmail_fixture_job_alert(message)`; this adapter
+uses only its already-normalized body and validated source envelope. The
+packaged Gmail fixture remains a collection of synthetic notes/receipts, not a
+job-alert dataset; its three messages classify as `NO_MATCH`.
+
+```powershell
+sentinel source parse-job-alert `
+  --allow-root C:\Notes `
+  --file C:\Notes\fictional-alert.txt `
+  --format text
+```
+
+The CLI supports `--format text|json`. It reports metadata and per-field
+presence/state plus citation metadata by default, without printing extracted
+PRIVATE values. `--show-fields` explicitly discloses only accepted cited
+values; it never prints the whole body. The JSON schema is
+`sentinel.job-alert-extraction.v1` and has no paths or generated timestamps.
+Both renderers finish validating every field citation before writing stdout.
+A read or citation failure exits nonzero with empty stdout and a bounded,
+path-free error.
+
+The supported line grammar is one field per physical line, with an exact
+case-insensitive label before `:` and an unchanged UTF-8 value after optional
+ASCII spaces/tabs. Accepted labels are `Company`/`Employer`, `Role`/`Position`,
+`Location`, `Apply URL`/`Application URL`, and `Deadline`. Values are not
+case-folded, stripped, Unicode-normalized, inferred from prose, subject text,
+quoted content, or other fields. A blank or ordinary prose line separates
+field blocks. Multiple blocks, repeated labels (including aliases with the
+same value), or multiple `Job opportunity` markers yield `AMBIGUOUS`; the
+parser never takes the first listing or merges its fields. No recognized
+labels yields `NO_MATCH`; recognized structure missing company or role, or
+containing an invalid value, yields `INCOMPLETE`. `CANDIDATE` means only that
+one company and one role were explicitly labeled and byte-cited. It does not
+verify an employer, live opening, job legitimacy, user eligibility,
+application readiness, or that a URL works.
+
+The adapter accepts at most 64 KiB, 256 physical lines, 1 KiB per line and 12
+recognized fields. UTF-8 bytes and CRLF/LF line endings are retained exactly.
+Company is limited to 160 UTF-8 bytes, role/location to 200 each, application
+URL to 1,024, and deadline to 64. Each present field has a deterministic
+source-bound citation over its exact value bytes (the label and delimiter are
+excluded), including the source UUID, full-body digest, half-open byte range,
+span UUID and slice digest. The local source UUID reuses CR1-M's UUIDv5 rule
+over the canonical root-relative identity and complete body digest; Gmail
+reuses the fixture message UUID. Field span UUIDv5 values bind source UUID,
+field kind and byte range. These identifiers are deterministic and
+correlatable, not authentication or anonymity proofs. Invalid optional URLs
+or dates make the result `INCOMPLETE`; their text is not returned as an
+extracted value. Dates accept only real `YYYY-MM-DD` calendar dates and remain
+date-only. URLs are inert
+strings: only syntactically bounded HTTPS URLs with ordinary DNS-style hosts
+are accepted; userinfo, fragments, whitespace, malformed ports, localhost,
+local suffixes, numeric/IP hosts and non-HTTPS schemes are rejected. There is
+no DNS lookup, URL fetch, redirect, or application action.
+
+All inputs remain `T4 EXTERNAL` / `PRIVATE`. These labels are assigned by
+trusted reader code; file placement, Gmail-like metadata and source text do
+not authenticate an author or establish owner intent. PRIVATE is conservative
+and does not prove the absence of SECRET information. Extracted values and
+citations are in memory only; no SQLite row, task, proposal, run, blob, cache,
+log, or telemetry record is created. Instruction-like text remains cited
+untrusted data. No model, tool, provider, network, credential or task API is
+called.
+
+The separate tests-only fictional corpus has 35 labeled cases. The current
+observed run classifies its 31 in-bound cases exactly (12 candidates, 10
+incomplete, 5 ambiguous, 4 non-matches; 100% classification accuracy on those
+31), with 48/48 expected field values exact, 48 verified present-field
+citations, and zero candidate false positives or false negatives. Four cases
+are correctly rejected by fixed source/line/field-count bounds. This is a
+contract test, not a real-world job-alert accuracy estimate. The parser
+deliberately cannot resolve prose, forwarded quotation semantics, multiple
+listing templates, relative deadlines, eligibility, or unmodeled job details;
+such content is ignored, incomplete, or ambiguous rather than guessed. F05
+and CR1 remain IN_PROGRESS; live Gmail access, task creation, application
+submission, and broader extraction remain unimplemented.
