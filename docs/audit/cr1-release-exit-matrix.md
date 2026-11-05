@@ -1,25 +1,28 @@
 # CR1 release-exit evidence matrix
 
-**Audit slices:** CR1-S; row C refreshed by CR1-T; row D refreshed by CR1-U and scorer correction CR1-V
-**Audited starting revision:** `ce44c433df2f7ffd114337841ea11de0f91dfeb0`
+**Audit slices:** CR1-S/T/U/V; independent CR1-W scope review
+**Audited starting revision:** 2c044aaf3fd8fe334bbf6875a51dfc0843a58084
 **Authoritative definition:** Master Blueprint §16 (Blueprint SHA-256
 `92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7`), with
 feature scope cross-checked against §2.
 **Package:** `0.2.0.dev0`
 
-This matrix classifies the 18 requested row-level criteria. `PASS` means the
-bounded criterion named in that row has concrete code and test evidence; it
-does not mean the broader feature is complete. `PARTIAL` records an active
-CR1 feature with an identified missing deliverable. `DEFERRED` is reserved for
-work the Blueprint assigns to a later release. A test result does not upgrade
-an unimplemented capability. The matrix is not a release approval.
+This matrix was independently cross-checked against the specific §16 CR1
+deliverable and mechanical exit tests in CR1-W, then checked against §2 feature
+scope. It classifies 18 bounded row-level criteria. PASS means the criterion
+named in that row has evidence; it does not complete a broader feature or
+approve release promotion.
+
+**CR1-W result:** 18 PASS, 0 PARTIAL, 0 FAIL, 0 UNVERIFIED, 0 DEFERRED as CR1
+exit rows. F13 remains IN_PROGRESS. The matrix is evidence for a separate
+release decision.
 
 | ID | Blueprint requirement | Code entrypoint | Tests and acceptance command | Verified evidence | Known limitation | State | Blocks CR1 exit? Reason |
 |---|---|---|---|---|---|---|---|
 | A | §16 prerequisite: CR0 accepted before CR1. | `sentinel.bootstrap`; `sentinel version`; CR0 tag and historical runtime lock. | `python -m pytest -q tests/test_bootstrap_doctor.py tests/test_cli_doctor.py`; `git show cr0-v0.1.0`; `Get-FileHash requirements/cr0-windows-py311.lock -Algorithm SHA256`. | Starting verification retained CR0 `VERIFIED`, tag object `e5aa8bb2e280a2fc78804d74d576afdfaf544559` peeling to `b446e1b934eb2be71853f9b6eab9e0238eade211`, and lock digest `319ec67ddf87b44690eda03d47675975c806d5cc16242166dbf109ed5c4005ec`. | CR0 acceptance is bounded to its recorded Windows / CPython scope; it is not production security certification. | PASS | No. CR0 prerequisite evidence is preserved. |
 | B | §2 F11: durable local task create/list/edit/complete/reopen and restart behavior. | `sentinel.tasks.store`; `sentinel task`. | `python -m pytest -q tests/test_cr1_j_tasks.py tests/test_cr1_j_transitions.py tests/test_cr1_j_idempotency.py tests/test_cr1_j_restart.py tests/test_cr1_j_cli.py`. | Manual task state, request receipts, optimistic revisions, and process restart are covered by CR1-J tests; CR1-L presents tasks read-only. | Operator identity is unauthenticated; task titles are unencrypted and must not hold secrets. No source-derived tasks or approval semantics. | PASS | No for this bounded manual workflow. F11 remains `IN_PROGRESS` for the wider product. |
-| C | §2 F10: allowlisted local evidence, path registry/read worker, traversal and symlink denial, byte limits, and edit detection. | `sentinel.readers.local_text.read_allowlisted_local_text`; `sentinel.readers.notes_registry.build_local_notes_registry`; `verify_local_notes_registry`; `sentinel source notes-registry build|verify`. | `python -m pytest -q tests/test_cr1_m_local_reader.py tests/test_cr1_m_path_security.py tests/test_cr1_m_races.py tests/test_cr1_n_search.py tests/test_cr1_n_boundaries.py tests/test_cr1_o_job_alert.py tests/test_cr1_p_batch.py tests/test_cr1_t_registry.py tests/test_cr1_t_changes.py tests/test_cr1_t_boundaries.py tests/test_cr1_t_cli.py tests/test_cr1_t_restart.py`. | CR1-T builds a deterministic metadata-only registry from 1–8 explicit files, preserving canonical relative identity, exact byte length, and SHA-256. It saves nothing; a later process validates the `.txt` registry and each listed file through CR1-M, rereads once, and reports `UNCHANGED`/`CHANGED` without names or bodies. Cross-process same-length content change, restoration, path boundaries, malformed metadata, and no-stdout failures are covered. | Registry filenames and hashes are an explicit metadata disclosure, not encrypted, signed, or author-authenticating. Notes remain PRIVATE and are not persisted. Multi-file reads are not an atomic snapshot; malicious same-user/ABA replacement is not ruled out. Two existing live Windows symlink-creation tests are skipped because creation is unavailable on the host. F10 remains `IN_PROGRESS` as a broader feature. | PASS | No for the bounded explicit allowlisted read/registry/edit-detection criterion. This does not complete the overall CR1 release; row D remains PARTIAL and blocks exit. |
-| D | Blueprint Sections 2 F05/F13: job-alert extraction/review and source facts to typed signals. | sentinel.extraction; sentinel.triage.job_alert.triage_selected_job_alerts; sentinel.triage.evaluation.evaluate_job_alert_triage. | pytest -q tests/test_cr1_o_job_alert.py tests/test_cr1_o_citations.py tests/test_cr1_p_batch.py tests/test_cr1_p_groups.py tests/test_cr1_p_citations.py tests/test_cr1_u_triage.py tests/test_cr1_u_citations.py tests/test_cr1_u_evaluation.py tests/test_cr1_v_evaluation_matching.py. | CR1-U provides deterministic cited field projection, abstention, and fictional dev/holdout evaluation. CR1-V fixes case-local signal matching; adversarial candidate/URL/deadline swaps now score TP/FP/FN per case. Frozen corpus metrics remain unchanged and are compared in docs/audit/cr1-u-evaluation.md. | This remains deterministic projection, not a ModelGateway run. PRIVATE source bodies cannot use the current CR0-D synthetic-PUBLIC-only gateway; prose-only candidate examples remain parser misses. No live inbox, legitimacy, ranking, or application action. | PARTIAL | Yes. The active CR1 F13 requirement is not complete until its remaining gateway/execution and release-scope requirements are separately resolved. |
+| C | §2 F10 and §16: explicit allowlisted notes, path checks, byte limits, registry and edit detection. | sentinel.readers.local_text; sentinel.readers.notes_registry; source inspect-file and notes-registry commands. | CR1-M/N/T path, race, change, boundary and restart tests. | Metadata-only registry records relative identity, length and hash; later process reports unchanged/changed without bodies. CR1-W reran the installed-wheel notes-registry smoke. | Explicit selection only; metadata is correlatable. Same-user/ABA race limits remain. Two existing Windows symlink-creation tests are skipped because creation is unavailable on this host. F10 remains IN_PROGRESS. | PASS | No for the bounded CR1 notes workflow. Broader F10 remains incomplete. |
+| D | §16 CR1 offline terminal-read core, normalization/citation tests, and restart CLI; §2 F05/F13 describe broader active feature scope, not a separate §16 requirement to complete model-mediated F13. | sentinel.extraction; sentinel.triage.job_alert; sentinel.triage.evaluation. | CR1-O/P/U/V parser, citation, triage, evaluation and case-local matching tests; installed-wheel parse/review/triage smoke. | Bounded deterministic extraction and typed signals retain source citations, abstentions, T4_EXTERNAL/PRIVATE source labels and T3_DERIVED/PRIVATE signal labels. Corrected scorer matches within each case. | Narrow labeled grammar misses three prose-only candidate cases; no model run or real-world generalization. PRIVATE input cannot use CR0-D ModelGateway; full F13 remains IN_PROGRESS and model-mediated work remains gated for the later privacy-gateway stage. | PASS (bounded CR1 criterion) | No under §16. This does not complete F13 or claim private model inference. See CR1-W for the scope decision. |
 | E | §2 F06/F07: public job feeds must remain behind explicit per-board/per-site terms gates. | Bundled source-status inventory; `sentinel.readers.source_status`. | `python -m pytest -q tests/test_cr1_s_terms_gates.py tests/test_cr1_s_status.py`. | Greenhouse and Lever report `TERMS_REVIEW_REQUIRED`, `TERMS_GATED`, and `REQUIRED_NOT_COMPLETED`; no host is enabled. The status operation does not interpret source text as review authority. | No feed adapter or trusted per-board review artifact exists. A public GET endpoint is not an aggregation/cache permission. The gate is closed; no feed is approved. | PASS | No. The requested gate is enforced by leaving both readers unimplemented and activation closed. |
 | F | §2 / §16: packaged Gmail fixture reader. | `read_packaged_gmail_fixture()`. | `python -m pytest -q tests/test_gmail_fixture_reader.py tests/test_gmail_fixture_packaging.py tests/test_gmail_fixture_decoding.py tests/test_gmail_fixture_citations.py tests/test_gmail_fixture_boundaries.py tests/test_cr1_s_fixtures.py`. | Existing strict reader validates its fixed package hash, schema, body encoding, and citations; CR1-S invokes it before reporting `FIXTURE_READY`. | This is synthetic fixture support only. Live F01 Gmail OAuth/read remains later-release work and account state is `NOT_CHECKED`. | PASS | No for the fixture criterion. Live Gmail access is explicitly deferred to CR4. |
 | G | §2 / §16: packaged GitHub fixture reader. | `read_packaged_github_fixture()`. | `python -m pytest -q tests/test_github_fixture_reader.py tests/test_github_fixture_packaging.py tests/test_github_fixture_citations.py tests/test_github_fixture_boundaries.py tests/test_cr1_s_fixtures.py`. | Existing fixed hash/schema/citation reader runs offline; source status independently invokes it and reports only fixture readiness. | Does not authenticate a GitHub account or provide live F03 selected-repository access. | PASS | No for the fixture criterion. Live GitHub access is explicitly deferred to CR4. |
@@ -33,14 +36,14 @@ an unimplemented capability. The matrix is not a release approval.
 | O | §16: one-shot CLI behavior after restart. | Installed `sentinel` entry point; `fixture-workspace`, `brief`, `task`, `fixture-sync`, `source status`. | `python -m pytest -q tests/test_cr1_r_restart.py`; disposable installed-wheel workflow recorded below. | A fresh installed process initializes/prepares/verifies the synthetic workspace, reads evidence and Calendar fixture, performs manual task transitions and one cursor advance, then verifies state and repeats prepare. | Synthetic local restart only; no live integrations or power-loss guarantee. | PASS | No for the one-shot offline CLI criterion. |
 | P | §16: installed-wheel functionality. | Built `sentinel-0.2.0.dev0` wheel and console entry point. | `python -m build --wheel`; install the resulting wheel into the disposable verification environment; invoke from outside the checkout. | The complete prepare/verify/brief/calendar/overview/task/cursor/restart sequence is run from the installed wheel outside the source tree. | Covers this fixed offline workflow and packaged fixtures, not every platform or future adapter. | PASS | No for the bounded installed-wheel requirement. |
 | Q | Read-only source-status and evidence paths; no provider side effects. | `sentinel source status`; existing read-only brief/readback APIs. | `python -m pytest -q tests/test_cr1_s_status.py tests/test_cr1_s_cli.py tests/test_cr1_s_credentials.py tests/test_bootstrap_doctor.py tests/test_cr1_i_restart.py`. | Status takes no database/root/credential options; source-status tests prohibit reference checks/network sockets; existing brief tests preserve read-only DB/blob behavior. | A code review/test cannot prove absence of all malicious same-user interference; status still reads its packaged resources. | PASS | No for the bounded read-only/no-external-effects criterion. |
-| R | §3/§6/§16: unresolved security/privacy limitations must remain visible. | README, this matrix, `docs/BUILD_LEDGER.md`, source-status explanations. | `git diff --check`; `python -m pytest -q tests/test_cr1_s_status.py tests/test_cr1_s_terms_gates.py`; final ledger/diff review. | Explicitly records unauthenticated task operator, unencrypted task titles, no private persistence, no live credential/account checks, closed feed terms gates, local filesystem limitations, and no production-readiness claim. | Disclosure does not resolve the limitations; CR1 remains open while active target work is incomplete. | PASS | No as a disclosure criterion; row D's F13 work remains PARTIAL and blocks release. F10 remains IN_PROGRESS at the wider product level. |
+| R | §3/§6/§16: disclose unresolved limitations and avoid production-readiness claims. | README, CR1-W scope review, this matrix, and BUILD_LEDGER.md. | Final documentation review; source-status and terms-gate tests; diff check. | Records unauthenticated task operator, unencrypted titles, private-data boundary, not-checked credentials, closed terms gates, Windows symlink skips, and remaining feature work. | Disclosure does not solve these limitations; broader active features remain IN_PROGRESS. CR1 status remains IN_PROGRESS pending a separate release decision. | PASS | No as a disclosure criterion. No §16 mechanical blocker was found by CR1-W; this is not release approval. |
 
 ## Row-level classification count
 
 | Classification | Count |
 |---|---:|
-| PASS | 17 |
-| PARTIAL | 1 |
+| PASS | 18 |
+| PARTIAL | 0 |
 | FAIL | 0 |
 | UNVERIFIED | 0 |
 | DEFERRED | 0 |
@@ -58,22 +61,15 @@ CLI workflow succeeds after process restart. The README and source-status
 output explicitly state that fixtures are not linked accounts and that this is
 not a production-readiness result.
 
-This does **not** close CR1. The bounded F10 allowlisted-notes criterion in row
-C now has explicit registry generation, cross-process comparison, and
-edit-detection evidence. F10 remains `IN_PROGRESS` as a wider capability; this
-row does not establish encrypted storage or broader discovery/synchronization.
-The active-target F13 criterion in row D remains PARTIAL: CR1-U adds
-deterministic cited-field projection and frozen fictional dev/holdout
-evaluation, and CR1-V corrects cross-case metric matching. Two prose-only
-candidate misses remain. PRIVATE inputs cannot pass the current CR0-D
-synthetic-PUBLIC-only ModelGateway gate; a separately reviewed execution path
-and broader F13 acceptance remain open.
-
-F01/F03/F09 live provider access remains explicitly assigned to later work and
-is not required to make fixture status appear healthy. F06/F07 remain disabled
-until source-specific terms review and implementation; no review approval is
-claimed. CR0 remains `VERIFIED`; CR1 remains `IN_PROGRESS`. The release decision
-must be made separately from CR1-S/CR1-T/CR1-U/CR1-V bounded acceptance.
+This review does **not** itself close or promote CR1. The bounded F10 allowlisted-notes criterion in row
+C has explicit registry generation, cross-process comparison, and edit
+detection evidence. F10 remains IN_PROGRESS as a wider capability. CR1-W
+independently rebuilt the §16 crosswalk and changed row D to PASS for its
+bounded CR1 criterion: deterministic source-cited extraction/triage is
+available, while model-mediated F13 remains outside the listed CR1 mechanical
+exit tests and gated for the later privacy-gateway stage. F13 remains
+IN_PROGRESS. The current row-level count is 18 PASS; the separate release
+decision must still be made.
 
 ## Bounded audit limitations
 
@@ -144,10 +140,13 @@ matrices, signal metrics, citation counts, and the two natural-language
 candidate misses. The evaluator reports zero candidate false positives,
 zero missing/invalid citation references, and zero cross-source evidence
 errors on both splits. The implementation never calls ModelGateway; the
-current PRIVATE-to-model path remains gated. Row D therefore remains
-PARTIAL; the row-level matrix count remains 17 PASS and 1 PARTIAL.
+current PRIVATE-to-model path remains gated. The original CR1-U scope review
+left row D PARTIAL pending release interpretation. CR1-W independently
+reviewed the §16 exit tests and reclassifies the bounded CR1 criterion as PASS;
+the current matrix has 18 PASS rows. Full F13 is still IN_PROGRESS.
 
 CR1-V did not alter the frozen evaluation corpus or expected-label manifest.
 The corrected evaluator matches signal kind and required field IDs within each
-case before adding TP/FP/FN counts; the release blocker and row-level
-classification remain unchanged.
+case before adding TP/FP/FN counts. CR1-V itself did not change the then-current
+release-scope interpretation; CR1-W later resolved that row-level question
+without changing the evaluator or the frozen corpus.

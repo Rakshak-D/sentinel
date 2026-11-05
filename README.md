@@ -1620,7 +1620,9 @@ holdout candidates are natural-language descriptions that CR1-O classifies as
 Development results and full confusion matrices are recorded in
 `docs/audit/cr1-u-evaluation.md`.
 
-F13 advances only to `IN_PROGRESS` for this bounded deterministic projection
-and evaluation. Model-mediated PRIVATE triage remains gated until a separately
-reviewed execution path exists. CR1 remains `IN_PROGRESS`; the CR1 release
-matrix row D remains `PARTIAL` and blocks the separate release decision.
+F13 remains IN_PROGRESS: CR1-U/V provide bounded deterministic cited-field
+signals and fictional evaluation, while model-mediated PRIVATE triage remains
+gated. The independent CR1-W scope review finds that §16 does not make full
+model-mediated F13 a CR1 exit test; its row D passes only for the bounded CR1
+criterion. This is not F13 completion or CR1 release approval. The separate
+release decision remains open, and CR1 remains IN_PROGRESS.
