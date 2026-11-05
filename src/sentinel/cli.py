@@ -87,6 +87,9 @@ from sentinel.tasks import (
     setup_local_task_operator,
 )
 from sentinel.tasks.types import LocalTask
+from sentinel.triage.formatters import format_json_job_alert_triage, format_text_job_alert_triage
+from sentinel.triage.job_alert import triage_selected_job_alerts
+from sentinel.triage.types import JobAlertTriageError
 from sentinel.workspace import (
     FixtureWorkspaceError,
     FixtureWorkspacePrepareDisposition,
@@ -620,6 +623,48 @@ def source_review_job_alerts(
         raise typer.Exit(code=1) from None
     except Exception:
         typer.echo("Job-alert review failed: selected sources could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@source_app.command("triage-job-alerts")
+def source_triage_job_alerts(
+    allow_root: Annotated[
+        Path,
+        typer.Option(
+            "--allow-root",
+            help="Explicit allowlisted local directory on a supported Windows volume.",
+        ),
+    ],
+    files: Annotated[
+        list[Path],
+        typer.Option("--file", help="One explicit .txt or .md alert file; repeat up to eight."),
+    ],
+    show_fields: Annotated[
+        bool,
+        typer.Option("--show-fields", help="Explicitly disclose verified cited field values."),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Project selected private job-alert fields into deterministic cited signals."""
+    if output_format not in {"text", "json"}:
+        typer.echo("Job-alert triage failed: output format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        triage = triage_selected_job_alerts(allowed_root=allow_root, file_paths=files)
+        output = (
+            format_text_job_alert_triage(triage, show_fields=show_fields)
+            if output_format == "text"
+            else format_json_job_alert_triage(triage, show_fields=show_fields)
+        )
+    except JobAlertTriageError as exc:
+        typer.echo(f"Job-alert triage failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Job-alert triage failed: selected sources could not be verified.", err=True)
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 
