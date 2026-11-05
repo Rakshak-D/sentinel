@@ -1335,3 +1335,73 @@ model, tool, task or scheduling path. It does not modify events and does not
 persist the PRIVATE descriptions. The installed wheel includes the pinned
 resource. CR1-Q verifies this bounded fixture reader only; live F09 Calendar
 OAuth/read remains NOT_STARTED for CR4, and CR1 remains IN_PROGRESS.
+
+## CR1-R prepare or verify the offline fixture workspace
+
+For a new disposable synthetic demo, first initialize an explicit database,
+then prepare its explicitly selected PUBLIC blob store:
+
+```powershell
+sentinel init --database C:\SentinelDemo\workspace.sqlite3
+sentinel fixture-workspace prepare `
+  --database C:\SentinelDemo\workspace.sqlite3 `
+  --store-root C:\SentinelDemo\public-store
+sentinel fixture-workspace verify `
+  --database C:\SentinelDemo\workspace.sqlite3 `
+  --store-root C:\SentinelDemo\public-store
+```
+
+Both paths are required and absolute. `init` is separate and refuses an
+existing database. The store API requires its parent directory to exist.
+Workspace preparation never initializes a database, migrates a schema,
+chooses a default location, or repairs unknown/corrupt state.
+
+Preparation validates the current CR1-J migration history and checkpoint,
+then recognizes only an absent original fixture source, a complete legacy
+fixture state, or a complete H1 blob-backed state. It uses the existing
+CR1-H store, CR1-G ingestion, CR1-H1 promotion/readback, CR1-J operator,
+CR1-K cursor, and CR1-L overview APIs. Legacy rows are verified completely
+before promotion; a promoted source is never passed back through legacy
+ingestion. The fixed precondition is three PUBLIC synthetic GitHub items,
+nine cited spans, and three verified PUBLIC blobs. No Calendar or Gmail data
+is persisted.
+
+The explicit stages are store initialization, verified blob publication,
+legacy item/span ingestion if absent, atomic three-reference promotion,
+local task-operator setup, and incremental cursor setup. Existing committed
+stages survive process termination. Retry recognizes completed stages and
+continues; it does not delete files, overwrite corrupt blobs, duplicate items
+or spans, recreate a valid operator, create tasks, or rewind cursor progress.
+For example, a crash after publishing blobs can leave harmless verified
+files; a crash during H1 reference promotion leaves SQLite's all-three-ref
+transaction rolled back; a crash after promotion leaves the promoted rows
+available for later setup. This workflow spans filesystem publication and
+separate SQLite transactions, so it is not one cross-resource atomic commit
+and does not claim power-loss durability.
+
+`prepare` reports `Fixture workspace prepared` or, on a complete repeat,
+`Fixture workspace already prepared`, with counts and the actual cursor
+generation/status. A progressed cursor at generations 1, 2, or 3 is retained.
+`verify` is read-only: it checks the current schema, blob-backed fixture and
+all nine citations, operator/task readability, full incremental state and
+the local overview at a fixed internal timestamp. It does not repair missing
+blobs, register an operator/cursor, run migrations, or create tasks. A valid
+result says `synthetic workspace ready`; this means only that the bounded
+offline local overview can be assembled. It says nothing about production
+readiness, an authenticated owner, live integrations, or release-gate
+completion.
+
+The operator is unauthenticated. Tasks remain manual local text in SQLite;
+preparation creates none. The incremental cursor is a deterministic
+synthetic fixture checkpoint, not an encrypted provider cursor. GitHub bodies
+remain PUBLIC / T4_EXTERNAL. This workflow never stores PRIVATE Gmail or
+Calendar content, action proposals, approvals, credentials, run traces, or
+external effects. Store and SQLite operations keep their existing separate
+locking and durability limits; maintenance migrations still require a
+quiescent window. Workspace preparation adds no cross-component lock:
+simultaneous prepare invocations can observe each other's committed stages
+and may fail closed if an observation is inconsistent. Retry after a competing
+invocation finishes. Direct same-user SQLite or filesystem changes are outside
+this cooperation boundary. CR1-R does not implement live providers, task
+extraction, models, schedulers, external writes, or complete CR1 release
+functionality.

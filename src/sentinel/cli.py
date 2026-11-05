@@ -69,6 +69,13 @@ from sentinel.tasks import (
     setup_local_task_operator,
 )
 from sentinel.tasks.types import LocalTask
+from sentinel.workspace import (
+    FixtureWorkspaceError,
+    FixtureWorkspacePrepareDisposition,
+    FixtureWorkspaceStatus,
+    prepare_fixture_workspace,
+    verify_fixture_workspace,
+)
 
 app = typer.Typer(no_args_is_help=True, help="Sentinel local-first automation CLI.")
 brief_app = typer.Typer(no_args_is_help=True, help="Read verified, source-cited evidence.")
@@ -80,6 +87,10 @@ fixture_sync_app = typer.Typer(
 source_app = typer.Typer(
     no_args_is_help=True,
     help="Inspect or search explicitly allowlisted local text files.",
+)
+fixture_workspace_app = typer.Typer(
+    no_args_is_help=True,
+    help="Prepare or verify the bounded offline synthetic workspace.",
 )
 
 
@@ -845,6 +856,116 @@ def fixture_sync_status(
 
 
 app.add_typer(fixture_sync_app, name="fixture-sync")
+
+
+def _fixture_workspace_summary(
+    status: str,
+    *,
+    github_items: int,
+    github_citations: int,
+    public_blobs: int,
+    task_operator_ready: bool,
+    cursor_generation: int,
+    cursor_status: str,
+) -> str:
+    return "\n".join(
+        (
+            status,
+            "Database schema: current",
+            f"GitHub evidence: {github_items} items / {github_citations} citations",
+            f"PUBLIC blobs: {public_blobs} verified",
+            f"Task operator: {'ready' if task_operator_ready else 'missing'}",
+            f"Synthetic cursor: {cursor_generation}/3 {cursor_status}",
+            "Live integrations: not configured",
+        )
+    )
+
+
+@fixture_workspace_app.command("prepare")
+def fixture_workspace_prepare(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing current Sentinel database."),
+    ],
+    store_root: Annotated[
+        Path,
+        typer.Option("--store-root", help="Explicit PUBLIC fixture-store root."),
+    ],
+) -> None:
+    """Prepare only the fixed offline synthetic workspace components."""
+    try:
+        report = prepare_fixture_workspace(database, store_root=store_root)
+    except FixtureWorkspaceError as error:
+        typer.echo(f"Fixture workspace preparation failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    headline = (
+        "Fixture workspace already prepared"
+        if report.disposition is FixtureWorkspacePrepareDisposition.ALREADY_PREPARED
+        else "Fixture workspace prepared"
+    )
+    state = report.state
+    if state.cursor_generation is None or state.cursor_status is None:
+        typer.echo(
+            "Fixture workspace preparation failed: verified cursor state is unavailable.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    typer.echo(
+        _fixture_workspace_summary(
+            headline,
+            github_items=state.github_items,
+            github_citations=state.github_citations,
+            public_blobs=state.public_blobs,
+            task_operator_ready=state.task_operator_ready,
+            cursor_generation=state.cursor_generation,
+            cursor_status=state.cursor_status,
+        )
+    )
+
+
+@fixture_workspace_app.command("verify")
+def fixture_workspace_verify(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing current Sentinel database."),
+    ],
+    store_root: Annotated[
+        Path,
+        typer.Option("--store-root", help="Explicit PUBLIC fixture-store root."),
+    ],
+) -> None:
+    """Verify the selected workspace without initializing or repairing it."""
+    try:
+        verification = verify_fixture_workspace(database, store_root=store_root)
+    except FixtureWorkspaceError as error:
+        typer.echo(f"Fixture workspace verification failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    state = verification.state
+    if state.status is not FixtureWorkspaceStatus.READY:
+        typer.echo(
+            "Fixture workspace is incomplete; run prepare to complete recognized stages.", err=True
+        )
+        raise typer.Exit(code=1)
+    if state.cursor_generation is None or state.cursor_status is None:
+        typer.echo(
+            "Fixture workspace verification failed: verified cursor state is unavailable.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    typer.echo(
+        _fixture_workspace_summary(
+            "synthetic workspace ready",
+            github_items=state.github_items,
+            github_citations=state.github_citations,
+            public_blobs=state.public_blobs,
+            task_operator_ready=state.task_operator_ready,
+            cursor_generation=state.cursor_generation,
+            cursor_status=state.cursor_status,
+        )
+    )
+
+
+app.add_typer(fixture_workspace_app, name="fixture-workspace")
 
 
 if __name__ == "__main__":
