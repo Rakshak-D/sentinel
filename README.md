@@ -1537,3 +1537,90 @@ denies their creation; CR1-M's controlled boundary tests and existing reader
 checks remain in force. No watcher, directory discovery, network, provider,
 database, blob write, or private-content storage is added. F10 remains
 `IN_PROGRESS`; CR1 remains `IN_PROGRESS` pending the separate release review.
+
+## CR1-U deterministic job-alert triage
+
+Use `sentinel source triage-job-alerts` to create a deterministic, typed
+projection from one to eight explicitly selected local `.txt` or `.md` files:
+
+```powershell
+sentinel source triage-job-alerts `
+  --allow-root C:\Notes `
+  --file C:\Notes\alert-one.txt `
+  --file C:\Notes\alert-two.md `
+  --format json
+```
+
+The command reuses CR1-P's explicit Windows allowlist checks, CR1-O's labeled
+field parser and byte-citation validation, and CR1-P's whole-batch source
+stability checks. It does not add a parser or infer facts from prose. Its
+closed signal vocabulary is `JOB_ALERT_CANDIDATE`,
+`APPLICATION_URL_DECLARED`, and `DEADLINE_DATE_DECLARED`. A candidate signal
+requires verified `company` and `role` field citations; URL and date signals
+appear only when those accepted fields are present. `INCOMPLETE` and
+`AMBIGUOUS` records remain `REVIEW_REQUIRED`; `NO_MATCH` remains `NO_SIGNAL`.
+No fields are joined across files, and duplicate bodies or shared URLs never
+merge records.
+
+The output schema is `sentinel.job-alert-triage.v1`. Items follow the explicit
+file order; signals follow the registered kind order. Each signal ID is a
+domain-separated deterministic UUID derived from the source identity, signal
+kind, and supporting field span IDs. Positive signal evidence preserves source
+UUID, source SHA-256, field ID, source-bound span UUID, half-open UTF-8 byte range,
+and exact slice SHA-256. Original source material remains `T4_EXTERNAL` /
+`PRIVATE`; projected signals are `T3_DERIVED` / `PRIVATE`. These labels and
+citations do not authenticate the source, employer, vacancy, owner intent,
+eligibility, application status, or deadline validity.
+
+By default, output contains field states and citations but hides company,
+role, URL, and deadline values. `--show-fields` deliberately discloses only
+the already accepted `PRESENT` field values, escaped by the existing
+terminal-safe formatter. Neither mode displays the source body. Errors produce
+no partial stdout and use fixed messages; rendered output is capped at 128
+KiB.
+
+This implementation is deliberately local and deterministic. CR1-O/P PRIVATE
+source bodies are never sent to ModelGateway: CR0-D currently admits synthetic
+PUBLIC demo traffic only, and its gate is unchanged. Triage performs no model,
+network, credential, tool, SQLite, blob, task, or application operation. It
+does not create summaries, rankings, priorities, tasks, or recommendations.
+The narrow labeled-field parser misses prose-only candidate examples; this
+slice does not improve extraction recall and is not general F13 completion.
+
+### CR1-U reproducible fictional evaluation
+
+The tests-only evaluation inputs and expected-label manifest are separately
+versioned and SHA-256 pinned in `tests/cr1_u_corpus.py`:
+
+- Development: 24 cases; corpus SHA-256
+  `13e4374e7cee04a1d08d9987376dc6d764eb737b63f1965ca756964fa0e820b5`.
+- Holdout: 30 cases; corpus SHA-256
+  `645bdaf8a2725e4228de49490b568ef92bcc37b4352b73e8ff3d439d026d47ba`.
+- Expected-label manifest SHA-256
+  `482008fb933808175d4ab1847d6c055b772dcb7a13abc388b2f941dabcbc2e79`.
+
+All cases are fictional. The corpus exercises required and optional fields,
+incomplete and ambiguous records, duplicate bytes, shared URLs, Unicode,
+CRLF, repeated listings, unsupported prose, injection-like text, invalid
+bytes, and parser limits. It is authored contract data, not an independently
+collected real-world benchmark. The evaluator reports parser classification
+confusion separately from exact typed-signal precision/recall/F1 and counts
+verified evidence references, missing evidence, invalid citations, and
+cross-source evidence. A signal matches only when both its kind and ordered
+required field IDs match exactly. A zero denominator yields zero.
+
+Measured holdout results: classification accuracy is 26/28 (92.86%) over
+in-bound cases; candidate-signal precision is 1.00, recall is 12/14 (85.71%),
+and F1 is 12/13 (92.31%). Application-URL and deadline signal F1 are each
+1.00; micro signal F1 is 25/26 (96.15%); macro signal F1 is 97.44%. There are
+zero candidate false positives, two candidate false negatives, zero missing
+or invalid citations, and zero cross-source evidence errors. The two missed
+holdout candidates are natural-language descriptions that CR1-O classifies as
+`NO_MATCH`; deterministic triage does not guess beyond that parser contract.
+Development results and full confusion matrices are recorded in
+`docs/audit/cr1-u-evaluation.md`.
+
+F13 advances only to `IN_PROGRESS` for this bounded deterministic projection
+and evaluation. Model-mediated PRIVATE triage remains gated until a separately
+reviewed execution path exists. CR1 remains `IN_PROGRESS`; the CR1 release
+matrix row D remains `PARTIAL` and blocks the separate release decision.
