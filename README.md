@@ -1405,3 +1405,64 @@ invocation finishes. Direct same-user SQLite or filesystem changes are outside
 this cooperation boundary. CR1-R does not implement live providers, task
 extraction, models, schedulers, external writes, or complete CR1 release
 functionality.
+
+## CR1-S source capability status and release audit
+
+Run the source diagnostic without selecting a database or store:
+
+```powershell
+sentinel source status --format text
+sentinel source status --format json
+```
+
+It reads the three fixed packaged Gmail, GitHub, and Calendar fixtures using
+their existing pinned readers. `FIXTURE_READY` means that the packaged
+resource hash and that reader's strict content/citation validation passed in
+this process. It does not mean a real provider account is linked. Explicit
+local text read, literal search, job-alert parsing, and batch review are
+reported as `EXPLICIT_LOCAL_ONLY`; those APIs require the caller to select a
+file/root and do not enable directory discovery, background scanning,
+automatic polling, PRIVATE persistence, or source-to-task actions.
+
+Live Gmail, GitHub, and Calendar adapters are `NOT_IMPLEMENTED` and disabled.
+The status command does not check for account credentials: the live account
+and per-provider credential states are `NOT_CHECKED`. The production
+credential backend is `UNAVAILABLE`; this describes the broker implementation
+without constructing a fake provider reference or inspecting Windows
+Credential Manager, environment variables, or user secrets. No account is
+connected or probed.
+
+Greenhouse and Lever feed readers are not implemented. Both remain
+`TERMS_REVIEW_REQUIRED`, with source-specific review incomplete. A public GET
+endpoint is not an approval for aggregation or caching. No employer board is
+approved by this status record, and source text cannot approve its own host,
+terms, or capability. LinkedIn owner-export import remains unimplemented and
+source-review-gated. These are closed gates, not successful feed readiness.
+
+The command checks the immutable bundled defaults in memory: no live source is
+enabled, external writes are disabled, and there is no implicit credential
+access. It does not modify configuration, enumerate local files, access a
+database, or use a network. JSON uses the deterministic
+`sentinel.source-capability-status.v1` schema and includes implementation,
+activation, credential-check, backend, account-check, and review-gate states
+separately. It contains no fixture body, title, path, account name, secret, or
+generated timestamp. Repeated output is byte-stable when package contents are
+unchanged.
+
+The typed read API is
+`build_source_status_report() -> SourceStatusReport`, with
+`format_text_source_status(report) -> str`,
+`format_json_source_status(report) -> str`, and
+`is_source_status_healthy(report) -> bool` in
+`sentinel.readers.source_status`. Its immutable capability rows are defined in
+`sentinel.readers.source_status_types`.
+
+An invalid fixture or invalid bundled defaults produce the complete inventory
+with `validation=FAILED` and a nonzero exit code; this is deliberate so the
+operator sees which fixed checks failed without a false success. An unexpected
+status/rendering failure produces no stdout and one fixed stderr message. The
+command never reports production readiness. The detailed CR1 audit and the
+remaining blockers are recorded in
+[`docs/audit/cr1-release-exit-matrix.md`](docs/audit/cr1-release-exit-matrix.md).
+CR1 remains `IN_PROGRESS`; this matrix is evidence for a separate release
+decision, not an automatic release approval.
