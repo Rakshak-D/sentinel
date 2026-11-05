@@ -1,4 +1,4 @@
-"""Credential-free, packaged source fixture readers."""
+"""Credential-free readers for fixtures and explicitly selected local sources."""
 
 from sentinel.readers.github_fixture import (
     FIXTURE_OBSERVED_AT,
@@ -15,6 +15,19 @@ from sentinel.readers.gmail_fixture import (
     GmailFixtureError,
     GmailFixtureErrorCode,
     read_packaged_gmail_fixture,
+)
+from sentinel.readers.local_search import (
+    format_json_local_file_search,
+    format_text_local_file_search,
+    search_selected_local_text_files,
+)
+from sentinel.readers.local_search_types import (
+    LocalFileMatch,
+    LocalFilePreview,
+    LocalFileSearch,
+    LocalFileSearchFile,
+    LocalSearchError,
+    LocalSearchErrorCode,
 )
 from sentinel.readers.local_text import read_allowlisted_local_text, verify_local_text_span
 from sentinel.readers.local_text_types import (
@@ -48,6 +61,12 @@ __all__ = [
     "GmailFixtureMessage",
     "GmailFixtureRead",
     "LocalFileMetadata",
+    "LocalFileMatch",
+    "LocalFilePreview",
+    "LocalFileSearch",
+    "LocalFileSearchFile",
+    "LocalSearchError",
+    "LocalSearchErrorCode",
     "LocalTextCitation",
     "LocalTextError",
     "LocalTextErrorCode",
@@ -57,4 +76,7 @@ __all__ = [
     "read_packaged_github_fixture",
     "read_allowlisted_local_text",
     "verify_local_text_span",
+    "search_selected_local_text_files",
+    "format_text_local_file_search",
+    "format_json_local_file_search",
 ]

@@ -25,6 +25,12 @@ from sentinel.overview import (
     format_text_local_overview,
 )
 from sentinel.overview.assembly import parse_as_of_timestamp
+from sentinel.readers.local_search import (
+    format_json_local_file_search,
+    format_text_local_file_search,
+    search_selected_local_text_files,
+)
+from sentinel.readers.local_search_types import LocalSearchError
 from sentinel.readers.local_text import read_allowlisted_local_text, verify_local_text_span
 from sentinel.readers.local_text_types import LocalTextCitation, LocalTextError, LocalTextRead
 from sentinel.sync import (
@@ -58,7 +64,7 @@ fixture_sync_app = typer.Typer(
 )
 source_app = typer.Typer(
     no_args_is_help=True,
-    help="Inspect one explicitly allowlisted local text file.",
+    help="Inspect or search explicitly allowlisted local text files.",
 )
 
 
@@ -350,6 +356,62 @@ def source_inspect_file(
         typer.echo(
             "Source inspection failed: the selected local source could not be verified.", err=True
         )
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@source_app.command("search-files")
+def source_search_files(
+    allow_root: Annotated[
+        Path,
+        typer.Option(
+            "--allow-root",
+            help="Explicit absolute allowlisted directory on a local Windows fixed volume.",
+        ),
+    ],
+    files: Annotated[
+        list[Path],
+        typer.Option(
+            "--file", help="One explicitly selected .txt or .md file; repeat up to eight."
+        ),
+    ],
+    query: Annotated[
+        str,
+        typer.Option("--query", help="One literal case-sensitive UTF-8 query (not logged)."),
+    ],
+    show_snippets: Annotated[
+        bool,
+        typer.Option(
+            "--show-snippets",
+            help="Explicitly disclose bounded verified context in terminal/JSON output.",
+        ),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Search only the explicitly selected local files for a literal phrase."""
+    if output_format not in {"text", "json"}:
+        typer.echo("File search failed: output format must be text or json.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        result = search_selected_local_text_files(
+            allowed_root=allow_root,
+            file_paths=files,
+            query=query,
+            show_snippets=show_snippets,
+        )
+        output = (
+            format_text_local_file_search(result)
+            if output_format == "text"
+            else format_json_local_file_search(result)
+        )
+    except (LocalSearchError, LocalTextError) as exc:
+        typer.echo(f"File search failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("File search failed: selected local sources could not be verified.", err=True)
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 

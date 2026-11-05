@@ -1054,3 +1054,79 @@ real external data supplied explicitly by the operator and is always PRIVATE.
 F10 is IN_PROGRESS only for this bounded reader; directory sync, secure
 PRIVATE persistence, authorization, and the remaining CR1 requirements are
 not implemented.
+
+## CR1-N search explicitly selected local text files
+
+Search is a read-only literal search over files named directly by the caller;
+it does not crawl directories, glob, watch, index, follow Markdown links, or
+search the network. Example:
+
+```powershell
+sentinel source search-files `
+  --allow-root C:\Notes `
+  --file C:\Notes\meeting.md `
+  --file C:\Notes\research.txt `
+  --query "deadline" `
+  --format text
+```
+
+The command requires an absolute allowlisted root, one to eight repeated
+absolute `--file` paths, a literal `--query`, and `--format text|json`. Each
+file is independently passed through the CR1-M Windows path and file reader:
+only `.txt` and `.md` files are accepted, Markdown remains plain text, and each
+source is capped at 1 MiB. The selected bytes are capped at 8 MiB total. Files
+must be beneath the selected root; case aliases and repeated canonical file
+identities are rejected. There are no defaults, environment-variable
+expansion, directory discovery, database reads, caches, or persistence.
+
+Matching compares the exact UTF-8 bytes, with case sensitivity and no Unicode
+normalization, regular expressions, fuzzy matching, locale conversion, or
+semantic interpretation. Thus `Done` differs from `done`, and composed and
+decomposed Unicode spellings differ. Overlapping occurrences are included
+(`banana` contains `ana` at byte offsets 1 and 3). Queries are limited to 128
+Unicode characters and 512 UTF-8 bytes and reject controls, line breaks, bidi
+controls, and invalid Unicode scalar input. At most 32 matches are allowed;
+finding a 33rd fails the entire request rather than returning a truncated
+result.
+
+Every match is a half-open UTF-8 byte range checked by the existing
+`verify_local_text_span()` citation verifier. The result identifies each
+selected file by its explicit argument ordinal, source UUID, full source
+digest and byte length, and gives every match's deterministic span UUID and
+slice digest. The versioned JSON schema is
+`sentinel.local-file-search.v1`. Default text and JSON include metadata and
+verified ranges only: they omit filenames, absolute paths, the query and
+source context. Zero-match selected files remain visible with count zero.
+Trusted in-process callers can use
+`search_selected_local_text_files(*, allowed_root, file_paths, query,
+show_snippets=False)`; it returns immutable file and match records, with preview
+text present only when snippets were explicitly requested.
+
+`--show-snippets` explicitly discloses one verified preview per match. A
+preview stays on one physical line, includes at most 40 Unicode characters of
+context on either side, is capped at 256 UTF-8 bytes, and is independently
+verified as a second byte range. Display escaping makes terminal controls,
+line breaks and bidi controls visible without changing the original digests or
+coordinates. Text and JSON are deterministic and contain no generated time.
+The command verifies every selected file, match and requested preview and
+renders the complete bounded result before writing stdout; any failure emits
+no partial result and one bounded error.
+
+All selected content remains `T4_EXTERNAL` and `PRIVATE`; matching text such
+as `ignore prior instructions` remains data and cannot select files, create a
+task, advance sync, or trigger tools. No bytes are written to SQLite or the
+PUBLIC blob store. No model, network, credential, provider or external action
+is used. Explicit snippets are an operator-directed disclosure to the
+terminal or JSON consumer. Query arguments may be retained in shell history or
+visible through operating-system process inspection, so the command-line query
+is not a safe channel for credentials or highly confidential strings.
+
+The CR1-M reader validates each selected file using its existing held-handle,
+identity and reparse checks. Search performs one further bounded read of each
+file and rejects a detectable identity or digest change before returning.
+Each file is still read independently: this is not an atomic multi-file
+snapshot and cannot rule out every ABA or same-user filesystem race. Existing
+Windows reparse, hard-link and same-user limitations remain. CR1-N adds literal
+multi-file search only; it does not complete F10 or CR1 and does not provide
+directory synchronization, semantic search, RAG, automatic task extraction,
+or PRIVATE persistence.
