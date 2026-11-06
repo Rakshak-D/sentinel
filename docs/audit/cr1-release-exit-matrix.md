@@ -1,152 +1,51 @@
-# CR1 release-exit evidence matrix
+# CR1 release-exit matrix
 
-**Audit slices:** CR1-S/T/U/V; independent CR1-W scope review
-**Audited starting revision:** 2c044aaf3fd8fe334bbf6875a51dfc0843a58084
-**Authoritative definition:** Master Blueprint §16 (Blueprint SHA-256
-`92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7`), with
-feature scope cross-checked against §2.
-**Package:** `0.2.0.dev0`
+**Independent audit:** CR1-X final acceptance audit
+**Audited implementation revision:** b5f31dd990f6d12ff301cc21456ad364dd66de5e
+**Authoritative release definition:** Master Blueprint §16; feature scope checked against §§2, 3, 6 and 7.
+**Blueprint SHA-256:** 92911A27CDA2AACE41616E5A45F07E228C3D21838E8EB93A30BF71CF228701E7
+**Package version inspected:** 0.2.0.dev0
 
-This matrix was independently cross-checked against the specific §16 CR1
-deliverable and mechanical exit tests in CR1-W, then checked against §2 feature
-scope. It classifies 18 bounded row-level criteria. PASS means the criterion
-named in that row has evidence; it does not complete a broader feature or
-approve release promotion.
+This matrix was reconstructed for CR1-X from the Blueprint, code, tests, wheel and executable CLI evidence. It does not inherit CR1-W classifications. PASS means the bounded CR1 criterion is demonstrated; it does not complete the broader feature, approve release promotion, or assert production readiness. The row D PASS is limited to the offline deterministic cited triage available in this build; it is not a PASS for full F13 or model-mediated PRIVATE inference.
 
-**CR1-W result:** 18 PASS, 0 PARTIAL, 0 FAIL, 0 UNVERIFIED, 0 DEFERRED as CR1
-exit rows. F13 remains IN_PROGRESS. The matrix is evidence for a separate
-release decision.
+## Independent requirement crosswalk
 
-| ID | Blueprint requirement | Code entrypoint | Tests and acceptance command | Verified evidence | Known limitation | State | Blocks CR1 exit? Reason |
-|---|---|---|---|---|---|---|---|
-| A | §16 prerequisite: CR0 accepted before CR1. | `sentinel.bootstrap`; `sentinel version`; CR0 tag and historical runtime lock. | `python -m pytest -q tests/test_bootstrap_doctor.py tests/test_cli_doctor.py`; `git show cr0-v0.1.0`; `Get-FileHash requirements/cr0-windows-py311.lock -Algorithm SHA256`. | Starting verification retained CR0 `VERIFIED`, tag object `e5aa8bb2e280a2fc78804d74d576afdfaf544559` peeling to `b446e1b934eb2be71853f9b6eab9e0238eade211`, and lock digest `319ec67ddf87b44690eda03d47675975c806d5cc16242166dbf109ed5c4005ec`. | CR0 acceptance is bounded to its recorded Windows / CPython scope; it is not production security certification. | PASS | No. CR0 prerequisite evidence is preserved. |
-| B | §2 F11: durable local task create/list/edit/complete/reopen and restart behavior. | `sentinel.tasks.store`; `sentinel task`. | `python -m pytest -q tests/test_cr1_j_tasks.py tests/test_cr1_j_transitions.py tests/test_cr1_j_idempotency.py tests/test_cr1_j_restart.py tests/test_cr1_j_cli.py`. | Manual task state, request receipts, optimistic revisions, and process restart are covered by CR1-J tests; CR1-L presents tasks read-only. | Operator identity is unauthenticated; task titles are unencrypted and must not hold secrets. No source-derived tasks or approval semantics. | PASS | No for this bounded manual workflow. F11 remains `IN_PROGRESS` for the wider product. |
-| C | §2 F10 and §16: explicit allowlisted notes, path checks, byte limits, registry and edit detection. | sentinel.readers.local_text; sentinel.readers.notes_registry; source inspect-file and notes-registry commands. | CR1-M/N/T path, race, change, boundary and restart tests. | Metadata-only registry records relative identity, length and hash; later process reports unchanged/changed without bodies. CR1-W reran the installed-wheel notes-registry smoke. | Explicit selection only; metadata is correlatable. Same-user/ABA race limits remain. Two existing Windows symlink-creation tests are skipped because creation is unavailable on this host. F10 remains IN_PROGRESS. | PASS | No for the bounded CR1 notes workflow. Broader F10 remains incomplete. |
-| D | §16 CR1 offline terminal-read core, normalization/citation tests, and restart CLI; §2 F05/F13 describe broader active feature scope, not a separate §16 requirement to complete model-mediated F13. | sentinel.extraction; sentinel.triage.job_alert; sentinel.triage.evaluation. | CR1-O/P/U/V parser, citation, triage, evaluation and case-local matching tests; installed-wheel parse/review/triage smoke. | Bounded deterministic extraction and typed signals retain source citations, abstentions, T4_EXTERNAL/PRIVATE source labels and T3_DERIVED/PRIVATE signal labels. Corrected scorer matches within each case. | Narrow labeled grammar misses three prose-only candidate cases; no model run or real-world generalization. PRIVATE input cannot use CR0-D ModelGateway; full F13 remains IN_PROGRESS and model-mediated work remains gated for the later privacy-gateway stage. | PASS (bounded CR1 criterion) | No under §16. This does not complete F13 or claim private model inference. See CR1-W for the scope decision. |
-| E | §2 F06/F07: public job feeds must remain behind explicit per-board/per-site terms gates. | Bundled source-status inventory; `sentinel.readers.source_status`. | `python -m pytest -q tests/test_cr1_s_terms_gates.py tests/test_cr1_s_status.py`. | Greenhouse and Lever report `TERMS_REVIEW_REQUIRED`, `TERMS_GATED`, and `REQUIRED_NOT_COMPLETED`; no host is enabled. The status operation does not interpret source text as review authority. | No feed adapter or trusted per-board review artifact exists. A public GET endpoint is not an aggregation/cache permission. The gate is closed; no feed is approved. | PASS | No. The requested gate is enforced by leaving both readers unimplemented and activation closed. |
-| F | §2 / §16: packaged Gmail fixture reader. | `read_packaged_gmail_fixture()`. | `python -m pytest -q tests/test_gmail_fixture_reader.py tests/test_gmail_fixture_packaging.py tests/test_gmail_fixture_decoding.py tests/test_gmail_fixture_citations.py tests/test_gmail_fixture_boundaries.py tests/test_cr1_s_fixtures.py`. | Existing strict reader validates its fixed package hash, schema, body encoding, and citations; CR1-S invokes it before reporting `FIXTURE_READY`. | This is synthetic fixture support only. Live F01 Gmail OAuth/read remains later-release work and account state is `NOT_CHECKED`. | PASS | No for the fixture criterion. Live Gmail access is explicitly deferred to CR4. |
-| G | §2 / §16: packaged GitHub fixture reader. | `read_packaged_github_fixture()`. | `python -m pytest -q tests/test_github_fixture_reader.py tests/test_github_fixture_packaging.py tests/test_github_fixture_citations.py tests/test_github_fixture_boundaries.py tests/test_cr1_s_fixtures.py`. | Existing fixed hash/schema/citation reader runs offline; source status independently invokes it and reports only fixture readiness. | Does not authenticate a GitHub account or provide live F03 selected-repository access. | PASS | No for the fixture criterion. Live GitHub access is explicitly deferred to CR4. |
-| H | §2: packaged Calendar fixture reader. | `read_packaged_calendar_fixture()`; `sentinel source calendar-fixture`. | `python -m pytest -q tests/test_cr1_q_calendar_reader.py tests/test_cr1_q_timestamps.py tests/test_cr1_q_all_day.py tests/test_cr1_q_citations.py tests/test_cr1_q_cli.py tests/test_cr1_s_fixtures.py`. | Four fixed fictional events, explicit-offset instants, exclusive all-day dates, and description citations validate offline; source status re-runs the reader. | No Google Calendar account access, recurrence/DST expansion, scheduling, or persistence. F09 live access is scheduled for CR4. | PASS | No for the fixture criterion. Live Calendar access is explicitly deferred to CR4. |
-| I | §2 F12: normalized source envelopes with declared trust/sensitivity. | `sentinel.normalization`; fixture and local readers. | `python -m pytest -q tests/test_plain_text_normalization.py tests/test_normalization_boundaries.py tests/test_source_citations.py tests/test_cr1_m_local_reader.py tests/test_cr1_q_calendar_reader.py`. | UTF-8 plain-text normalization, original-byte preservation, trust/sensitivity labels, and bounded source identities are tested across fixture and local readers. | Declared trust labels and digests do not authenticate an external author or provider. Full F12 remains `IN_PROGRESS`. | PASS | No for this bounded contract. It is not production provenance authentication. |
-| J | §16: exact source-bound citations. | `add_citation()`, `bind_citation()`, `verify_bound_citation()` and CR1-G/H1/local/Calendar consumers. | `python -m pytest -q tests/test_source_citations.py tests/test_cr1_g_citations.py tests/test_cr1_h1_citations.py tests/test_cr1_m_citations.py tests/test_cr1_o_citations.py tests/test_cr1_p_citations.py tests/test_cr1_q_citations.py`. | Persisted and in-memory citations are checked against exact UTF-8 half-open byte slices and source digests, including tamper cases. | Correct bytes prove integrity relative to the expected digest, not provider authenticity or truth. | PASS | No. The bounded citation contract has direct tests. |
-| K | §2: persistent incremental synthetic source state. | `sentinel.sync.github_fixture`; CR1-G/H1 ingestion and blob readback; `fixture-workspace`. | `python -m pytest -q tests/test_cr1_g_complete_state.py tests/test_cr1_h1_restart.py tests/test_cr1_k_progress.py tests/test_cr1_k_crash.py tests/test_cr1_r_verify.py tests/test_cr1_r_crash.py`. | Three fixed GitHub revisions/nine spans, three verified PUBLIC bodies, promoted refs, and cursor 0–3 are transactionally validated and restart-tested. | Persistence is fixture-specific; no general blob store integration, live cursor, private storage, or cross-resource transaction is claimed. | PASS | No for synthetic state. General source persistence remains outside this criterion. |
-| L | §2: terminal evidence briefing. | `sentinel brief github-fixture`; `build_github_fixture_brief()`. | `python -m pytest -q tests/test_cr1_i_briefing.py tests/test_cr1_i_formatters.py tests/test_cr1_i_cli.py tests/test_cr1_i_restart.py`. | Three source items and nine citations are read from promoted rows and verified PUBLIC blobs without requiring packaged fixture fallback. | Deterministic evidence presentation only; no model-generated summary or live GitHub claim. | PASS | No for this synthetic evidence brief. |
-| M | §2: local task/evidence overview. | `sentinel brief local-overview`; `build_local_overview()`. | `python -m pytest -q tests/test_cr1_l_overview.py tests/test_cr1_l_task_buckets.py tests/test_cr1_l_formatters.py tests/test_cr1_l_boundaries.py tests/test_cr1_l_restart.py`. | Fixed-as-of task day buckets, original verified evidence once, separate synthetic cursor status, and detectable read-stability changes are tested. | Separate readers do not form one atomic SQLite snapshot; no automatic source-to-task conversion or freshness claim. | PASS | No for the bounded local overview. |
-| N | §16: missing-credential/capability status is clear without false account claims. | `sentinel source status`; `CredentialBroker.backend_availability`. | `python -m pytest -q tests/test_cr1_s_status.py tests/test_cr1_s_credentials.py tests/test_cr1_s_terms_gates.py tests/test_bootstrap_doctor.py`. | Reports fixture checks separately from live adapter implementation, activation, backend availability, credential-check and account-check state; account and credential state are `NOT_CHECKED`, production backend `UNAVAILABLE`. | No real credential or account presence is inspected. Status is not production readiness. | PASS | No. The bounded §16 status assertion is satisfied without probing user secrets. |
-| O | §16: one-shot CLI behavior after restart. | Installed `sentinel` entry point; `fixture-workspace`, `brief`, `task`, `fixture-sync`, `source status`. | `python -m pytest -q tests/test_cr1_r_restart.py`; disposable installed-wheel workflow recorded below. | A fresh installed process initializes/prepares/verifies the synthetic workspace, reads evidence and Calendar fixture, performs manual task transitions and one cursor advance, then verifies state and repeats prepare. | Synthetic local restart only; no live integrations or power-loss guarantee. | PASS | No for the one-shot offline CLI criterion. |
-| P | §16: installed-wheel functionality. | Built `sentinel-0.2.0.dev0` wheel and console entry point. | `python -m build --wheel`; install the resulting wheel into the disposable verification environment; invoke from outside the checkout. | The complete prepare/verify/brief/calendar/overview/task/cursor/restart sequence is run from the installed wheel outside the source tree. | Covers this fixed offline workflow and packaged fixtures, not every platform or future adapter. | PASS | No for the bounded installed-wheel requirement. |
-| Q | Read-only source-status and evidence paths; no provider side effects. | `sentinel source status`; existing read-only brief/readback APIs. | `python -m pytest -q tests/test_cr1_s_status.py tests/test_cr1_s_cli.py tests/test_cr1_s_credentials.py tests/test_bootstrap_doctor.py tests/test_cr1_i_restart.py`. | Status takes no database/root/credential options; source-status tests prohibit reference checks/network sockets; existing brief tests preserve read-only DB/blob behavior. | A code review/test cannot prove absence of all malicious same-user interference; status still reads its packaged resources. | PASS | No for the bounded read-only/no-external-effects criterion. |
-| R | §3/§6/§16: disclose unresolved limitations and avoid production-readiness claims. | README, CR1-W scope review, this matrix, and BUILD_LEDGER.md. | Final documentation review; source-status and terms-gate tests; diff check. | Records unauthenticated task operator, unencrypted titles, private-data boundary, not-checked credentials, closed terms gates, Windows symlink skips, and remaining feature work. | Disclosure does not solve these limitations; broader active features remain IN_PROGRESS. CR1 status remains IN_PROGRESS pending a separate release decision. | PASS | No as a disclosure criterion. No §16 mechanical blocker was found by CR1-W; this is not release approval. |
+| ID | Blueprint criterion | Implementation and public entrypoint | Direct evidence and observed result | State; blocks CR1 exit? |
+|---|---|---|---|---|
+| A | §16: CR0 prerequisite is accepted before CR1. | CR0 package, doctor, gateway and config contracts; sentinel doctor. | CR0 annotated tag object e5aa8bb2e280a2fc78804d74d576afdfaf544559 peels to b446e1b934eb2be71853f9b6eab9e0238eade211; historical lock SHA-256 319ec67ddf87b44690eda03d47675975c806d5cc16242166dbf109ed5c4005ec. Full suite and installed doctor help pass. | PASS; no. This is the recorded CR0 scope, not a production security certification. |
+| B | §2 F11 and §16: manually usable local tasks, including restart. | sentinel.tasks.store; sentinel task setup/add/list/edit/complete/reopen. | CR1-J task, transition, idempotency, CLI and restart tests pass; installed-wheel run showed revisions 1, 2, 3, 4 and a fresh process listed revision 4. | PASS; no. Operator is unauthenticated; titles are unencrypted. |
+| C | §2 F10 and §16: allowlisted notes with bounded access and edit detection. | readers.local_text; readers.notes_registry; source inspect-file and source notes-registry build/verify. | CR1-M/N/T path, race, byte, registry, change and restart tests pass. Installed CLI built a 3-entry registry, detected one edit as 1 CHANGED/2 UNCHANGED, then reported 3 UNCHANGED after restore. | PASS; no for the demonstrated explicit-file workflow. Two existing Windows symlink-creation tests remain unexecuted on this host; residual same-user/ABA races remain. |
+| D | §2 F13 describes the broader ModelGateway-dependent feature. §16 CR1 does not list full F13 or model inference as a CR1 exit assertion; it specifies the offline daily-read deliverable and mechanical exits. | extraction.job_alert and extraction.batch; triage.job_alert/evaluation; source parse-job-alert, review-job-alerts and triage-job-alerts. | CR1-O/P/U/V tests pass. Independent evaluation rerun and cross-case swap test pass; metrics and citation counts are in the CR1-X audit. | PASS for the bounded deterministic, source-cited CR1 utility only; no for full F13. No CR1 blocker under the §16 reading documented in CR1-X. Full F13 remains IN_PROGRESS; natural-language extraction and model-mediated PRIVATE triage remain absent/gated. |
+| E | §2 F06/F07 and §16: job feeds must have explicit terms gates. | readers.source_status; source status. No Greenhouse or Lever reader exists. | CR1-S terms/status tests pass. Installed status reports both feeds TERMS_GATED and TERMS_REVIEW_REQUIRED / REQUIRED_NOT_COMPLETED; live sources and external writes are false; network-guarded runs observed no attempted network/process action. | PASS for an explicitly closed gate. No feed is implemented, fetched, or approved; no source-specific terms review is represented as complete. |
+| F | §2/§16: packaged Gmail fixture reader. | readers.gmail_fixture.read_packaged_gmail_fixture; source status. | Fixture reader, packaging, decoding, citation, boundary and status tests pass. Installed reader validated 3 packaged messages and expected digest. | PASS for synthetic fixture only; live Gmail and account connection are not implemented or checked. |
+| G | §2/§16: packaged GitHub fixture reader. | readers.github_fixture.read_packaged_github_fixture; brief github-fixture. | Reader, packaging, citation, boundary and status tests pass. Installed briefing returned 3 items and 9 citations from verified promoted blobs. | PASS for synthetic fixture only; no live GitHub access or freshness claim. |
+| H | §2/§16: packaged Calendar fixture reader. | readers.calendar_fixture.read_packaged_calendar_fixture; source calendar-fixture. | Calendar parser, timestamp, all-day, citation, boundary, CLI and status tests pass. Installed inspection returned 4 fictional events, 3 confirmed and 1 cancelled. | PASS for synthetic fixture only; no live Calendar access, recurrence, DST resolution or scheduling. |
+| I | §2 F12 and §16: typed source normalization. | sentinel.normalization and fixture/local reader adapters. | Normalization, boundaries and source-reader tests pass; fixed fixture readers validate schema, bytes, hashes, trust and sensitivity. | PASS for bounded envelope and byte-normalization contracts. Labels/digests do not authenticate source authors or truth. |
+| J | §16: exact citation/provenance checks. | add_citation, bind_citation, verify_bound_citation; fixture, local, extraction and triage readers. | Source citation and CR1-G/H1/M/O/P/Q/U/V citation tests pass; evaluator reports 0 missing, invalid and cross-source references on both frozen splits. | PASS for tested byte-bound references. A hash proves byte agreement, not real-world authenticity. |
+| K | §2 F18 and §16: persistent incremental synthetic source state. | sync.github_fixture; fixture-sync setup/status/advance; fixture-workspace. | CR1-K progress/idempotency/crash/tampering and CR1-R verify/crash tests pass. Installed run advanced 0→1, verified 1 item/3 spans, and retained generation 1 after restart. | PASS for fixed synthetic replay only; not live synchronization or provider freshness. |
+| L | §2/§16: terminal evidence briefing. | briefing APIs; brief github-fixture. | CR1-I briefing/formatter/CLI/restart tests pass. Installed result was 3 original evidence items and 9 citations, without counting replay copies as additional observations. | PASS for synthetic verified evidence; no generated summary or live-provider claim. |
+| M | §2: combined manual-task/evidence overview. | overview.assembly; brief local-overview. | CR1-L overview, task-bucket, formatter, boundary and restart tests pass. Installed fixed-as-of JSON retained 1 manual task, 3 original items, 9 citations and cursor generation 1. Read-only SQLite row and PUBLIC-blob snapshots matched before/after. | PASS for bounded overview. Existing independent readers do not provide one atomic cross-component snapshot; detectable changes are rejected. |
+| N | §16: clear missing-credential/capability state. | readers.source_status; credentials.CredentialBroker.backend_availability; source status JSON. | CR1-S status/credential tests pass. Installed status separates fixtures, absent live adapters, disabled activation, production backend UNAVAILABLE and actual credential/account NOT_CHECKED. Source status does not inspect credential references. | PASS. It accurately reports no check performed; no real credentials or account are declared missing. |
+| O | §16: one-shot CLI works after restart. | sentinel init, fixture-workspace, source, brief, task and fixture-sync commands. | Disposable independent-process sequence succeeded from initialization through task revision 4, cursor generation 1, repeat ALREADY_PREPARED and rebuilt overview. All 36 CLI process invocations in the guarded end-to-end/notes/triage run completed with empty success stderr. | PASS for this bounded offline workflow; no power-loss or daemon guarantee. |
+| P | §16: independently usable installable release artifact. | Built sentinel-0.2.0.dev0-py3-none-any.whl and console script. | Wheel built successfully, SHA-256 b8380fb655c90d3715424a15fee3fcd9fbcc5e7a1e074ab9670bae8579f3c56d. Installed with locally available dependencies into a separate clean venv; import resolved inside that venv's site-packages; wheel included and read pinned fixtures. CLI cwd was outside checkout. | PASS for the bounded wheel workflow. This is a development-version wheel, not a final stable release artifact. |
+| Q | §§3/6/7/16: preserve offline, source-trust and no-unauthorized-effect boundaries. | source status, fixture/local readers, ModelGateway, ToolGateway and read-only APIs. | Full suite and focused negative tests pass. A child-process guard denied network/socket, subprocess, os.system and startfile use; 36 installed CLI processes produced no blocked-action entries. Read-only DB/blob snapshots were equal. PRIVATE/SECRET gateway denial and unauthorized ToolGateway cases pass. | PASS for tested paths and implemented boundaries, not assurance against compromised OS or malicious same-user interference. |
+| R | §16: usable demo documentation, known limits, deterministic smoke and honest scope. | README, BUILD_LEDGER and audit documents. | Documentation reviewed; commands, fixture IDs, scope limits, credential status, closed feed gates, Windows skips, F13/CR5 deferrals and no-production-readiness statement are recorded. | PASS as a disclosure criterion. Documentation does not resolve the limitations it describes. |
 
-## Row-level classification count
+## Independently assigned row counts
 
-| Classification | Count |
+| State | Count |
 |---|---:|
 | PASS | 18 |
 | PARTIAL | 0 |
 | FAIL | 0 |
 | UNVERIFIED | 0 |
-| DEFERRED | 0 |
 
-The `DEFERRED` count is zero because the 18 requested rows are CR1-facing
-criteria. Live Gmail, GitHub, and Calendar adapters are noted as later-release
-limitations within the fixture rows rather than counted as CR1 row failures.
+The table's PASS count means bounded CR1 exit criteria are evidenced. It does not mark CR1 VERIFIED, complete F13/F10, or replace the release owner's decision. The two skipped Windows symlink-creation tests are explained and unchanged from baseline; the tests are not counted as passing.
 
-## CR1 §16 decision evidence and open blockers
+## Release-scope interpretation and remaining limitations
 
-The three §16 mechanical checks have evidence: source normalization and exact
-citations pass; the CLI reports the unavailable production credential backend
-and leaves real account credentials `NOT_CHECKED`; and the one-shot installed
-CLI workflow succeeds after process restart. The README and source-status
-output explicitly state that fixtures are not linked accounts and that this is
-not a production-readiness result.
+Blueprint §2 marks F13 ACTIVE TARGET and defines it as typed triage/extraction with a ModelGateway dependency. Blueprint §16 names the CR1 deliverable and its mechanical exit criteria but does not require every ACTIVE TARGET feature to be complete, nor does it name model-mediated F13 as an exit test. §16 places the four-model privacy gateway, sensitivity egress oracles and provider contracts in CR5, which depends on CR4. The current deterministic cited triage is useful bounded offline behavior, but it is not full F13. This reading is defensible as staged scope; it is still a proposed interpretation, not owner approval.
 
-This review does **not** itself close or promote CR1. The bounded F10 allowlisted-notes criterion in row
-C has explicit registry generation, cross-process comparison, and edit
-detection evidence. F10 remains IN_PROGRESS as a wider capability. CR1-W
-independently rebuilt the §16 crosswalk and changed row D to PASS for its
-bounded CR1 criterion: deterministic source-cited extraction/triage is
-available, while model-mediated F13 remains outside the listed CR1 mechanical
-exit tests and gated for the later privacy-gateway stage. F13 remains
-IN_PROGRESS. The current row-level count is 18 PASS; the separate release
-decision must still be made.
+Greenhouse and Lever are reported with their gates closed. The implementation provides no feed readers, no review approval artifact, and no HTTP path. This satisfies the bounded requirement to keep public feeds behind explicit terms gates; it does not claim public job-feed support.
 
-## Bounded audit limitations
-
-This is a source-code, test, package, and local-process audit. It does not
-authenticate a user, inspect credentials, approve terms, establish provider
-truth, certify Windows isolation, prove sudden-power-loss durability, or
-establish production readiness. See the build ledger for exact test and
-acceptance outputs, commit IDs, and preserved artifact digests.
-
-## CR1-S execution evidence
-
-The requested implementation and tests were committed as
-`0aa2a95` (`Add read-only source capability status`). The CR1-S focused
-selection, including the existing doctor regression tests, reported
-`38 passed in 2.43s`. The full run used
-`.\.venv\Scripts\python.exe -m pytest -q` and reported
-`1251 passed, 2 skipped in 274.53s`; both skips are the same existing
-Windows final-component symlink-creation limitations at
-`tests/test_bootstrap_init.py:125` and
-`tests/test_storage_writer_lease.py:251`. No new skip or xfail was added.
-
-Acceptance commands completed successfully: editable installation;
-`pip check` (`No broken requirements found.`); Ruff (`All checks passed!`);
-mypy (`Success: no issues found in 84 source files`); wheel build for
-`sentinel-0.2.0.dev0-py3-none-any.whl`; root, source, and source-status help;
-and `sentinel version` (`0.2.0.dev0`). The built wheel was installed into the
-selected virtual environment and invoked from a fresh temporary working
-directory outside the checkout. Its import origin was
-`.venv\Lib\site-packages\sentinel`.
-
-The installed-wheel restart workflow used a disposable database and store:
-`init`; `fixture-workspace prepare`; `fixture-workspace verify`; source
-status; GitHub evidence brief; Calendar fixture inspection; a fixed-as-of
-local overview; task add/edit/complete/reopen; one synthetic cursor advance;
-new-process verification; repeated prepare; and a rebuilt overview. Results
-were three original GitHub items/nine citations, four Calendar fixture events,
-one retained task at revision 4, cursor generation 1, and final overview
-counts of one task/three evidence items/nine citations/generation 1. The
-database held two synthetic source rows, two principals, four items, twelve
-spans, one task, one cursor, and zero action proposals. Source-status JSON
-was byte-identical across processes. Complete SQLite row snapshots and PUBLIC
-blob hashes were unchanged across read-only checks and the repeated
-`ALREADY_PREPARED` call. Successful CLI calls had empty stderr. This is
-process-restart evidence for the bounded local fixture workflow, not a
-power-loss, production, or live-provider guarantee.
-
-The deterministic JSON diagnostic had 14 capability rows and
-`validation=VALID`: the three packaged fixtures were `FIXTURE_READY`; four
-explicit local workflows were `EXPLICIT_LOCAL_ONLY`; the three live adapters
-were `NOT_IMPLEMENTED`, disabled, with credentials and account state
-`NOT_CHECKED`; Greenhouse and Lever remained `TERMS_REVIEW_REQUIRED` and
-`TERMS_GATED`; LinkedIn owner-export remained unimplemented and source-review
-gated; and the production credential backend was `UNAVAILABLE`. The text
-view makes the same distinctions and says it is not a production-readiness
-result.
-
-No database schema, migration, checkpoint, fixture, H1 manifest, package
-version, dependency, CR0 lock, or CR0 tag was changed. The implementation
-commit is `0aa2a95`; README, audit-matrix, and detailed ledger evidence are
-recorded in the separate documentation commit reported with this slice.
-
-## CR1-U deterministic triage evidence
-
-CR1-U adds source-bound deterministic typed signals and an evaluator over
-24 development and 30 holdout fictional cases. The separate report
-docs/audit/cr1-u-evaluation.md records corpus/label hashes, exact confusion
-matrices, signal metrics, citation counts, and the two natural-language
-candidate misses. The evaluator reports zero candidate false positives,
-zero missing/invalid citation references, and zero cross-source evidence
-errors on both splits. The implementation never calls ModelGateway; the
-current PRIVATE-to-model path remains gated. The original CR1-U scope review
-left row D PARTIAL pending release interpretation. CR1-W independently
-reviewed the §16 exit tests and reclassifies the bounded CR1 criterion as PASS;
-the current matrix has 18 PASS rows. Full F13 is still IN_PROGRESS.
-
-CR1-V did not alter the frozen evaluation corpus or expected-label manifest.
-The corrected evaluator matches signal kind and required field IDs within each
-case before adding TP/FP/FN counts. CR1-V itself did not change the then-current
-release-scope interpretation; CR1-W later resolved that row-level question
-without changing the evaluator or the frozen corpus.
+CR1 remains IN_PROGRESS. F13 and broader F10 remain IN_PROGRESS. Live Gmail/GitHub/Calendar, scheduling, CR2 policy and approvals, CR5 privacy routing, general PRIVATE persistence, general provider sync, backup/restore assurance and production-readiness remain outside the demonstrated scope. See docs/audit/cr1-x-final-release-verification.md for the independent review, measured evaluation and executable acceptance record.
