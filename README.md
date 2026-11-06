@@ -23,6 +23,14 @@ The overview's `--as-of` value is required and its supplied offset defines a fix
 
 CR0 remains the historical 0.1.0 package/tag scope. Its annotated tag and Windows runtime lock retain their original identities and hashes; the 0.2.0 release does not retag or rewrite CR0.
 
+## CR2-A policy foundation (development branch)
+
+The CR2-A branch uses development version `0.3.0.dev0`; the released CR1 package remains `0.2.0`. It adds a strict, immutable C0–C6 capability registry containing passive metadata only, canonical request and decision records, domain-separated SHA-256 identifiers, a deterministic deny-only evaluator, and `sentinel policy status --format text|json`.
+
+The evaluator implements bounded P00, P01, P02, P03, P17, and catch-all P12 denials in that order. P04–P16 remain unimplemented. Every evaluator result is `DENY`; `ALLOW` and `PENDING_HUMAN` are reserved and cannot be constructed as policy decisions. A valid request shape is not permission. Hashes identify exact canonical metadata but are not signatures and do not authenticate a registrar, principal, source, or approval.
+
+This is a policy foundation, not a complete reference monitor. It is not installed on every model, tool, task, or effect dispatch path and its decisions are not executable authorization receipts. There is no trusted owner-proof resolver, approval verifier/queue, privileged worker, durable grant, or effect reconciliation. C4, C5, and C6 stay OFF. The existing ModelGateway and ToolGateway contracts are unchanged; no model, credential, provider, network, database, blob, task, proposal, shell, or external-write operation is performed by policy evaluation or status inspection. CR0 and the released CR1 scope are unchanged; CR2-A remains on its review branch pending acceptance.
+
 ## CR0-B contract API
 
 `sentinel.contracts` exports the immutable `SourceEnvelope`, `ByteSpan`, and `BoundaryEnvelope` models, their `TrustLabel`, `SensitivityLabel`, and `BoundaryKind` enums, and `canonical_json_bytes` / `canonical_sha256` helpers. The models use UUID identifiers, timezone-aware UTC-normalized timestamps, lowercase 64-character SHA-256 hex digests, `sha256:<hex>` content references, tuples for nested collections, and reject undeclared fields.
