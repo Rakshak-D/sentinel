@@ -39,6 +39,11 @@ from sentinel.policy import (
     format_json_policy_status,
     format_text_policy_status,
 )
+from sentinel.proposals import ProposalPreviewError, build_github_issue_proposal_preview
+from sentinel.proposals.formatters import (
+    format_json_proposal_preview,
+    format_text_proposal_preview,
+)
 from sentinel.readers.calendar_fixture import read_packaged_calendar_fixture
 from sentinel.readers.calendar_formatters import (
     format_json_calendar_fixture,
@@ -125,6 +130,10 @@ fixture_workspace_app = typer.Typer(
 policy_app = typer.Typer(
     no_args_is_help=True,
     help="Inspect bounded deterministic policy status.",
+)
+proposal_app = typer.Typer(
+    no_args_is_help=True,
+    help="Construct explicitly selected, in-memory source review previews.",
 )
 
 
@@ -1165,6 +1174,49 @@ def policy_status(
 
 
 app.add_typer(policy_app, name="policy")
+
+
+@proposal_app.command("preview-github-fixture")
+def proposal_preview_github_fixture(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing prepared Sentinel database."),
+    ],
+    store_root: Annotated[
+        Path,
+        typer.Option("--store-root", help="Explicit PUBLIC fixture-store root."),
+    ],
+    issue_number: Annotated[
+        int,
+        typer.Option("--issue", help="Explicit fixture issue number: 101, 102 or 103."),
+    ],
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Build one body-free P06 review preview from a verified synthetic issue."""
+    try:
+        preview = build_github_issue_proposal_preview(
+            database,
+            store_root=store_root,
+            issue_number=issue_number,
+        )
+        output = (
+            format_text_proposal_preview(preview)
+            if output_format == "text"
+            else format_json_proposal_preview(preview)
+        )
+    except ProposalPreviewError as error:
+        typer.echo(f"Proposal preview failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Proposal preview failed: verified synthetic source is unavailable.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+app.add_typer(proposal_app, name="proposal")
 
 
 if __name__ == "__main__":

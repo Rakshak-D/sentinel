@@ -30,5 +30,5 @@ def test_policy_status_is_a_read_only_deterministic_cli_command() -> None:
     assert text_result.exit_code == 0, text_result.output
     assert json_result.exit_code == 0, json_result.output
     assert "P12" in text_result.output
-    assert '"schema_version":"sentinel.policy-status.v2"' in json_result.output
+    assert '"schema_version":"sentinel.policy-status.v3"' in json_result.output
     assert json_result.output == runner.invoke(app, ["policy", "status", "--format", "json"]).output

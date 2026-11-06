@@ -84,7 +84,7 @@ def test_policy_request_is_frozen_and_rejects_unknown_or_duplicate_claims() -> N
         )
 
 
-def test_policy_decisions_can_only_represent_non_executable_denials() -> None:
+def test_policy_decisions_are_never_executable_authorization_receipts() -> None:
     assert PolicyOutcome.ALLOW.value == "ALLOW"
     assert PolicyOutcome.PENDING_HUMAN.value == "PENDING_HUMAN"
     with pytest.raises(ValidationError):

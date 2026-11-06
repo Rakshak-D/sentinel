@@ -36,11 +36,10 @@ REGISTRY_SCHEMA_VERSION: Literal["sentinel.capability-registry.v1"] = (
 REGISTRY_ID = "sentinel.cr2.synthetic-capabilities"
 REGISTRY_VERSION = "v1"
 POLICY_ID = "sentinel.cr2.bounded-public-read-policy"
-POLICY_VERSION = "v2"
+POLICY_VERSION = "v3"
 
 UNIMPLEMENTED_RULE_IDS: tuple[str, ...] = (
     "P05",
-    "P06",
     "P07",
     "P08",
     "P10",
@@ -116,7 +115,7 @@ class PolicyRuleContract(BaseModel):
         hide_input_in_errors=True,
     )
 
-    schema_version: Literal["sentinel.policy-rule.v2"] = POLICY_RULE_SCHEMA
+    schema_version: Literal["sentinel.policy-rule.v3"] = POLICY_RULE_SCHEMA
     rule_id: PolicyRuleId
     priority: Annotated[StrictInt, Field(ge=0, le=17)]
     outcome: PolicyOutcome = PolicyOutcome.DENY
@@ -265,8 +264,17 @@ POLICY_RULES: tuple[PolicyRuleContract, ...] = (
         hard=False,
     ),
     PolicyRuleContract(
-        rule_id=PolicyRuleId.P12,
+        rule_id=PolicyRuleId.P06,
         priority=7,
+        outcome=PolicyOutcome.ALLOW,
+        summary=(
+            "Allow only a body-free in-memory C2 preview for one verified synthetic PUBLIC issue."
+        ),
+        hard=False,
+    ),
+    PolicyRuleContract(
+        rule_id=PolicyRuleId.P12,
+        priority=8,
         outcome=PolicyOutcome.DENY,
         summary="Unsupported rules and all otherwise unmatched requests deny.",
         hard=False,

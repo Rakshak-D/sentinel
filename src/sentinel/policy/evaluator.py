@@ -1,4 +1,4 @@
-"""Pure policy evaluation for the bounded CR2-B public fixture read route."""
+"""Pure policy evaluation for bounded synthetic GitHub read and preview routes."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from sentinel.policy.registry import (
     CapabilityRegistry,
 )
 from sentinel.policy.source_binding import (
+    PublicSourceBinding,
     VerifiedGithubPublicRead,
     source_binding_sha256,
     validate_verified_github_public_read,
@@ -102,6 +103,61 @@ def build_verified_public_read_policy_input(
         config_version=context.config_version,
         config_sha256=context.config_sha256,
         requested_effect_class=EffectClass.READ_ONLY,
+    )
+    return request, context
+
+
+def build_verified_proposal_preview_policy_input(
+    verified_read: VerifiedGithubPublicRead,
+    *,
+    issue_number: int,
+) -> tuple[PolicyRequest, PolicyContext]:
+    """Build a fixed C2 request bound to one selected item in the verified fixture."""
+    if (
+        type(issue_number) is not int
+        or issue_number not in {101, 102, 103}
+        or not validate_verified_github_public_read(verified_read)
+    ):
+        raise ValueError("verified synthetic source is unavailable")
+    binding = verified_read.binding
+    provider_item_id = f"example-owner/fixture-project#{issue_number}"
+    selected = tuple(
+        source for source in binding.sources if source.provider_item_id == provider_item_id
+    )
+    if len(selected) != 1:
+        raise ValueError("verified synthetic source is unavailable")
+    context = build_policy_context(
+        sources=verified_read.source_envelopes,
+        source_binding_sha256=binding.source_set_sha256,
+    )
+    request = PolicyRequest(
+        request_id=uuid5(
+            NAMESPACE_URL,
+            "sentinel.policy.github-proposal-preview.v1:"
+            + binding.source_set_sha256
+            + ":"
+            + str(selected[0].item_id),
+        ),
+        operation_id="sentinel.synthetic.proposal.local",
+        capability=Capability.C2_WRITE_LOCAL_PROPOSAL,
+        execution_mode=ExecutionMode.LIVE,
+        execution_boundary=ExecutionBoundary.CORE,
+        arguments=(("label", "REVIEW_SOURCE:" + provider_item_id),),
+        source_ids=tuple(source.source_id for source in binding.sources),
+        evidence_span_ids=tuple(
+            citation.span_id for source in binding.sources for citation in source.citations
+        ),
+        source_binding_sha256=binding.source_set_sha256,
+        declared_sensitivity=SensitivityLabel.PUBLIC,
+        registry_id=REGISTRY_ID,
+        registry_version=REGISTRY_VERSION,
+        registry_sha256=_BUILTIN_REGISTRY_SHA256,
+        policy_id=POLICY_ID,
+        policy_version=POLICY_VERSION,
+        policy_sha256=_BUILTIN_POLICY_SHA256,
+        config_version=context.config_version,
+        config_sha256=context.config_sha256,
+        requested_effect_class=EffectClass.LOCAL_PROPOSAL,
     )
     return request, context
 
@@ -474,13 +530,17 @@ def _evaluate_validated(
             evidence_ids=evidence_ids,
         )
 
-    # P09 is deliberately narrow: only the fixed C0 synthetic GitHub read route
-    # can be evaluated with the resolver-created, pinned source binding.
+    # P09 is deliberately narrow: only fixed C0/P04 and C2/P06 GitHub routes
+    # can use the resolver-created, pinned source binding.
     public_read_operation = (
         request.operation_id == "sentinel.synthetic.read.public"
         and request.capability is Capability.C0_READ_PUBLIC
     )
-    if public_read_operation:
+    proposal_preview_operation = (
+        request.operation_id == "sentinel.synthetic.proposal.local"
+        and request.capability is Capability.C2_WRITE_LOCAL_PROPOSAL
+    )
+    if public_read_operation or proposal_preview_operation:
         if request.requested_effect_class is not registration.effect_class:
             return _deny(
                 PolicyRuleId.P09,
@@ -558,27 +618,46 @@ def _evaluate_validated(
                 request_digest=request_digest,
                 evidence_ids=evidence_ids,
             )
-        if (
+        common_route_invalid = (
             request.declared_sensitivity is not SensitivityLabel.PUBLIC
             or request.execution_mode.value != "LIVE"
             or request.execution_boundary is not ExecutionBoundary.CORE
-            or request.requested_effect_class is not EffectClass.READ_ONLY
-            or request.arguments != (("resource_id", "github.fixture"),)
             or context.implementation_state != "bounded_public_read_foundation"
             or context.model_route is not ModelRouteState.UNVERIFIED
             or context.enabled_capabilities
-        ):
+        )
+        public_read_invalid = public_read_operation and (
+            request.requested_effect_class is not EffectClass.READ_ONLY
+            or request.arguments != (("resource_id", "github.fixture"),)
+        )
+        preview_route_invalid = proposal_preview_operation and (
+            request.requested_effect_class is not EffectClass.LOCAL_PROPOSAL
+            or registration.state is not RegistrationState.POLICY_ONLY
+            or registration.required_authorization_class is not AuthorizationClass.NONE
+        )
+        if common_route_invalid or public_read_invalid or preview_route_invalid:
             return _deny(
                 PolicyRuleId.P09,
-                PolicyReasonCode.PUBLIC_READ_SCOPE_MISMATCH,
+                (
+                    PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH
+                    if proposal_preview_operation
+                    else PolicyReasonCode.PUBLIC_READ_SCOPE_MISMATCH
+                ),
                 request_digest=request_digest,
                 evidence_ids=evidence_ids,
             )
-        if all(
+        if not all(
             source.trust is TrustLabel.T4_EXTERNAL
             and source.sensitivity is SensitivityLabel.PUBLIC
             for source in context.sources
         ):
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.SOURCE_SET_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if public_read_operation:
             return PolicyDecision(
                 outcome=PolicyOutcome.ALLOW,
                 rule_id=PolicyRuleId.P04,
@@ -588,6 +667,44 @@ def _evaluate_validated(
                 request_sha256=request_digest,
                 evidence_binding_sha256=binding.source_set_sha256,
                 evidence_ids=evidence_ids[:8],
+                executable=False,
+            )
+        if proposal_preview_operation:
+            selected_source = _selected_preview_source(request, binding.sources)
+            if selected_source is None:
+                return _deny(
+                    PolicyRuleId.P09,
+                    PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH,
+                    request_digest=request_digest,
+                    evidence_ids=evidence_ids,
+                )
+            expected_request_id = uuid5(
+                NAMESPACE_URL,
+                "sentinel.policy.github-proposal-preview.v1:"
+                + binding.source_set_sha256
+                + ":"
+                + str(selected_source.item_id),
+            )
+            if request.request_id != expected_request_id:
+                return _deny(
+                    PolicyRuleId.P09,
+                    PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH,
+                    request_digest=request_digest,
+                    evidence_ids=evidence_ids,
+                )
+            return PolicyDecision(
+                outcome=PolicyOutcome.ALLOW,
+                rule_id=PolicyRuleId.P06,
+                reason_code=PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED,
+                policy_sha256=_BUILTIN_POLICY_SHA256,
+                registry_sha256=_BUILTIN_REGISTRY_SHA256,
+                request_sha256=request_digest,
+                evidence_binding_sha256=binding.source_set_sha256,
+                evidence_ids=(
+                    request.request_id,
+                    selected_source.source_id,
+                    *(citation.span_id for citation in selected_source.citations),
+                ),
                 executable=False,
             )
         return _deny(
@@ -612,6 +729,28 @@ def _evaluate_validated(
     )
 
 
+def _selected_preview_source(
+    request: PolicyRequest, sources: tuple[PublicSourceBinding, ...]
+) -> PublicSourceBinding | None:
+    """Resolve only the fixed label grammar against a resolver-verified source set."""
+    if len(request.arguments) != 1 or request.arguments[0][0] != "label":
+        return None
+    label = request.arguments[0][1]
+    if type(label) is not str or not label.startswith("REVIEW_SOURCE:"):
+        return None
+    provider_item_id = label.removeprefix("REVIEW_SOURCE:")
+    if provider_item_id not in {
+        "example-owner/fixture-project#101",
+        "example-owner/fixture-project#102",
+        "example-owner/fixture-project#103",
+    }:
+        return None
+    matches = tuple(source for source in sources if source.provider_item_id == provider_item_id)
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
 def evaluate_policy(
     *,
     request: object,
@@ -623,8 +762,9 @@ def evaluate_policy(
 
     The registry and context are revalidated at entry. No callback, storage,
     credential, gateway, environment, filesystem, network, or clock access occurs.
-    P04 can ALLOW only the resolver-bound synthetic PUBLIC GitHub briefing read;
-    that decision remains metadata, never an executable authorization receipt.
+    P04 can ALLOW the resolver-bound synthetic PUBLIC GitHub read; P06 can
+    ALLOW only the body-free in-memory preview for one pinned issue. Both are
+    metadata decisions, never executable authorization receipts.
     """
     try:
         validated_request = _validate_request(request)

@@ -95,10 +95,13 @@ def test_rule_status_places_p09_before_p04_and_keeps_p12_last() -> None:
         "P17",
         "P09",
         "P04",
+        "P06",
         "P12",
     )
     assert report.active_rules[-1].rule_id is PolicyRuleId.P12
-    assert report.active_rules[-2].rule_id is PolicyRuleId.P04
+    assert report.active_rules[-3].rule_id is PolicyRuleId.P04
+    assert report.active_rules[-3].outcome is PolicyOutcome.ALLOW
+    assert report.active_rules[-2].rule_id is PolicyRuleId.P06
     assert report.active_rules[-2].outcome is PolicyOutcome.ALLOW
 
 

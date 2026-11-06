@@ -20,9 +20,10 @@ def test_rules_follow_the_supported_priority_and_p12_is_always_last() -> None:
         PolicyRuleId.P17,
         PolicyRuleId.P09,
         PolicyRuleId.P04,
+        PolicyRuleId.P06,
         PolicyRuleId.P12,
     )
-    assert tuple(rule.priority for rule in POLICY_RULES) == tuple(range(8))
+    assert tuple(rule.priority for rule in POLICY_RULES) == tuple(range(9))
     assert POLICY_RULES[-1].rule_id is PolicyRuleId.P12
     assert POLICY_RULES[-1].hard is False
     assert POLICY_RULES[-2].outcome.value == "ALLOW"

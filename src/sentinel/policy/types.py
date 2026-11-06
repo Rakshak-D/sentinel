@@ -24,12 +24,12 @@ from sentinel.gateways.types import ExecutionMode
 
 POLICY_REQUEST_SCHEMA: Literal["sentinel.policy-request.v2"] = "sentinel.policy-request.v2"
 POLICY_CONTEXT_SCHEMA: Literal["sentinel.policy-context.v2"] = "sentinel.policy-context.v2"
-POLICY_STATUS_SCHEMA: Literal["sentinel.policy-status.v2"] = "sentinel.policy-status.v2"
-POLICY_DECISION_SCHEMA: Literal["sentinel.policy-decision.v2"] = "sentinel.policy-decision.v2"
+POLICY_STATUS_SCHEMA: Literal["sentinel.policy-status.v3"] = "sentinel.policy-status.v3"
+POLICY_DECISION_SCHEMA: Literal["sentinel.policy-decision.v3"] = "sentinel.policy-decision.v3"
 CAPABILITY_REGISTRATION_SCHEMA: Literal["sentinel.capability-registration.v1"] = (
     "sentinel.capability-registration.v1"
 )
-POLICY_RULE_SCHEMA: Literal["sentinel.policy-rule.v2"] = "sentinel.policy-rule.v2"
+POLICY_RULE_SCHEMA: Literal["sentinel.policy-rule.v3"] = "sentinel.policy-rule.v3"
 MAX_POLICY_ARGUMENTS = 32
 MAX_POLICY_ARGUMENT_BYTES = 16_384
 MAX_POLICY_SOURCE_IDS = 32
@@ -104,7 +104,7 @@ class RegistrationState(StrEnum):
 
 
 class PolicyOutcome(StrEnum):
-    """Closed decision vocabulary; P04 is the sole bounded ALLOW in CR2-B."""
+    """Closed decision vocabulary; only bounded P04/P06 routes may ALLOW in CR2-C."""
 
     ALLOW = "ALLOW"
     PENDING_HUMAN = "PENDING_HUMAN"
@@ -112,7 +112,7 @@ class PolicyOutcome(StrEnum):
 
 
 class PolicyRuleId(StrEnum):
-    """Rules represented by the bounded CR2-A/B policy slices."""
+    """Rules represented by the bounded CR2-A/B/C policy slices."""
 
     P00 = "P00"
     P01 = "P01"
@@ -121,6 +121,7 @@ class PolicyRuleId(StrEnum):
     P17 = "P17"
     P09 = "P09"
     P04 = "P04"
+    P06 = "P06"
     P12 = "P12"
 
 
@@ -154,6 +155,8 @@ class PolicyReasonCode(StrEnum):
     EFFECT_CLASS_MISMATCH = "EFFECT_CLASS_MISMATCH"
     PUBLIC_READ_SCOPE_MISMATCH = "PUBLIC_READ_SCOPE_MISMATCH"
     PUBLIC_READ_ALLOWED = "PUBLIC_READ_ALLOWED"
+    PROPOSAL_PREVIEW_SCOPE_MISMATCH = "PROPOSAL_PREVIEW_SCOPE_MISMATCH"
+    PROPOSAL_PREVIEW_ALLOWED = "PROPOSAL_PREVIEW_ALLOWED"
     UNSUPPORTED_POLICY = "UNSUPPORTED_POLICY"
     INTERNAL_FAILURE = "INTERNAL_FAILURE"
 
@@ -365,7 +368,7 @@ class PolicyContext(_FrozenPolicyModel):
 class PolicyDecision(_FrozenPolicyModel):
     """Deterministic decision metadata; never an executable authorization receipt."""
 
-    schema_version: Literal["sentinel.policy-decision.v2"] = POLICY_DECISION_SCHEMA
+    schema_version: Literal["sentinel.policy-decision.v3"] = POLICY_DECISION_SCHEMA
     outcome: PolicyOutcome
     rule_id: PolicyRuleId
     reason_code: PolicyReasonCode
@@ -379,11 +382,24 @@ class PolicyDecision(_FrozenPolicyModel):
     @model_validator(mode="after")
     def bounded_decision_contract(self) -> PolicyDecision:
         if self.outcome is PolicyOutcome.PENDING_HUMAN:
-            raise ValueError("CR2-B does not represent PENDING_HUMAN decisions")
+            raise ValueError("CR2-C does not represent PENDING_HUMAN decisions")
         if self.outcome is PolicyOutcome.ALLOW and (
-            self.rule_id is not PolicyRuleId.P04 or self.evidence_binding_sha256 is None
+            self.rule_id not in {PolicyRuleId.P04, PolicyRuleId.P06}
+            or self.evidence_binding_sha256 is None
         ):
-            raise ValueError("CR2-B ALLOW is limited to evidence-bound P04 decisions")
+            raise ValueError("CR2-C ALLOW is limited to evidence-bound P04/P06 decisions")
+        if self.outcome is PolicyOutcome.ALLOW and not self.evidence_ids:
+            raise ValueError("CR2-C ALLOW decisions must retain evidence references")
+        if (
+            self.rule_id is PolicyRuleId.P04
+            and self.reason_code is not PolicyReasonCode.PUBLIC_READ_ALLOWED
+        ):
+            raise ValueError("P04 decisions must use the registered public-read reason")
+        if (
+            self.rule_id is PolicyRuleId.P06
+            and self.reason_code is not PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED
+        ):
+            raise ValueError("P06 decisions must use the registered preview reason")
         if self.executable is not False:
             raise ValueError("policy decisions are not executable authorization receipts")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
@@ -439,7 +455,7 @@ class PolicyRuleStatus(_FrozenPolicyModel):
 class PolicyStatusReport(_FrozenPolicyModel):
     """Deterministic status DTO used by the read-only policy CLI."""
 
-    schema_version: Literal["sentinel.policy-status.v2"] = POLICY_STATUS_SCHEMA
+    schema_version: Literal["sentinel.policy-status.v3"] = POLICY_STATUS_SCHEMA
     policy_id: PolicyIdentifier
     policy_version: PolicyVersion
     policy_sha256: Sha256Digest
@@ -447,15 +463,18 @@ class PolicyStatusReport(_FrozenPolicyModel):
     registry_version: PolicyVersion
     registry_sha256: Sha256Digest
     capabilities: Annotated[tuple[CapabilityStatus, ...], Field(min_length=7, max_length=7)]
-    active_rules: Annotated[tuple[PolicyRuleStatus, ...], Field(min_length=8, max_length=8)]
+    active_rules: Annotated[tuple[PolicyRuleStatus, ...], Field(min_length=9, max_length=9)]
     unimplemented_rules: Annotated[tuple[RuleReference, ...], Field(max_length=12)]
     bounded_public_read_operation: Literal["sentinel.synthetic.read.public"] = (
         "sentinel.synthetic.read.public"
     )
     bounded_public_read_state: Literal["IMPLEMENTED"] = "IMPLEMENTED"
+    bounded_proposal_preview_operation: Literal["sentinel.synthetic.proposal.local"] = (
+        "sentinel.synthetic.proposal.local"
+    )
+    bounded_proposal_preview_state: Literal["IN_MEMORY_PREVIEW_ONLY"] = "IN_MEMORY_PREVIEW_ONLY"
     inactive_capabilities: tuple[Capability, ...] = (
         Capability.C1_READ_PRIVATE,
-        Capability.C2_WRITE_LOCAL_PROPOSAL,
         Capability.C3_WRITE_LOCAL_ACCEPTED,
     )
     disabled_capabilities: tuple[Capability, ...] = (
@@ -482,10 +501,9 @@ class PolicyStatusReport(_FrozenPolicyModel):
     def require_fixed_capability_activation(self) -> PolicyStatusReport:
         if self.inactive_capabilities != (
             Capability.C1_READ_PRIVATE,
-            Capability.C2_WRITE_LOCAL_PROPOSAL,
             Capability.C3_WRITE_LOCAL_ACCEPTED,
         ):
-            raise ValueError("private read and local-write capabilities remain inactive")
+            raise ValueError("private read and accepted-task write remain inactive")
         if self.disabled_capabilities != (
             Capability.C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB,
             Capability.C5_SEND_EXTERNAL_EMAIL,
@@ -507,6 +525,7 @@ class PolicyStatusReport(_FrozenPolicyModel):
             (PolicyRuleId.P17, PolicyOutcome.DENY),
             (PolicyRuleId.P09, PolicyOutcome.DENY),
             (PolicyRuleId.P04, PolicyOutcome.ALLOW),
+            (PolicyRuleId.P06, PolicyOutcome.ALLOW),
             (PolicyRuleId.P12, PolicyOutcome.DENY),
         )
         if tuple((item.rule_id, item.outcome) for item in value) != expected:
@@ -520,7 +539,7 @@ class PolicyStatusReport(_FrozenPolicyModel):
     def require_unimplemented_rule_order(
         cls, value: tuple[RuleReference, ...]
     ) -> tuple[RuleReference, ...]:
-        expected = ("P05", "P06", "P07", "P08", "P10", "P11", "P13", "P14", "P15", "P16")
+        expected = ("P05", "P07", "P08", "P10", "P11", "P13", "P14", "P15", "P16")
         if value != expected:
-            raise ValueError("unimplemented rules must match the closed CR2-B remainder")
+            raise ValueError("unimplemented rules must match the closed CR2-C remainder")
         return value
