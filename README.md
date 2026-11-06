@@ -2,7 +2,7 @@
 
 Sentinel 0.2.0 is the bounded offline CR1 daily-read/product core described by the [Master Blueprint](docs/spec/Sentinel%20Master%20Blueprint.pdf). It provides manual local tasks, pinned fictional Gmail/GitHub/Calendar fixture readers, explicit allowlisted local-file workflows, source-bound citations, a deterministic local overview, and restart-safe synthetic GitHub fixture state. The [build ledger](docs/BUILD_LEDGER.md) records exact evidence and remaining product gates.
 
-The historical CR1 slice notes below preserve each slice's acceptance-time status. The release owner accepted the bounded scope for promotion, subject to final release acceptance recorded in the ledger and release record. This does not mean the full Sentinel product or every broader F-feature is complete. There is no live Gmail, GitHub, Calendar, Greenhouse, or Lever connection; no model-mediated PRIVATE processing; no automatic source-derived tasks; no secure external writes; and no production-readiness claim. The ModelGateway remains synthetic PUBLIC-only, while local alert and note content remains PRIVATE/T4_EXTERNAL.
+The historical CR1 slice notes below preserve each slice's acceptance-time status. CR1 is VERIFIED for the bounded offline scope in Blueprint §16 at version 0.2.0. This does not mean the full Sentinel product or every broader F-feature is complete. There is no live Gmail, GitHub, Calendar, Greenhouse, or Lever connection; no model-mediated PRIVATE processing; no automatic source-derived tasks; no secure external writes; and no production-readiness claim. The ModelGateway remains synthetic PUBLIC-only, while local alert and note content remains PRIVATE/T4_EXTERNAL.
 
 ## CR1 offline workflow
 
