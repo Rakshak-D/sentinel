@@ -16,8 +16,23 @@ from typer.testing import CliRunner
 from sentinel.cli import app
 from sentinel.content.public_fixture_store import _blob_path
 from sentinel.ingestion.blob_manifest import EXPECTED_MANIFEST
+from sentinel.policy import (
+    BUILTIN_REGISTRY,
+    EffectClass,
+    PolicyOutcome,
+    PolicyReasonCode,
+    PolicyRuleId,
+    build_policy_context,
+    evaluate_policy,
+)
+from sentinel.policy.evaluator import (
+    build_proposal_persistence_policy_request,
+    build_verified_proposal_preview_policy_input,
+)
+from sentinel.policy.source_binding import resolve_github_fixture_public_read
 from sentinel.proposals import persistence
 from sentinel.proposals.persistence import ProposalPersistenceError, ProposalPersistenceErrorCode
+from sentinel.proposals.preview import build_github_issue_proposal_preview
 from sentinel.storage.migrations import initialize_storage
 from tests.test_cr1_i_support import promoted_case
 
@@ -295,13 +310,161 @@ def test_task_rows_remain_untouched_when_pending_proposal_is_saved(tmp_path) -> 
     database, store_root = promoted_case(tmp_path, name="cr2-d-task-preservation")
     with sqlite3.connect(database) as connection:
         before = connection.execute("SELECT * FROM tasks ORDER BY task_id").fetchall()
+        source_items_before = connection.execute(
+            "SELECT * FROM source_items ORDER BY item_id"
+        ).fetchall()
+        source_spans_before = connection.execute(
+            "SELECT * FROM source_spans ORDER BY item_id, span_id"
+        ).fetchall()
+        cursors_before = connection.execute(
+            "SELECT * FROM sync_cursors ORDER BY source_id"
+        ).fetchall()
 
     saved = _save(database, store_root, 103)
 
     assert saved.exit_code == 0, saved.stderr
     with sqlite3.connect(database) as connection:
         after = connection.execute("SELECT * FROM tasks ORDER BY task_id").fetchall()
+        source_items_after = connection.execute(
+            "SELECT * FROM source_items ORDER BY item_id"
+        ).fetchall()
+        source_spans_after = connection.execute(
+            "SELECT * FROM source_spans ORDER BY item_id, span_id"
+        ).fetchall()
+        cursors_after = connection.execute(
+            "SELECT * FROM sync_cursors ORDER BY source_id"
+        ).fetchall()
     assert after == before == []
+    assert source_items_after == source_items_before
+    assert source_spans_after == source_spans_before
+    assert cursors_after == cursors_before
+
+
+def test_persistence_policy_is_distinct_from_preview_permission(tmp_path, monkeypatch) -> None:
+    database, store_root = promoted_case(tmp_path, name="cr2-d-preview-allow-not-write")
+    verified = resolve_github_fixture_public_read(database, store_root=store_root)
+    preview_request, preview_context = build_verified_proposal_preview_policy_input(
+        verified,
+        issue_number=101,
+    )
+    preview_decision = evaluate_policy(
+        request=preview_request,
+        context=preview_context,
+        registry=BUILTIN_REGISTRY,
+        evidence_binding=verified,
+    )
+    assert preview_decision.outcome is PolicyOutcome.ALLOW
+    assert preview_decision.reason_code is PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED
+
+    monkeypatch.setattr(persistence, "evaluate_policy", lambda **_kwargs: preview_decision)
+    before = _lineage_counts(database)
+    result = _save(database, store_root, 101)
+
+    assert result.exit_code != 0
+    assert result.stdout == ""
+    assert "Proposal save failed:" in result.stderr
+    assert _lineage_counts(database) == before
+
+
+def test_persistence_policy_binds_exact_request_and_resolved_source(tmp_path) -> None:
+    database, store_root = promoted_case(tmp_path, name="cr2-d-persistence-p09")
+    verified = resolve_github_fixture_public_read(database, store_root=store_root)
+    source = next(
+        item
+        for item in verified.binding.sources
+        if item.provider_item_id == "example-owner/fixture-project#102"
+    )
+    preview = build_github_issue_proposal_preview(
+        database,
+        store_root=store_root,
+        issue_number=102,
+    )
+    request = build_proposal_persistence_policy_request(
+        binding=verified.binding,
+        issue_number=102,
+        preview_id=preview.preview_id,
+    )
+    context = build_policy_context(
+        sources=verified.source_envelopes,
+        source_binding_sha256=verified.binding.source_set_sha256,
+    )
+    allowed = evaluate_policy(
+        request=request,
+        context=context,
+        registry=BUILTIN_REGISTRY,
+        evidence_binding=verified,
+    )
+    assert request.operation_id == "sentinel.synthetic.proposal.persist"
+    assert allowed.outcome is PolicyOutcome.ALLOW
+    assert allowed.rule_id is PolicyRuleId.P06
+    assert allowed.reason_code is PolicyReasonCode.PROPOSAL_PERSISTENCE_ALLOWED
+    assert allowed.executable is False
+    assert allowed.evidence_binding_sha256 == verified.binding.source_set_sha256
+    assert allowed.evidence_ids == (
+        request.request_id,
+        source.source_id,
+        *(citation.span_id for citation in source.citations),
+    )
+
+    changed_arguments = tuple(
+        (name, "f" * 64 if name == "source_content_sha256" else value)
+        for name, value in request.arguments
+    )
+    changed_requests = (
+        request.model_copy(update={"source_binding_sha256": "f" * 64}),
+        request.model_copy(update={"source_ids": request.source_ids[:-1]}),
+        request.model_copy(update={"evidence_span_ids": request.evidence_span_ids[:-1]}),
+        request.model_copy(update={"arguments": changed_arguments}),
+        request.model_copy(update={"requested_effect_class": EffectClass.READ_ONLY}),
+        request.model_copy(update={"registry_sha256": "f" * 64}),
+        request.model_copy(update={"policy_sha256": "f" * 64}),
+        request.model_copy(update={"operation_id": "sentinel.synthetic.proposal.local"}),
+    )
+    for changed in changed_requests:
+        decision = evaluate_policy(
+            request=changed,
+            context=context,
+            registry=BUILTIN_REGISTRY,
+            evidence_binding=verified,
+        )
+        assert decision.outcome is PolicyOutcome.DENY
+        assert decision.executable is False
+
+
+def test_storage_insert_guard_rejects_accepted_or_executable_rows(tmp_path) -> None:
+    database = tmp_path / "cr2-d-insert-guard.sqlite3"
+    initialize_storage(database, create=True)
+
+    with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with pytest.raises(sqlite3.IntegrityError, match="invalid bounded pending proposal"):
+            connection.execute(
+                """INSERT INTO action_proposals
+                   (proposal_id, run_id, principal_id, tool_id, capability,
+                    canonical_args_ref, canonical_args_sha256, display_sha256,
+                    owner_intent_id, status, created_at, expires_at, credential_alias,
+                    proposal_schema_version, proposal_kind, executable)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "proposal-id",
+                    "run-id",
+                    "principal-id",
+                    "sentinel.synthetic.proposal.persist",
+                    "C2_WRITE_LOCAL_PROPOSAL",
+                    "sha256:" + "a" * 64,
+                    "a" * 64,
+                    "b" * 64,
+                    None,
+                    "APPROVED",
+                    "2026-11-06T00:00:00.000000+00:00",
+                    "2026-12-06T00:00:00.000000+00:00",
+                    None,
+                    "sentinel.synthetic-pending-proposal.v1",
+                    "REVIEW_SOURCE",
+                    0,
+                ),
+            )
+        assert connection.execute("SELECT count(*) FROM action_proposals").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize(
