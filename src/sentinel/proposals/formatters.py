@@ -5,15 +5,16 @@ from __future__ import annotations
 import json
 
 from sentinel.briefing.formatters import escape_display_text
-from sentinel.proposals.types import SyntheticProposalPreview, _is_verified_preview
+from sentinel.proposals.types import SyntheticProposalPreview, _verified_preview_snapshot
 
 MAX_PREVIEW_OUTPUT_BYTES = 64 * 1024
 
 
 def _validate_preview(preview: SyntheticProposalPreview) -> SyntheticProposalPreview:
-    if not _is_verified_preview(preview):
+    validated = _verified_preview_snapshot(preview)
+    if validated is None:
         raise ValueError("proposal formatter requires a locally verified preview")
-    return SyntheticProposalPreview.model_validate(preview.model_dump(mode="python"), strict=True)
+    return validated
 
 
 def _bounded(output: str) -> str:

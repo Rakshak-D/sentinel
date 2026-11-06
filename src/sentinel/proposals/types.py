@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import weakref
+from dataclasses import dataclass
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -31,7 +36,22 @@ _ProviderItemId = Annotated[
         max_length=40,
     ),
 ]
-_PREVIEW_VERIFICATION_SEAL = object()
+_PREVIEW_ATTESTATION_DOMAIN = b"sentinel.synthetic-proposal-preview.attestation.v1\x00"
+_PREVIEW_ATTESTATION_SEAL = object()
+
+
+@dataclass(frozen=True, eq=False)
+class _PreviewAttestation:
+    """Internal marker excluded from value equality; identity is checked explicitly."""
+
+    seal: object
+    instance_ref: weakref.ReferenceType[SyntheticProposalPreview]
+    payload_sha256: str
+
+    def __eq__(self, other: object) -> bool:
+        # Pydantic compares private attributes during model equality. Comparing weakrefs
+        # normally delegates to referent equality, which recursively compares this model.
+        return type(other) is _PreviewAttestation
 
 
 class SyntheticProposalPreview(BaseModel):
@@ -44,7 +64,7 @@ class SyntheticProposalPreview(BaseModel):
         revalidate_instances="always",
         hide_input_in_errors=True,
     )
-    _verification_seal: object = PrivateAttr(default=None)
+    _verification_attestation: object = PrivateAttr(default=None)
 
     schema_version: Literal["sentinel.synthetic-proposal-preview.v1"] = (
         "sentinel.synthetic-proposal-preview.v1"
@@ -97,19 +117,61 @@ class SyntheticProposalPreview(BaseModel):
         return self
 
 
+def _canonical_validated_payload(
+    preview: SyntheticProposalPreview,
+) -> tuple[bytes, SyntheticProposalPreview]:
+    """Return canonical bytes for a strict snapshot of the complete public schema."""
+    raw = preview.model_dump(mode="python")
+    validated = SyntheticProposalPreview.model_validate(raw, strict=True)
+    canonical = json.dumps(
+        validated.model_dump(mode="json"),
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8", errors="strict")
+    return canonical, validated
+
+
+def _preview_attestation_digest(canonical_payload: bytes) -> str:
+    return hashlib.sha256(_PREVIEW_ATTESTATION_DOMAIN + canonical_payload).hexdigest()
+
+
 def _mark_verified_preview(preview: SyntheticProposalPreview) -> SyntheticProposalPreview:
-    """Seal only the result assembled after local P06 evaluation."""
+    """Attest the exact fully validated instance after the trusted P06 path."""
     if type(preview) is not SyntheticProposalPreview:
         raise TypeError("verified preview requires the registered preview type")
-    preview._verification_seal = _PREVIEW_VERIFICATION_SEAL
+    canonical_payload, _ = _canonical_validated_payload(preview)
+    preview._verification_attestation = _PreviewAttestation(
+        seal=_PREVIEW_ATTESTATION_SEAL,
+        instance_ref=weakref.ref(preview),
+        payload_sha256=_preview_attestation_digest(canonical_payload),
+    )
     return preview
 
 
-def _is_verified_preview(value: object) -> bool:
-    return (
-        type(value) is SyntheticProposalPreview
-        and value._verification_seal is _PREVIEW_VERIFICATION_SEAL
-    )
+def _verified_preview_snapshot(value: object) -> SyntheticProposalPreview | None:
+    """Return a strict rendering snapshot only for an unchanged attested instance."""
+    if type(value) is not SyntheticProposalPreview:
+        return None
+    try:
+        attestation = value._verification_attestation
+        if type(attestation) is not _PreviewAttestation:
+            return None
+        if (
+            attestation.seal is not _PREVIEW_ATTESTATION_SEAL
+            or type(attestation.instance_ref) is not weakref.ReferenceType
+            or attestation.instance_ref() is not value
+            or type(attestation.payload_sha256) is not str
+        ):
+            return None
+        canonical_payload, validated = _canonical_validated_payload(value)
+        actual_digest = _preview_attestation_digest(canonical_payload)
+        if not hmac.compare_digest(actual_digest, attestation.payload_sha256):
+            return None
+        return validated
+    except Exception:
+        return None
 
 
 __all__ = ["SyntheticProposalPreview"]
