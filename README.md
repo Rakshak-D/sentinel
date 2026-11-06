@@ -1,14 +1,27 @@
 # Sentinel
 
-Sentinel is a planned local-first personal automation application. Its authoritative design is [the Sentinel Master Blueprint](docs/spec/Sentinel%20Master%20Blueprint.pdf); [the build ledger](docs/BUILD_LEDGER.md) tracks implementation evidence and remaining gates. The architecture separates untrusted source content, model access through `ModelGateway`, tool effects through `ToolGateway`, and a deterministic policy reference monitor.
+Sentinel 0.2.0 is the bounded offline CR1 daily-read/product core described by the [Master Blueprint](docs/spec/Sentinel%20Master%20Blueprint.pdf). It provides manual local tasks, pinned fictional Gmail/GitHub/Calendar fixture readers, explicit allowlisted local-file workflows, source-bound citations, a deterministic local overview, and restart-safe synthetic GitHub fixture state. The [build ledger](docs/BUILD_LEDGER.md) records exact evidence and remaining product gates.
 
-## Implemented bootstrap slices
+The historical CR1 slice notes below preserve each slice's acceptance-time status. The release owner accepted the bounded scope for promotion, subject to final release acceptance recorded in the ledger and release record. This does not mean the full Sentinel product or every broader F-feature is complete. There is no live Gmail, GitHub, Calendar, Greenhouse, or Lever connection; no model-mediated PRIVATE processing; no automatic source-derived tasks; no secure external writes; and no production-readiness claim. The ModelGateway remains synthetic PUBLIC-only, while local alert and note content remains PRIVATE/T4_EXTERNAL.
 
-CR0-A establishes repository governance, a Python package, and an installable CLI. CR0-B adds immutable typed source and model/tool boundary envelopes. CR0-C adds an explicit SQLite connection API and a versioned migration foundation. CR0-D adds centralized, demo-only `ModelGateway.generate()` and `ToolGateway.call()` wrappers. CR0-E adds an allowlisted structured diagnostic event and JSON Lines sink API. CR0-F adds strictly validated, immutable bundled configuration defaults and a deterministic SHA-256 fingerprint. CR0-G adds a fail-closed credential broker contract; CR0-H adds explicit new-database initialization; CR0-I adds read-only diagnostics; CR0-J adds one deterministic synthetic `demo` flow through the existing gateway methods. CR1-A adds an in-memory UTF-8 plain-text normalizer and verified byte-span citations. CR0 is accepted only for the recorded Windows x64 / CPython 3.11.7 / Sentinel 0.1.0 scope; CR1-A does not complete F12, F43, F46, or CR1.
+## CR1 offline workflow
 
-There is no agent, live provider adapter, MCP worker, policy engine, approval system, provider integration, daemon, or frontend. CR0-H adds `sentinel init` for one explicitly selected new database; CR0-I adds read-only diagnostics for an existing database; CR0-J adds a fixed-fixture `sentinel demo` that uses only in-memory synthetic adapters. CR0-C's only schema is `schema_migrations`; no task, source, approval, audit, or user-data table is included. No live model, HTTP provider, MCP, or external-tool calls are wired. External writes are unavailable. These bootstrap slices do not demonstrate later security invariants.
+Initialize a new database explicitly, prepare and verify the synthetic local workspace, then run one-shot read commands from separate CLI processes:
 
-The project metadata now identifies ongoing CR1 development as `0.2.0.dev0`. The immutable CR0 tag and the historical `requirements/cr0-windows-py311.lock` retain the accepted `0.1.0` release identity and hashes.
+```powershell
+sentinel init --database C:\Data\sentinel.sqlite3
+sentinel fixture-workspace prepare --database C:\Data\sentinel.sqlite3 --store-root C:\Data\sentinel-public
+sentinel fixture-workspace verify --database C:\Data\sentinel.sqlite3 --store-root C:\Data\sentinel-public
+sentinel source status --format text
+sentinel brief github-fixture --database C:\Data\sentinel.sqlite3 --store-root C:\Data\sentinel-public
+sentinel source calendar-fixture --format text
+sentinel brief local-overview --database C:\Data\sentinel.sqlite3 --store-root C:\Data\sentinel-public --as-of 2026-11-05T18:00:00+05:30 --format text
+sentinel task add --database C:\Data\sentinel.sqlite3 --title "Review a manually selected item"
+```
+
+The overview's `--as-of` value is required and its supplied offset defines a fixed-offset local calendar day. Other selected-file workflows include `source inspect-file`, `source search-files`, `source notes-registry build|verify`, `source parse-job-alert`, `source review-job-alerts`, and `source triage-job-alerts`; each requires explicit paths beneath an allowlisted local root. The fixture readers are synthetic and do not represent connected accounts. Notes and job-alert files are PRIVATE in memory and are not persisted by these commands. Task titles are manually entered, unauthenticated local data.
+
+CR0 remains the historical 0.1.0 package/tag scope. Its annotated tag and Windows runtime lock retain their original identities and hashes; the 0.2.0 release does not retag or rewrite CR0.
 
 ## CR0-B contract API
 
@@ -241,7 +254,7 @@ Create a new local database by supplying an absolute path whose parent directory
 
 Use a fresh, disposable path for this example. The command refuses every existing target, including a previously initialized Sentinel database; choose another new path if it reports that the target already exists. There is no default database location, no automatic parent-directory creation, and no command in this slice to open or upgrade an existing installation.
 
-The CLI reserves the exact target with the operating system's exclusive-create operation, then calls the trusted storage migration API. In the CR1 development build it applies the registered foundation migration `cr0-c-0001-schema-migrations` followed by `cr1-e-0002-source-registry`, verifies each artifact and the complete expected schema checkpoint, and runs SQLite integrity and foreign-key checks. File-backed connection setup retains the existing `foreign_keys=ON`, WAL, and bounded busy timeout behavior. Success output is fixed and does not disclose the path. Invalid paths and initialization failures exit unsuccessfully with bounded messages that omit exception text and path values. The historical CR0 0.1.0 wheel and lock remain unchanged; this description is for the current 0.2.0.dev0 source build.
+The CLI reserves the exact target with the operating system's exclusive-create operation, then calls the trusted storage migration API. The 0.2.0 release applies the registered foundation migration `cr0-c-0001-schema-migrations` followed by `cr1-e-0002-source-registry`, verifies each artifact and the complete expected schema checkpoint, and runs SQLite integrity and foreign-key checks. File-backed connection setup retains the existing `foreign_keys=ON`, WAL, and bounded busy timeout behavior. Success output is fixed and does not disclose the path. Invalid paths and initialization failures exit unsuccessfully with bounded messages that omit exception text and path values. The historical CR0 0.1.0 wheel and lock remain unchanged.
 
 If initialization fails after exclusive creation, the newly reserved file and any SQLite-owned sidecars are left for inspection. The command does not attempt path-based cleanup because a concurrent path replacement could make deletion unsafe. Resolve the cause before manually removing that exact disposable path.
 
@@ -872,7 +885,7 @@ can still modify SQLite/files, and migration maintenance does not share the
 writer-session mutex; do not run schema maintenance concurrently. This is a
 fixed synthetic replay, not live GitHub pagination, OAuth, Gmail sync, cursor
 encryption, scheduling, deletion/tombstones, automatic task creation, or full
-F18/CR1 implementation. CR1 remains IN_PROGRESS.
+F18 implementation. CR1 release verification is limited to the bounded offline scope described at the top of this README; live synchronization remains unavailable.
 
 ## CR1-L explicit local overview
 
@@ -1334,7 +1347,7 @@ The reader uses no database, blob store, credential, Google client, network,
 model, tool, task or scheduling path. It does not modify events and does not
 persist the PRIVATE descriptions. The installed wheel includes the pinned
 resource. CR1-Q verifies this bounded fixture reader only; live F09 Calendar
-OAuth/read remains NOT_STARTED for CR4, and CR1 remains IN_PROGRESS.
+OAuth/read remains NOT_STARTED for CR4. CR1 does not imply live Calendar access.
 
 ## CR1-R prepare or verify the offline fixture workspace
 
@@ -1464,8 +1477,8 @@ status/rendering failure produces no stdout and one fixed stderr message. The
 command never reports production readiness. The detailed CR1 audit and the
 remaining blockers are recorded in
 [`docs/audit/cr1-release-exit-matrix.md`](docs/audit/cr1-release-exit-matrix.md).
-CR1 remains `IN_PROGRESS`; this matrix is evidence for a separate release
-decision, not an automatic release approval.
+The matrix records the independently reviewed §16 exit evidence; the current
+bounded release status and remaining product gates are summarized above.
 
 ## CR1-T build and verify a local notes registry
 
@@ -1535,8 +1548,9 @@ and cannot rule out every ABA or malicious same-user replacement race. The two
 existing Windows symlink-creation tests remain skipped on hosts where the OS
 denies their creation; CR1-M's controlled boundary tests and existing reader
 checks remain in force. No watcher, directory discovery, network, provider,
-database, blob write, or private-content storage is added. F10 remains
-`IN_PROGRESS`; CR1 remains `IN_PROGRESS` pending the separate release review.
+database, blob write, or private-content storage is added. Broader F10 remains
+`IN_PROGRESS`; the registered-notes behavior is one bounded explicit-file
+workflow in the verified offline CR1 core.
 
 ## CR1-U deterministic job-alert triage
 
@@ -1625,4 +1639,5 @@ signals and fictional evaluation, while model-mediated PRIVATE triage remains
 gated. The independent CR1-W scope review finds that §16 does not make full
 model-mediated F13 a CR1 exit test; its row D passes only for the bounded CR1
 criterion. This is not F13 completion or CR1 release approval. The separate
-release decision remains open, and CR1 remains IN_PROGRESS.
+release scope is accepted for the bounded offline CR1 core. Full F13 remains
+IN_PROGRESS, and model-mediated PRIVATE triage remains gated.
