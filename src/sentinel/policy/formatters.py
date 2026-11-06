@@ -51,15 +51,22 @@ def format_text_policy_status(report: PolicyStatusReport) -> str:
         "Capabilities:",
     ]
     for item in validated.capabilities:
-        state = "OFF" if item.registration_state.value == "OFF" else "DENY_ONLY"
+        state = "OFF" if item.registration_state.value == "OFF" else "POLICY_ONLY"
         lines.append(
             f"  {item.capability_id.value}  {_CAPABILITY_LABELS[item.capability_id]}  {state}"
         )
     lines.extend(
         (
-            "Active denial order: "
-            + " -> ".join(rule.value for rule in validated.active_denial_rules),
+            "Rule order: "
+            + " -> ".join(
+                f"{rule.rule_id.value}:{rule.outcome.value}" for rule in validated.active_rules
+            ),
+            f"Bounded PUBLIC read route: {validated.bounded_public_read_state} "
+            f"({validated.bounded_public_read_operation})",
+            "C1/C2/C3: NOT ACTIVE",
+            "C4/C5/C6: OFF",
             f"Default decision: {validated.default_outcome.value}",
+            f"PENDING_HUMAN: {validated.pending_human_decisions}",
             f"Approval verifier: {validated.approval_verifier}",
             f"Live effect execution: {validated.live_effect_execution}",
             f"Enforcement integration: {validated.enforcement_integration}",

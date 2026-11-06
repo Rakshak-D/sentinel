@@ -64,8 +64,8 @@ def _domain_sha256(domain: str, payload: bytes) -> str:
 
 
 def request_sha256(request: PolicyRequest) -> str:
-    """Hash canonical request metadata under a request-specific domain."""
-    return _domain_sha256("sentinel.policy.request.v1", canonical_policy_bytes(request))
+    """Hash v2 request metadata, including the source-binding identity."""
+    return _domain_sha256("sentinel.policy.request.v2", canonical_policy_bytes(request))
 
 
 def registration_sha256(registration: CapabilityRegistration) -> str:
@@ -83,14 +83,14 @@ def registry_sha256(registry: CapabilityRegistry) -> str:
 def policy_sha256() -> str:
     """Hash rule IDs, priority, closed summaries, and catch-all state."""
     manifest = {
-        "schema_version": "sentinel.policy-manifest.v1",
+        "schema_version": "sentinel.policy-manifest.v2",
         "policy_id": POLICY_ID,
         "policy_version": POLICY_VERSION,
         "ordered_rules": [rule.model_dump(mode="json") for rule in POLICY_RULES],
         "unimplemented_rules": list(UNIMPLEMENTED_RULE_IDS),
         "default_outcome": "DENY",
     }
-    return _domain_sha256("sentinel.policy-manifest.v1", _json_bytes(manifest))
+    return _domain_sha256("sentinel.policy-manifest.v2", _json_bytes(manifest))
 
 
 def builtin_registry_sha256() -> str:

@@ -35,16 +35,14 @@ REGISTRY_SCHEMA_VERSION: Literal["sentinel.capability-registry.v1"] = (
 )
 REGISTRY_ID = "sentinel.cr2.synthetic-capabilities"
 REGISTRY_VERSION = "v1"
-POLICY_ID = "sentinel.cr2.deny-only-policy"
-POLICY_VERSION = "v1"
+POLICY_ID = "sentinel.cr2.bounded-public-read-policy"
+POLICY_VERSION = "v2"
 
 UNIMPLEMENTED_RULE_IDS: tuple[str, ...] = (
-    "P04",
     "P05",
     "P06",
     "P07",
     "P08",
-    "P09",
     "P10",
     "P11",
     "P13",
@@ -118,10 +116,10 @@ class PolicyRuleContract(BaseModel):
         hide_input_in_errors=True,
     )
 
-    schema_version: Literal["sentinel.policy-rule.v1"] = POLICY_RULE_SCHEMA
+    schema_version: Literal["sentinel.policy-rule.v2"] = POLICY_RULE_SCHEMA
     rule_id: PolicyRuleId
-    priority: Annotated[StrictInt, Field(ge=0, le=5)]
-    outcome: Literal[PolicyOutcome.DENY] = PolicyOutcome.DENY
+    priority: Annotated[StrictInt, Field(ge=0, le=17)]
+    outcome: PolicyOutcome = PolicyOutcome.DENY
     summary: Annotated[StrictStr, Field(min_length=1, max_length=160)]
     hard: StrictBool
 
@@ -251,8 +249,25 @@ POLICY_RULES: tuple[PolicyRuleContract, ...] = (
         hard=True,
     ),
     PolicyRuleContract(
-        rule_id=PolicyRuleId.P12,
+        rule_id=PolicyRuleId.P09,
         priority=5,
+        outcome=PolicyOutcome.DENY,
+        summary=(
+            "The bounded PUBLIC fixture read requires verified, exact source and citation lineage."
+        ),
+        hard=True,
+    ),
+    PolicyRuleContract(
+        rule_id=PolicyRuleId.P04,
+        priority=6,
+        outcome=PolicyOutcome.ALLOW,
+        summary="Allow only the verified synthetic PUBLIC GitHub fixture briefing read.",
+        hard=False,
+    ),
+    PolicyRuleContract(
+        rule_id=PolicyRuleId.P12,
+        priority=7,
+        outcome=PolicyOutcome.DENY,
         summary="Unsupported rules and all otherwise unmatched requests deny.",
         hard=False,
     ),

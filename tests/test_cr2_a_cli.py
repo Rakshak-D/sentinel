@@ -9,10 +9,17 @@ def test_policy_status_text_and_json_are_deterministic_and_agree() -> None:
     json_one = runner.invoke(app, ["policy", "status", "--format", "json"])
     json_two = runner.invoke(app, ["policy", "status", "--format", "json"])
     assert text.exit_code == json_one.exit_code == json_two.exit_code == 0
-    assert "Schema: sentinel.policy-status.v1" in text.stdout
-    assert "P00 -> P01 -> P02 -> P03 -> P17 -> P12" in text.stdout
+    assert "Schema: sentinel.policy-status.v2" in text.stdout
+    assert (
+        "P00:DENY -> P01:DENY -> P02:DENY -> P03:DENY -> "
+        "P17:DENY -> P09:DENY -> P04:ALLOW -> P12:DENY"
+    ) in text.stdout
+    assert "Bounded PUBLIC read route: IMPLEMENTED" in text.stdout
+    assert "PENDING_HUMAN: UNAVAILABLE" in text.stdout
     assert "C5_SEND_EXTERNAL_EMAIL" in json_one.stdout
     assert '"default_outcome":"DENY"' in json_one.stdout
+    assert '"bounded_public_read_state":"IMPLEMENTED"' in json_one.stdout
+    assert '"pending_human_decisions":"UNAVAILABLE"' in json_one.stdout
     assert '"enforcement_integration":"INCOMPLETE"' in json_one.stdout
     assert json_one.stdout == json_two.stdout
     assert text.stderr == json_one.stderr == json_two.stderr == ""

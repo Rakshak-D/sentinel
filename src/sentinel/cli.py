@@ -124,7 +124,7 @@ fixture_workspace_app = typer.Typer(
 )
 policy_app = typer.Typer(
     no_args_is_help=True,
-    help="Inspect the deny-only deterministic policy foundation.",
+    help="Inspect bounded deterministic policy status.",
 )
 
 

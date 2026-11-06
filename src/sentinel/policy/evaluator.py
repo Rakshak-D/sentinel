@@ -1,8 +1,8 @@
-"""Pure deny-only policy evaluation for the bounded CR2-A foundation."""
+"""Pure policy evaluation for the bounded CR2-B public fixture read route."""
 
 from __future__ import annotations
 
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel
 
@@ -10,6 +10,7 @@ from sentinel.config.defaults import load_bundled_defaults
 from sentinel.config.fingerprint import config_sha256 as fingerprint_config
 from sentinel.config.schema import CONFIG_SCHEMA_VERSION
 from sentinel.contracts import SensitivityLabel, SourceEnvelope, TrustLabel
+from sentinel.gateways.types import ExecutionMode
 from sentinel.policy.canonical import (
     policy_sha256,
     registry_sha256,
@@ -24,6 +25,11 @@ from sentinel.policy.registry import (
     REGISTRY_VERSION,
     UNIMPLEMENTED_RULE_IDS,
     CapabilityRegistry,
+)
+from sentinel.policy.source_binding import (
+    VerifiedGithubPublicRead,
+    source_binding_sha256,
+    validate_verified_github_public_read,
 )
 from sentinel.policy.types import (
     ArgumentKind,
@@ -40,6 +46,7 @@ from sentinel.policy.types import (
     PolicyReasonCode,
     PolicyRequest,
     PolicyRuleId,
+    PolicyRuleStatus,
     PolicyStatusReport,
     RegistrationState,
 )
@@ -59,15 +66,56 @@ _SENSITIVITY_ORDER = {
 }
 
 
+def build_verified_public_read_policy_input(
+    verified_read: VerifiedGithubPublicRead,
+) -> tuple[PolicyRequest, PolicyContext]:
+    """Build the one canonical request/context accepted by the P04 fixture route."""
+    if not validate_verified_github_public_read(verified_read):
+        raise ValueError("verified public source evidence is unavailable")
+    binding = verified_read.binding
+    context = build_policy_context(
+        sources=verified_read.source_envelopes,
+        source_binding_sha256=binding.source_set_sha256,
+    )
+    request = PolicyRequest(
+        request_id=uuid5(
+            NAMESPACE_URL,
+            "sentinel.policy.public-github-read.v1:" + binding.source_set_sha256,
+        ),
+        operation_id="sentinel.synthetic.read.public",
+        capability=Capability.C0_READ_PUBLIC,
+        execution_mode=ExecutionMode.LIVE,
+        execution_boundary=ExecutionBoundary.CORE,
+        arguments=(("resource_id", "github.fixture"),),
+        source_ids=tuple(source.source_id for source in binding.sources),
+        evidence_span_ids=tuple(
+            citation.span_id for source in binding.sources for citation in source.citations
+        ),
+        source_binding_sha256=binding.source_set_sha256,
+        declared_sensitivity=SensitivityLabel.PUBLIC,
+        registry_id=REGISTRY_ID,
+        registry_version=REGISTRY_VERSION,
+        registry_sha256=_BUILTIN_REGISTRY_SHA256,
+        policy_id=POLICY_ID,
+        policy_version=POLICY_VERSION,
+        policy_sha256=_BUILTIN_POLICY_SHA256,
+        config_version=context.config_version,
+        config_sha256=context.config_sha256,
+        requested_effect_class=EffectClass.READ_ONLY,
+    )
+    return request, context
+
+
 def build_policy_context(
     *,
     sources: tuple[SourceEnvelope, ...] = (),
     model_route: ModelRouteState = ModelRouteState.UNVERIFIED,
+    source_binding_sha256: str | None = None,
 ) -> PolicyContext:
-    """Build a policy-runtime context without creating owner proof or permissions.
+    """Build context structure without authenticating sources or granting authority.
 
-    Source envelopes must be supplied by trusted application code. This helper
-    validates context structure only; it is not an identity/provenance resolver.
+    A caller-declared binding digest is only a claim. P04 requires the separate
+    resolver-created source object passed to :func:`evaluate_policy`.
     """
     return PolicyContext(
         principal_id=POLICY_RUNTIME_PRINCIPAL,
@@ -76,11 +124,12 @@ def build_policy_context(
         policy_sha256=_BUILTIN_POLICY_SHA256,
         config_version=CONFIG_SCHEMA_VERSION,
         config_sha256=_BUNDLED_CONFIG_SHA256,
+        source_binding_sha256=source_binding_sha256,
         sources=sources,
         model_route=model_route,
         enabled_capabilities=(),
         isolated_worker_available=False,
-        implementation_state="deny_only_foundation",
+        implementation_state="bounded_public_read_foundation",
     )
 
 
@@ -186,6 +235,7 @@ def _evaluate_validated(
     validated_registry: CapabilityRegistry,
     context: PolicyContext,
     request_digest: str,
+    evidence_binding: object | None,
 ) -> PolicyDecision:
     actual_registry_digest = registry_sha256(validated_registry)
     if validated_registry != BUILTIN_REGISTRY or actual_registry_digest != _BUILTIN_REGISTRY_SHA256:
@@ -265,10 +315,7 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=(request.request_id,),
         )
-    if (
-        registration.capability_id is not request.capability
-        or registration.effect_class is not request.requested_effect_class
-    ):
+    if registration.capability_id is not request.capability:
         return _p00(
             PolicyReasonCode.CAPABILITY_MISMATCH,
             request_digest=request_digest,
@@ -427,6 +474,129 @@ def _evaluate_validated(
             evidence_ids=evidence_ids,
         )
 
+    # P09 is deliberately narrow: only the fixed C0 synthetic GitHub read route
+    # can be evaluated with the resolver-created, pinned source binding.
+    public_read_operation = (
+        request.operation_id == "sentinel.synthetic.read.public"
+        and request.capability is Capability.C0_READ_PUBLIC
+    )
+    if public_read_operation:
+        if request.requested_effect_class is not registration.effect_class:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.EFFECT_CLASS_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if type(evidence_binding) is not VerifiedGithubPublicRead:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.EVIDENCE_BINDING_MISSING,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if not validate_verified_github_public_read(evidence_binding):
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.EVIDENCE_BINDING_INVALID,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        binding = evidence_binding.binding
+        expected_sources = tuple(item.source_id for item in binding.sources)
+        expected_spans = tuple(
+            citation.span_id for item in binding.sources for citation in item.citations
+        )
+        if (
+            request.source_binding_sha256 != binding.source_set_sha256
+            or context.source_binding_sha256 != binding.source_set_sha256
+            or binding.source_set_sha256 != source_binding_sha256(binding)
+        ):
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.FIXTURE_PIN_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if request.source_ids != expected_sources or tuple(
+            source.source_id for source in context.sources
+        ) != expected_sources:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.SOURCE_SET_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if request.evidence_span_ids != expected_spans:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.CITATION_SET_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if (
+            tuple(context.sources) != evidence_binding.source_envelopes
+            or any(
+                source.trust is not TrustLabel.T4_EXTERNAL
+                or source.sensitivity is not SensitivityLabel.PUBLIC
+                for source in context.sources
+            )
+        ):
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.SOURCE_SET_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if (
+            binding.fixture_sha256 != evidence_binding.binding.fixture_sha256
+            or binding.manifest_sha256 != evidence_binding.binding.manifest_sha256
+        ):
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.FIXTURE_PIN_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if (
+            request.declared_sensitivity is not SensitivityLabel.PUBLIC
+            or request.execution_mode.value != "LIVE"
+            or request.execution_boundary is not ExecutionBoundary.CORE
+            or request.requested_effect_class is not EffectClass.READ_ONLY
+            or request.arguments != (("resource_id", "github.fixture"),)
+            or context.implementation_state != "bounded_public_read_foundation"
+            or context.model_route is not ModelRouteState.UNVERIFIED
+            or context.enabled_capabilities
+        ):
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.PUBLIC_READ_SCOPE_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        if all(
+            source.trust is TrustLabel.T4_EXTERNAL
+            and source.sensitivity is SensitivityLabel.PUBLIC
+            for source in context.sources
+        ):
+            return PolicyDecision(
+                outcome=PolicyOutcome.ALLOW,
+                rule_id=PolicyRuleId.P04,
+                reason_code=PolicyReasonCode.PUBLIC_READ_ALLOWED,
+                policy_sha256=_BUILTIN_POLICY_SHA256,
+                registry_sha256=_BUILTIN_REGISTRY_SHA256,
+                request_sha256=request_digest,
+                evidence_binding_sha256=binding.source_set_sha256,
+                evidence_ids=evidence_ids[:8],
+                executable=False,
+            )
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.SOURCE_SET_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+
     if registration.required_authorization_class is not AuthorizationClass.NONE:
         return _p00(
             PolicyReasonCode.PRINCIPAL_UNTRUSTED,
@@ -447,12 +617,14 @@ def evaluate_policy(
     request: object,
     registry: object = BUILTIN_REGISTRY,
     context: object,
+    evidence_binding: object | None = None,
 ) -> PolicyDecision:
     """Evaluate one policy DTO without external effects and fail closed on errors.
 
     The registry and context are revalidated at entry. No callback, storage,
     credential, gateway, environment, filesystem, network, or clock access occurs.
-    CR2-A returns DENY for every outcome, including structurally valid requests.
+    P04 can ALLOW only the resolver-bound synthetic PUBLIC GitHub briefing read;
+    that decision remains metadata, never an executable authorization receipt.
     """
     try:
         validated_request = _validate_request(request)
@@ -482,6 +654,7 @@ def evaluate_policy(
             validated_registry,
             validated_context,
             request_digest,
+            evidence_binding,
         )
     except Exception:
         return _p00(
@@ -511,7 +684,14 @@ def build_policy_status_report() -> PolicyStatusReport:
         registry_version=REGISTRY_VERSION,
         registry_sha256=registry_digest,
         capabilities=statuses,
-        active_denial_rules=tuple(rule.rule_id for rule in POLICY_RULES),
+        active_rules=tuple(
+            PolicyRuleStatus(
+                rule_id=rule.rule_id,
+                outcome=rule.outcome,
+                priority=rule.priority,
+            )
+            for rule in POLICY_RULES
+        ),
         unimplemented_rules=UNIMPLEMENTED_RULE_IDS,
     )
 

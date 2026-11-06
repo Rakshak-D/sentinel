@@ -1,4 +1,4 @@
-"""Deny-only deterministic policy foundation; no decision authorizes execution."""
+"""Deterministic policy foundation with one evidence-bound public read route."""
 
 from sentinel.policy.canonical import (
     builtin_registry_sha256,
@@ -41,6 +41,7 @@ from sentinel.policy.types import (
     PolicyReasonCode,
     PolicyRequest,
     PolicyRuleId,
+    PolicyRuleStatus,
     PolicyStatusReport,
     RegistrationState,
 )
@@ -70,6 +71,7 @@ __all__ = [
     "PolicyRequest",
     "PolicyRuleContract",
     "PolicyRuleId",
+    "PolicyRuleStatus",
     "PolicyStatusReport",
     "RegistrationState",
     "build_policy_context",

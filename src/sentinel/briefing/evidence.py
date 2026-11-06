@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
+import sentinel.policy.evaluator as policy_evaluator
 from sentinel.briefing.types import (
     BriefingError,
     BriefingErrorCode,
@@ -12,8 +13,13 @@ from sentinel.briefing.types import (
     EvidenceItem,
 )
 from sentinel.ingestion.blob_manifest import EXPECTED_MANIFEST
-from sentinel.ingestion.blob_readback import read_blob_backed_github_evidence
 from sentinel.ingestion.types import VerifiedGithubEvidenceItem
+from sentinel.policy import PolicyOutcome, PolicyReasonCode, PolicyRuleId
+from sentinel.policy.canonical import request_sha256
+from sentinel.policy.source_binding import (
+    resolve_github_fixture_public_read,
+    validate_verified_github_public_read,
+)
 
 BRIEF_SCHEMA_VERSION = "sentinel.synthetic-evidence-brief.v1"
 BRIEFING_TYPE = "Synthetic GitHub evidence briefing"
@@ -70,8 +76,36 @@ def build_github_fixture_brief(
     *,
     store_root: str | Path,
 ) -> EvidenceBriefing:
-    """Build a complete briefing only after trusted evidence verification."""
-    verified = read_blob_backed_github_evidence(database, store_root=store_root)
+    """Build the fixed briefing only after the verified P09/P04 read decision."""
+    try:
+        verified_read = resolve_github_fixture_public_read(database, store_root=store_root)
+        if not validate_verified_github_public_read(verified_read):
+            raise BriefingError(BriefingErrorCode.EVIDENCE_UNAVAILABLE)
+        request, context = policy_evaluator.build_verified_public_read_policy_input(
+            verified_read
+        )
+        decision = policy_evaluator.evaluate_policy(
+            request=request,
+            context=context,
+            evidence_binding=verified_read,
+        )
+        if (
+            decision.outcome is not PolicyOutcome.ALLOW
+            or decision.rule_id is not PolicyRuleId.P04
+            or decision.reason_code is not PolicyReasonCode.PUBLIC_READ_ALLOWED
+            or decision.executable is not False
+            or decision.request_sha256 != request_sha256(request)
+            or decision.policy_sha256 != request.policy_sha256
+            or decision.registry_sha256 != request.registry_sha256
+            or decision.evidence_binding_sha256 != verified_read.binding.source_set_sha256
+            or decision.evidence_ids != (request.request_id, *request.source_ids)
+        ):
+            raise BriefingError(BriefingErrorCode.EVIDENCE_UNAVAILABLE)
+        verified = verified_read.evidence
+    except BriefingError:
+        raise
+    except Exception:
+        raise BriefingError(BriefingErrorCode.EVIDENCE_UNAVAILABLE) from None
     if (
         verified.provider_id != "github.fixture"
         or verified.fixture_version != EXPECTED_MANIFEST.fixture_version

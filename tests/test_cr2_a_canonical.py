@@ -21,7 +21,7 @@ def test_canonical_request_serialization_is_stable_utf8_and_versioned() -> None:
     encoded = canonical_policy_bytes(request)
     assert encoded == canonical_policy_bytes(request)
     assert encoded.startswith(b'{"arguments":')
-    assert b'"schema_version":"sentinel.policy-request.v1"' in encoded
+    assert b'"schema_version":"sentinel.policy-request.v2"' in encoded
     assert json.loads(encoded.decode("utf-8"))["operation_id"] == "sentinel.synthetic.read.public"
     assert request_sha256(request) == request_sha256(request)
     assert len(request_sha256(request)) == 64

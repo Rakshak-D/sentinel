@@ -206,7 +206,7 @@ def test_secret_private_and_unknown_sensitivity_model_routes_are_p03_denied() ->
 
 
 def test_otherwise_valid_unsupported_request_uses_p12_and_no_result_can_allow() -> None:
-    result = _decision()
+    result = _decision(capability=Capability.C2_WRITE_LOCAL_PROPOSAL)
     assert result.rule_id is PolicyRuleId.P12
     assert result.reason_code is PolicyReasonCode.UNSUPPORTED_POLICY
     assert result.outcome.value == "DENY"

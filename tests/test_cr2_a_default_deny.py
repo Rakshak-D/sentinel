@@ -18,12 +18,15 @@ def test_rules_follow_the_supported_priority_and_p12_is_always_last() -> None:
         PolicyRuleId.P02,
         PolicyRuleId.P03,
         PolicyRuleId.P17,
+        PolicyRuleId.P09,
+        PolicyRuleId.P04,
         PolicyRuleId.P12,
     )
-    assert tuple(rule.priority for rule in POLICY_RULES) == tuple(range(6))
+    assert tuple(rule.priority for rule in POLICY_RULES) == tuple(range(8))
     assert POLICY_RULES[-1].rule_id is PolicyRuleId.P12
     assert POLICY_RULES[-1].hard is False
-    assert all(rule.hard is True for rule in POLICY_RULES[:-1])
+    assert POLICY_RULES[-2].outcome.value == "ALLOW"
+    assert all(rule.hard is True for rule in POLICY_RULES[:6])
 
 
 def test_privileged_capability_registry_and_bundled_write_defaults_are_off() -> None:

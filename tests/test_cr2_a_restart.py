@@ -17,6 +17,6 @@ def test_policy_status_runs_in_a_fresh_cli_process_outside_checkout(tmp_path: Pa
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
     payload = json.loads(result.stdout)
-    assert payload["schema_version"] == "sentinel.policy-status.v1"
+    assert payload["schema_version"] == "sentinel.policy-status.v2"
     assert payload["default_outcome"] == "DENY"
     assert payload["enforcement_integration"] == "INCOMPLETE"

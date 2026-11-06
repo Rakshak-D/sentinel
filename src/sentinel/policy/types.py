@@ -1,4 +1,4 @@
-"""Strict, immutable data contracts for the CR2-A deny-only policy foundation."""
+"""Strict, immutable data contracts for the bounded CR2 policy foundation."""
 
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ from pydantic import (
 from sentinel.contracts import SensitivityLabel, SourceEnvelope, TrustLabel
 from sentinel.gateways.types import ExecutionMode
 
-POLICY_REQUEST_SCHEMA: Literal["sentinel.policy-request.v1"] = "sentinel.policy-request.v1"
-POLICY_CONTEXT_SCHEMA: Literal["sentinel.policy-context.v1"] = "sentinel.policy-context.v1"
-POLICY_STATUS_SCHEMA: Literal["sentinel.policy-status.v1"] = "sentinel.policy-status.v1"
-POLICY_DECISION_SCHEMA: Literal["sentinel.policy-decision.v1"] = "sentinel.policy-decision.v1"
+POLICY_REQUEST_SCHEMA: Literal["sentinel.policy-request.v2"] = "sentinel.policy-request.v2"
+POLICY_CONTEXT_SCHEMA: Literal["sentinel.policy-context.v2"] = "sentinel.policy-context.v2"
+POLICY_STATUS_SCHEMA: Literal["sentinel.policy-status.v2"] = "sentinel.policy-status.v2"
+POLICY_DECISION_SCHEMA: Literal["sentinel.policy-decision.v2"] = "sentinel.policy-decision.v2"
 CAPABILITY_REGISTRATION_SCHEMA: Literal["sentinel.capability-registration.v1"] = (
     "sentinel.capability-registration.v1"
 )
-POLICY_RULE_SCHEMA: Literal["sentinel.policy-rule.v1"] = "sentinel.policy-rule.v1"
+POLICY_RULE_SCHEMA: Literal["sentinel.policy-rule.v2"] = "sentinel.policy-rule.v2"
 MAX_POLICY_ARGUMENTS = 32
 MAX_POLICY_ARGUMENT_BYTES = 16_384
 MAX_POLICY_SOURCE_IDS = 32
@@ -104,7 +104,7 @@ class RegistrationState(StrEnum):
 
 
 class PolicyOutcome(StrEnum):
-    """Closed decision vocabulary; CR2-A constructs DENY decisions only."""
+    """Closed decision vocabulary; P04 is the sole bounded ALLOW in CR2-B."""
 
     ALLOW = "ALLOW"
     PENDING_HUMAN = "PENDING_HUMAN"
@@ -112,18 +112,20 @@ class PolicyOutcome(StrEnum):
 
 
 class PolicyRuleId(StrEnum):
-    """Only the supported CR2-A rules are representable as evaluated rules."""
+    """Rules represented by the bounded CR2-A/B policy slices."""
 
     P00 = "P00"
     P01 = "P01"
     P02 = "P02"
     P03 = "P03"
     P17 = "P17"
+    P09 = "P09"
+    P04 = "P04"
     P12 = "P12"
 
 
 class PolicyReasonCode(StrEnum):
-    """Bounded non-sensitive reasons for deny-only decisions."""
+    """Bounded non-sensitive reason codes for policy decisions."""
 
     REQUEST_INVALID = "REQUEST_INVALID"
     OPERATION_UNREGISTERED = "OPERATION_UNREGISTERED"
@@ -144,6 +146,14 @@ class PolicyReasonCode(StrEnum):
     UNKNOWN_MODEL_SENSITIVITY = "UNKNOWN_MODEL_SENSITIVITY"
     SENSITIVITY_DOWNGRADE = "SENSITIVITY_DOWNGRADE"
     SECRET_ACCESS_DENIED = "SECRET_ACCESS_DENIED"
+    EVIDENCE_BINDING_MISSING = "EVIDENCE_BINDING_MISSING"
+    EVIDENCE_BINDING_INVALID = "EVIDENCE_BINDING_INVALID"
+    SOURCE_SET_MISMATCH = "SOURCE_SET_MISMATCH"
+    CITATION_SET_MISMATCH = "CITATION_SET_MISMATCH"
+    FIXTURE_PIN_MISMATCH = "FIXTURE_PIN_MISMATCH"
+    EFFECT_CLASS_MISMATCH = "EFFECT_CLASS_MISMATCH"
+    PUBLIC_READ_SCOPE_MISMATCH = "PUBLIC_READ_SCOPE_MISMATCH"
+    PUBLIC_READ_ALLOWED = "PUBLIC_READ_ALLOWED"
     UNSUPPORTED_POLICY = "UNSUPPORTED_POLICY"
     INTERNAL_FAILURE = "INTERNAL_FAILURE"
 
@@ -246,7 +256,7 @@ class CapabilityRegistration(_FrozenPolicyModel):
 class PolicyRequest(_FrozenPolicyModel):
     """Canonical, bounded request claims; it contains no authority proof."""
 
-    schema_version: Literal["sentinel.policy-request.v1"] = POLICY_REQUEST_SCHEMA
+    schema_version: Literal["sentinel.policy-request.v2"] = POLICY_REQUEST_SCHEMA
     request_id: UUID
     operation_id: PolicyIdentifier
     capability: Capability
@@ -257,6 +267,8 @@ class PolicyRequest(_FrozenPolicyModel):
         Field(max_length=MAX_POLICY_ARGUMENTS, repr=False),
     ]
     source_ids: Annotated[tuple[UUID, ...], Field(max_length=MAX_POLICY_SOURCE_IDS)]
+    evidence_span_ids: Annotated[tuple[UUID, ...], Field(max_length=MAX_CONTEXT_SOURCE_SPANS)] = ()
+    source_binding_sha256: Sha256Digest | None = None
     declared_sensitivity: SensitivityLabel | None
     registry_id: PolicyIdentifier
     registry_version: PolicyVersion
@@ -273,6 +285,13 @@ class PolicyRequest(_FrozenPolicyModel):
     def require_unique_source_ids(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
         if len(value) != len(set(value)):
             raise ValueError("source identity references must be unique")
+        return value
+
+    @field_validator("evidence_span_ids")
+    @classmethod
+    def require_unique_evidence_span_ids(cls, value: tuple[UUID, ...]) -> tuple[UUID, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("evidence span references must be unique")
         return value
 
     @model_validator(mode="after")
@@ -294,18 +313,21 @@ class PolicyRequest(_FrozenPolicyModel):
 class PolicyContext(_FrozenPolicyModel):
     """Separate evaluator context; this type is not an owner-authentication proof."""
 
-    schema_version: Literal["sentinel.policy-context.v1"] = POLICY_CONTEXT_SCHEMA
+    schema_version: Literal["sentinel.policy-context.v2"] = POLICY_CONTEXT_SCHEMA
     principal_id: PolicyIdentifier
     principal_trust: TrustLabel
     registry_sha256: Sha256Digest
     policy_sha256: Sha256Digest
     config_version: PolicyIdentifier
     config_sha256: Sha256Digest
+    source_binding_sha256: Sha256Digest | None = None
     sources: Annotated[tuple[SourceEnvelope, ...], Field(max_length=MAX_POLICY_SOURCE_IDS)] = ()
     model_route: ModelRouteState = ModelRouteState.UNVERIFIED
     enabled_capabilities: Annotated[tuple[Capability, ...], Field(max_length=7)] = ()
     isolated_worker_available: Literal[False] = False
-    implementation_state: Literal["deny_only_foundation"] = "deny_only_foundation"
+    implementation_state: Literal["bounded_public_read_foundation"] = (
+        "bounded_public_read_foundation"
+    )
 
     @field_validator("sources")
     @classmethod
@@ -343,20 +365,25 @@ class PolicyContext(_FrozenPolicyModel):
 class PolicyDecision(_FrozenPolicyModel):
     """Deterministic decision metadata; never an executable authorization receipt."""
 
-    schema_version: Literal["sentinel.policy-decision.v1"] = POLICY_DECISION_SCHEMA
+    schema_version: Literal["sentinel.policy-decision.v2"] = POLICY_DECISION_SCHEMA
     outcome: PolicyOutcome
     rule_id: PolicyRuleId
     reason_code: PolicyReasonCode
     policy_sha256: Sha256Digest
     registry_sha256: Sha256Digest
     request_sha256: Sha256Digest
+    evidence_binding_sha256: Sha256Digest | None = None
     evidence_ids: Annotated[tuple[UUID, ...], Field(max_length=MAX_DECISION_EVIDENCE_IDS)] = ()
     executable: Literal[False] = False
 
     @model_validator(mode="after")
-    def deny_only(self) -> PolicyDecision:
-        if self.outcome is not PolicyOutcome.DENY:
-            raise ValueError("CR2-A only represents DENY decisions")
+    def bounded_decision_contract(self) -> PolicyDecision:
+        if self.outcome is PolicyOutcome.PENDING_HUMAN:
+            raise ValueError("CR2-B does not represent PENDING_HUMAN decisions")
+        if self.outcome is PolicyOutcome.ALLOW and (
+            self.rule_id is not PolicyRuleId.P04 or self.evidence_binding_sha256 is None
+        ):
+            raise ValueError("CR2-B ALLOW is limited to evidence-bound P04 decisions")
         if self.executable is not False:
             raise ValueError("policy decisions are not executable authorization receipts")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
@@ -401,10 +428,18 @@ class CapabilityStatus(_FrozenPolicyModel):
         return self
 
 
+class PolicyRuleStatus(_FrozenPolicyModel):
+    """One fixed active rule and its bounded outcome for policy-status display."""
+
+    rule_id: PolicyRuleId
+    outcome: PolicyOutcome
+    priority: Annotated[StrictInt, Field(ge=0, le=17)]
+
+
 class PolicyStatusReport(_FrozenPolicyModel):
     """Deterministic status DTO used by the read-only policy CLI."""
 
-    schema_version: Literal["sentinel.policy-status.v1"] = POLICY_STATUS_SCHEMA
+    schema_version: Literal["sentinel.policy-status.v2"] = POLICY_STATUS_SCHEMA
     policy_id: PolicyIdentifier
     policy_version: PolicyVersion
     policy_sha256: Sha256Digest
@@ -412,9 +447,24 @@ class PolicyStatusReport(_FrozenPolicyModel):
     registry_version: PolicyVersion
     registry_sha256: Sha256Digest
     capabilities: Annotated[tuple[CapabilityStatus, ...], Field(min_length=7, max_length=7)]
-    active_denial_rules: Annotated[tuple[PolicyRuleId, ...], Field(max_length=6)]
+    active_rules: Annotated[tuple[PolicyRuleStatus, ...], Field(min_length=8, max_length=8)]
     unimplemented_rules: Annotated[tuple[RuleReference, ...], Field(max_length=12)]
+    bounded_public_read_operation: Literal["sentinel.synthetic.read.public"] = (
+        "sentinel.synthetic.read.public"
+    )
+    bounded_public_read_state: Literal["IMPLEMENTED"] = "IMPLEMENTED"
+    inactive_capabilities: tuple[Capability, ...] = (
+        Capability.C1_READ_PRIVATE,
+        Capability.C2_WRITE_LOCAL_PROPOSAL,
+        Capability.C3_WRITE_LOCAL_ACCEPTED,
+    )
+    disabled_capabilities: tuple[Capability, ...] = (
+        Capability.C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB,
+        Capability.C5_SEND_EXTERNAL_EMAIL,
+        Capability.C6_ACCESS_SECRET,
+    )
     default_outcome: Literal[PolicyOutcome.DENY] = PolicyOutcome.DENY
+    pending_human_decisions: Literal["UNAVAILABLE"] = "UNAVAILABLE"
     approval_verifier: Literal["UNAVAILABLE"] = "UNAVAILABLE"
     live_effect_execution: Literal["UNAVAILABLE"] = "UNAVAILABLE"
     enforcement_integration: Literal["INCOMPLETE"] = "INCOMPLETE"
@@ -428,21 +478,41 @@ class PolicyStatusReport(_FrozenPolicyModel):
             raise ValueError("policy status capabilities must use the fixed C0-C6 order")
         return value
 
-    @field_validator("active_denial_rules")
+    @model_validator(mode="after")
+    def require_fixed_capability_activation(self) -> PolicyStatusReport:
+        if self.inactive_capabilities != (
+            Capability.C1_READ_PRIVATE,
+            Capability.C2_WRITE_LOCAL_PROPOSAL,
+            Capability.C3_WRITE_LOCAL_ACCEPTED,
+        ):
+            raise ValueError("private read and local-write capabilities remain inactive")
+        if self.disabled_capabilities != (
+            Capability.C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB,
+            Capability.C5_SEND_EXTERNAL_EMAIL,
+            Capability.C6_ACCESS_SECRET,
+        ):
+            raise ValueError("external and secret capabilities remain disabled")
+        return self
+
+    @field_validator("active_rules")
     @classmethod
     def require_supported_rule_order(
-        cls, value: tuple[PolicyRuleId, ...]
-    ) -> tuple[PolicyRuleId, ...]:
+        cls, value: tuple[PolicyRuleStatus, ...]
+    ) -> tuple[PolicyRuleStatus, ...]:
         expected = (
-            PolicyRuleId.P00,
-            PolicyRuleId.P01,
-            PolicyRuleId.P02,
-            PolicyRuleId.P03,
-            PolicyRuleId.P17,
-            PolicyRuleId.P12,
+            (PolicyRuleId.P00, PolicyOutcome.DENY),
+            (PolicyRuleId.P01, PolicyOutcome.DENY),
+            (PolicyRuleId.P02, PolicyOutcome.DENY),
+            (PolicyRuleId.P03, PolicyOutcome.DENY),
+            (PolicyRuleId.P17, PolicyOutcome.DENY),
+            (PolicyRuleId.P09, PolicyOutcome.DENY),
+            (PolicyRuleId.P04, PolicyOutcome.ALLOW),
+            (PolicyRuleId.P12, PolicyOutcome.DENY),
         )
-        if value != expected:
+        if tuple((item.rule_id, item.outcome) for item in value) != expected:
             raise ValueError("active policy rules must use the supported fixed priority order")
+        if tuple(item.priority for item in value) != tuple(range(len(expected))):
+            raise ValueError("active policy rule priorities must be consecutive and fixed")
         return value
 
     @field_validator("unimplemented_rules")
@@ -450,20 +520,7 @@ class PolicyStatusReport(_FrozenPolicyModel):
     def require_unimplemented_rule_order(
         cls, value: tuple[RuleReference, ...]
     ) -> tuple[RuleReference, ...]:
-        expected = (
-            "P04",
-            "P05",
-            "P06",
-            "P07",
-            "P08",
-            "P09",
-            "P10",
-            "P11",
-            "P13",
-            "P14",
-            "P15",
-            "P16",
-        )
+        expected = ("P05", "P06", "P07", "P08", "P10", "P11", "P13", "P14", "P15", "P16")
         if value != expected:
-            raise ValueError("unimplemented rules must match the closed CR2-A remainder")
+            raise ValueError("unimplemented rules must match the closed CR2-B remainder")
         return value
