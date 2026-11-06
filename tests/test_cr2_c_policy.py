@@ -182,7 +182,7 @@ def test_policy_decision_schema_allows_only_evidence_bound_p04_or_p06() -> None:
         reason_code=PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED,
         **shared,
     )
-    assert allowed.schema_version == "sentinel.policy-decision.v3"
+    assert allowed.schema_version == "sentinel.policy-decision.v4"
     assert allowed.executable is False
     with pytest.raises(ValidationError):
         PolicyDecision(

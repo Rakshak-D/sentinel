@@ -495,6 +495,126 @@ CR1_J_SCHEMA = SchemaDefinition(
 # Independent pin for the complete post-CR1-J schema checkpoint.
 CR1_J_SCHEMA_DEFINITION_SHA256 = "659d0643a9e1c85f839a107d4e8d1d944c38972bb0416d094cd5a73ad355979d"
 
+# CR2-D adds durable metadata for one fixed synthetic proposal path.  CR1-J's
+# checkpoint above is intentionally immutable; this complete post-migration
+# table definition records the append-only ALTER TABLE result.
+CR2_D_ACTION_PROPOSAL_COLUMNS = (
+    "proposal_schema_version TEXT NOT NULL DEFAULT ''",
+    "proposal_kind TEXT NOT NULL DEFAULT ''",
+    "preview_id TEXT NOT NULL DEFAULT ''",
+    "selected_source_item_id TEXT NOT NULL DEFAULT ''",
+    "selected_source_envelope_id TEXT NOT NULL DEFAULT ''",
+    (
+        "source_content_sha256 TEXT NOT NULL DEFAULT '' CHECK (source_content_sha256 = '' OR "
+        "(length(source_content_sha256) = 64 AND source_content_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    (
+        "source_binding_sha256 TEXT NOT NULL DEFAULT '' CHECK (source_binding_sha256 = '' OR "
+        "(length(source_binding_sha256) = 64 AND source_binding_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    (
+        "source_manifest_sha256 TEXT NOT NULL DEFAULT '' CHECK (source_manifest_sha256 = '' OR "
+        "(length(source_manifest_sha256) = 64 AND source_manifest_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    (
+        "policy_request_sha256 TEXT NOT NULL DEFAULT '' CHECK (policy_request_sha256 = '' OR "
+        "(length(policy_request_sha256) = 64 AND policy_request_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    (
+        "policy_sha256 TEXT NOT NULL DEFAULT '' CHECK (policy_sha256 = '' OR "
+        "(length(policy_sha256) = 64 AND policy_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    (
+        "registry_sha256 TEXT NOT NULL DEFAULT '' CHECK (registry_sha256 = '' OR "
+        "(length(registry_sha256) = 64 AND registry_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    (
+        "config_sha256 TEXT NOT NULL DEFAULT '' CHECK (config_sha256 = '' OR "
+        "(length(config_sha256) = 64 AND config_sha256 NOT GLOB '*[^0-9a-f]*'))"
+    ),
+    "canonical_args_json TEXT NOT NULL DEFAULT '' CHECK (length(canonical_args_json) <= 16384)",
+    "executable INTEGER NOT NULL DEFAULT 0 CHECK (executable = 0)",
+)
+_CR2_D_PROPOSAL_COLUMNS_INLINE = ", ".join(CR2_D_ACTION_PROPOSAL_COLUMNS)
+CR2_D_ACTION_PROPOSALS_TABLE_DDL = ACTION_PROPOSALS_TABLE_DDL.replace(
+    "    credential_alias TEXT,\n    UNIQUE",
+    f"    credential_alias TEXT, {_CR2_D_PROPOSAL_COLUMNS_INLINE},\n    UNIQUE",
+)
+if CR2_D_ACTION_PROPOSALS_TABLE_DDL == ACTION_PROPOSALS_TABLE_DDL:
+    raise RuntimeError("CR2-D proposal schema extension point is missing")
+
+SOURCE_SPANS_ITEM_SPAN_UNIQUE_INDEX_DDL = (
+    "CREATE UNIQUE INDEX source_spans_item_span_unique_idx\n"
+    "    ON source_spans(item_id, span_id)"
+)
+
+PROPOSAL_SOURCES_TABLE_DDL = """CREATE TABLE proposal_sources (
+    proposal_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    argument_path TEXT NOT NULL,
+    attribution_kind TEXT NOT NULL CHECK (attribution_kind = 'SOURCE_CITATION'),
+    PRIMARY KEY (proposal_id, item_id, span_id, argument_path),
+    UNIQUE (proposal_id, span_id),
+    FOREIGN KEY (proposal_id) REFERENCES action_proposals(proposal_id),
+    FOREIGN KEY (item_id, span_id) REFERENCES source_spans(item_id, span_id)
+)"""
+PROPOSAL_SOURCES_ITEM_ID_INDEX_DDL = (
+    "CREATE INDEX proposal_sources_item_id_idx ON proposal_sources(item_id)"
+)
+
+ACTION_PROPOSALS_CR2_D_INSERT_GUARD_DDL = """CREATE TRIGGER action_proposals_cr2_d_insert_guard
+BEFORE INSERT ON action_proposals
+WHEN NOT (
+    NEW.proposal_schema_version = 'sentinel.synthetic-pending-proposal.v1'
+    AND NEW.proposal_kind = 'REVIEW_SOURCE'
+    AND NEW.tool_id = 'sentinel.synthetic.proposal.persist'
+    AND NEW.capability = 'C2_WRITE_LOCAL_PROPOSAL'
+    AND NEW.status = 'PENDING_REVIEW'
+    AND NEW.owner_intent_id IS NULL
+    AND NEW.credential_alias IS NULL
+    AND NEW.executable = 0
+    AND length(NEW.canonical_args_json) <= 16384
+)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid bounded pending proposal');
+END"""
+
+CR2_D_SCHEMA_VERSION = "cr2-d-0005-durable-pending-proposals"
+CR2_D_SCHEMA = SchemaDefinition(
+    schema_version=CR2_D_SCHEMA_VERSION,
+    objects=(
+        *(
+            SchemaObjectDefinition(
+                item.object_type,
+                item.name,
+                CR2_D_ACTION_PROPOSALS_TABLE_DDL
+                if item.object_type == "table" and item.name == "action_proposals"
+                else item.sql,
+            )
+            for item in CR1_J_SCHEMA.objects
+        ),
+        SchemaObjectDefinition(
+            "index",
+            "source_spans_item_span_unique_idx",
+            SOURCE_SPANS_ITEM_SPAN_UNIQUE_INDEX_DDL,
+        ),
+        SchemaObjectDefinition("table", "proposal_sources", PROPOSAL_SOURCES_TABLE_DDL),
+        SchemaObjectDefinition(
+            "index", "proposal_sources_item_id_idx", PROPOSAL_SOURCES_ITEM_ID_INDEX_DDL
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "action_proposals_cr2_d_insert_guard",
+            ACTION_PROPOSALS_CR2_D_INSERT_GUARD_DDL,
+        ),
+    ),
+)
+CURRENT_SCHEMA = CR2_D_SCHEMA
+
+# Filled from the exact registered schema artifact, then pinned in migrations.py.
+CR2_D_SCHEMA_DEFINITION_SHA256 = "bf0ec109fd2495d2d45253bcf79eee3cdd5e554a05b58d249adb482536907484"
+
 
 def _normalized_sql(value: object) -> str | None:
     if not isinstance(value, str):

@@ -29,7 +29,7 @@ from sentinel.storage.migrations import (
     inspect_migration_state_readonly,
     verify_integrity,
 )
-from sentinel.storage.schema import SchemaIntegrityError
+from sentinel.storage.schema import CURRENT_SCHEMA, SchemaIntegrityError
 from sentinel.sync import (
     FixtureSyncError,
     IncrementalGithubFixtureState,
@@ -78,12 +78,14 @@ def _selected_path(value: object, *, database: bool) -> Path:
 
 def _probe_database(database: Path) -> tuple[bool, bool, bool, int]:
     expected_ids = tuple(migration.migration_id for migration in MIGRATIONS)
-    if len(expected_ids) != 4:
-        _fail(FixtureWorkspaceErrorCode.INTEGRITY_FAILURE)
     try:
         with readonly_database_connection(database) as connection:
             state = inspect_migration_state_readonly(connection)
-            if not state.is_current or state.applied_migration_ids != expected_ids:
+            if (
+                not state.is_current
+                or state.applied_migration_ids != expected_ids
+                or state.schema_version != CURRENT_SCHEMA.schema_version
+            ):
                 _fail(FixtureWorkspaceErrorCode.SCHEMA_NOT_CURRENT)
             try:
                 verify_integrity(connection)

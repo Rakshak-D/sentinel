@@ -79,6 +79,7 @@ def test_fresh_initialization_registers_cr1_f_and_source_spans(tmp_path: Path) -
         CR1_E_MIGRATION_ID,
         CR1_F_MIGRATION_ID,
         CR1_J_MIGRATION_ID,
+        "cr2-d-0005-durable-pending-proposals",
     )
     with database_connection(database) as connection:
         row = connection.execute(
@@ -91,7 +92,11 @@ def test_fresh_initialization_registers_cr1_f_and_source_spans(tmp_path: Path) -
             )
         }
         verify_integrity(connection)
-    assert [item[0] for item in row][-2:] == [CR1_F_MIGRATION_ID, CR1_J_MIGRATION_ID]
+    assert [item[0] for item in row][-3:] == [
+        CR1_F_MIGRATION_ID,
+        CR1_J_MIGRATION_ID,
+        "cr2-d-0005-durable-pending-proposals",
+    ]
     assert {
         "config_revisions",
         "run_manifests",

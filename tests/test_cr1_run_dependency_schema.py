@@ -242,6 +242,8 @@ def test_fk_dependency_graph_and_blueprint_indexes_are_present(tmp_path: Path) -
             ("kind", "adapter_id"),
         ("source_spans", "source_spans_item_start_byte_idx"):
             ("item_id", "start_byte"),
+        ("source_spans", "source_spans_item_span_unique_idx"):
+            ("item_id", "span_id"),
     }
     briefing = next(row for row in run_columns if row[1] == "briefing_id")
     assert briefing[3] == 0

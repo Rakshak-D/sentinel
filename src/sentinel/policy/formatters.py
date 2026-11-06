@@ -64,9 +64,11 @@ def format_text_policy_status(report: PolicyStatusReport) -> str:
             f"Bounded PUBLIC read route: {validated.bounded_public_read_state} "
             f"({validated.bounded_public_read_operation})",
             "C1/C3: NOT ACTIVE",
-            "C2: in-memory preview only; no proposal/task persistence",
+            "C2: bounded pending-review proposal metadata only; no task or execution",
             f"Bounded C2 preview route: {validated.bounded_proposal_preview_state} "
             f"({validated.bounded_proposal_preview_operation})",
+            f"Bounded C2 persistence route: {validated.bounded_proposal_persistence_state} "
+            f"({validated.bounded_proposal_persistence_operation})",
             "C4/C5/C6: OFF",
             f"Default decision: {validated.default_outcome.value}",
             f"PENDING_HUMAN: {validated.pending_human_decisions}",

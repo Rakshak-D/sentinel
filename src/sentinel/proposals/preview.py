@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from enum import StrEnum
 from pathlib import Path
 
@@ -18,6 +16,7 @@ from sentinel.policy import (
     PolicyRuleId,
 )
 from sentinel.policy.canonical import request_sha256
+from sentinel.policy.identities import proposal_preview_identity
 from sentinel.policy.registry import BUILTIN_REGISTRY
 from sentinel.policy.source_binding import (
     PublicSourceBinding,
@@ -27,8 +26,6 @@ from sentinel.policy.source_binding import (
 )
 from sentinel.proposals.types import SyntheticProposalPreview, _mark_verified_preview
 
-_PREVIEW_ID_DOMAIN = b"sentinel.synthetic-proposal-preview.identity.v1\x00"
-_PREVIEW_TEMPLATE_VERSION = "v1"
 _ALLOWED_ISSUES = frozenset({101, 102, 103})
 
 
@@ -55,28 +52,6 @@ class ProposalPreviewError(RuntimeError):
             raise TypeError("preview error code must be registered")
         self.code = code
         super().__init__(_ERROR_MESSAGES[code])
-
-
-def _preview_identity(
-    *,
-    selected: PublicSourceBinding,
-    source_binding_sha256: str,
-) -> str:
-    payload = {
-        "domain": "sentinel.synthetic-proposal-preview.identity.v1",
-        "source_item_id": str(selected.item_id),
-        "source_binding_sha256": source_binding_sha256,
-        "proposal_kind": "REVIEW_SOURCE",
-        "template_version": _PREVIEW_TEMPLATE_VERSION,
-    }
-    canonical = json.dumps(
-        payload,
-        ensure_ascii=False,
-        allow_nan=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8", errors="strict")
-    return hashlib.sha256(_PREVIEW_ID_DOMAIN + canonical).hexdigest()
 
 
 def _selected_source(
@@ -157,6 +132,22 @@ def build_github_issue_proposal_preview(
         raise ProposalPreviewError(ProposalPreviewErrorCode.INVALID_SELECTION)
     try:
         verified_read = resolve_github_fixture_public_read(database, store_root=store_root)
+        return _build_preview_from_verified_read(verified_read, issue_number=issue_number)
+    except ProposalPreviewError:
+        raise
+    except Exception:
+        raise ProposalPreviewError(ProposalPreviewErrorCode.SOURCE_UNAVAILABLE) from None
+
+
+def _build_preview_from_verified_read(
+    verified_read: VerifiedGithubPublicRead,
+    *,
+    issue_number: int,
+) -> SyntheticProposalPreview:
+    """Build and attest a preview from the exact resolver snapshot supplied by the caller."""
+    if type(issue_number) is not int or issue_number not in _ALLOWED_ISSUES:
+        raise ProposalPreviewError(ProposalPreviewErrorCode.INVALID_SELECTION)
+    try:
         if type(
             verified_read
         ) is not VerifiedGithubPublicRead or not validate_verified_github_public_read(
@@ -182,9 +173,9 @@ def build_github_issue_proposal_preview(
         ):
             raise ProposalPreviewError(ProposalPreviewErrorCode.POLICY_DENIED)
         preview = SyntheticProposalPreview(
-            preview_id=_preview_identity(
-                selected=selected,
-                source_binding_sha256=verified_read.binding.source_set_sha256,
+            preview_id=proposal_preview_identity(
+                selected.item_id,
+                verified_read.binding.source_set_sha256,
             ),
             proposal_title=f"Review synthetic GitHub issue #{issue_number}",
             issue_number=issue_number,

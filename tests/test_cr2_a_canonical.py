@@ -30,7 +30,7 @@ def test_canonical_request_serialization_is_stable_utf8_and_versioned() -> None:
 def test_policy_and_registry_digests_are_domain_separated_and_stable() -> None:
     registration = BUILTIN_REGISTRY.entries[0]
     expected_registry = hashlib.sha256(
-        b"sentinel.capability-registry.v1\x00" + canonical_policy_bytes(BUILTIN_REGISTRY)
+        b"sentinel.capability-registry.v2\x00" + canonical_policy_bytes(BUILTIN_REGISTRY)
     ).hexdigest()
     expected_registration = hashlib.sha256(
         b"sentinel.capability-registration.v1\x00" + canonical_policy_bytes(registration)

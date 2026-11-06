@@ -73,7 +73,7 @@ from sentinel.storage.migrations import (
     inspect_migration_state_readonly,
     verify_integrity,
 )
-from sentinel.storage.schema import CR1_J_SCHEMA
+from sentinel.storage.schema import CURRENT_SCHEMA
 from sentinel.storage.writer import (
     WriterLeaseError,
     WriterLeaseErrorCode,
@@ -254,7 +254,7 @@ def _require_current_state(connection: sqlite3.Connection) -> MigrationState:
         if (
             not state.is_current
             or state.applied_migration_ids != _EXPECTED_MIGRATION_IDS
-            or state.schema_version != CR1_J_SCHEMA.schema_version
+            or state.schema_version != CURRENT_SCHEMA.schema_version
         ):
             _fail(FixtureSyncErrorCode.SCHEMA_NOT_CURRENT)
         verify_integrity(connection)
@@ -295,7 +295,7 @@ def _require_current_schema_in_transaction(connection: sqlite3.Connection) -> No
                  AND type IN ('table', 'index', 'view', 'trigger')"""
         ).fetchall()
         actual = {(str(kind), str(name)): sql for kind, name, sql in actual_rows}
-        expected = {(item.object_type, item.name): item.sql for item in CR1_J_SCHEMA.objects}
+        expected = {(item.object_type, item.name): item.sql for item in CURRENT_SCHEMA.objects}
         if actual.keys() != expected.keys() or any(
             not isinstance(actual[key], str) or actual[key].strip() != sql.strip()
             for key, sql in expected.items()

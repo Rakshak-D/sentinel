@@ -16,6 +16,7 @@ from pydantic import (
 
 from sentinel.contracts import TrustLabel
 from sentinel.policy.types import (
+    CAPABILITY_REGISTRY_SCHEMA,
     POLICY_RULE_SCHEMA,
     ArgumentKind,
     ArgumentSpec,
@@ -30,13 +31,11 @@ from sentinel.policy.types import (
     RegistrationState,
 )
 
-REGISTRY_SCHEMA_VERSION: Literal["sentinel.capability-registry.v1"] = (
-    "sentinel.capability-registry.v1"
-)
+REGISTRY_SCHEMA_VERSION: Literal["sentinel.capability-registry.v2"] = CAPABILITY_REGISTRY_SCHEMA
 REGISTRY_ID = "sentinel.cr2.synthetic-capabilities"
-REGISTRY_VERSION = "v1"
+REGISTRY_VERSION = "v2"
 POLICY_ID = "sentinel.cr2.bounded-public-read-policy"
-POLICY_VERSION = "v3"
+POLICY_VERSION = "v4"
 
 UNIMPLEMENTED_RULE_IDS: tuple[str, ...] = (
     "P05",
@@ -62,10 +61,10 @@ class CapabilityRegistry(BaseModel):
         hide_input_in_errors=True,
     )
 
-    schema_version: Literal["sentinel.capability-registry.v1"] = REGISTRY_SCHEMA_VERSION
+    schema_version: Literal["sentinel.capability-registry.v2"] = REGISTRY_SCHEMA_VERSION
     registry_id: PolicyIdentifier = REGISTRY_ID
     registry_version: PolicyVersion = REGISTRY_VERSION
-    entries: Annotated[tuple[CapabilityRegistration, ...], Field(min_length=7, max_length=7)]
+    entries: Annotated[tuple[CapabilityRegistration, ...], Field(min_length=8, max_length=8)]
 
     @classmethod
     def _entry_maps(
@@ -86,8 +85,18 @@ class CapabilityRegistry(BaseModel):
         if len(operation_ids) != len(set(operation_ids)):
             raise ValueError("operation identities must be unique")
         capabilities = tuple(entry.capability_id for entry in entries)
-        if capabilities != tuple(Capability):
-            raise ValueError("registry must contain exactly one canonical entry per capability")
+        expected = (
+            Capability.C0_READ_PUBLIC,
+            Capability.C1_READ_PRIVATE,
+            Capability.C2_WRITE_LOCAL_PROPOSAL,
+            Capability.C2_WRITE_LOCAL_PROPOSAL,
+            Capability.C3_WRITE_LOCAL_ACCEPTED,
+            Capability.C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB,
+            Capability.C5_SEND_EXTERNAL_EMAIL,
+            Capability.C6_ACCESS_SECRET,
+        )
+        if capabilities != expected:
+            raise ValueError("registry must contain the exact ordered static capability operations")
         if any(entry.registry_id != REGISTRY_ID for entry in entries):
             raise ValueError("registration registry identity is invalid")
         return entries
@@ -131,6 +140,7 @@ def _registration(
     trust: tuple[TrustLabel, ...],
     authorization: AuthorizationClass,
     state: RegistrationState,
+    registration_suffix: str | None = None,
 ) -> CapabilityRegistration:
     effect = {
         Capability.C0_READ_PUBLIC: EffectClass.READ_ONLY,
@@ -142,7 +152,11 @@ def _registration(
         Capability.C6_ACCESS_SECRET: EffectClass.SECRET_ACCESS,
     }[capability]
     return CapabilityRegistration(
-        registration_id=f"sentinel.cr2.registration.{capability.name.lower()}",
+        registration_id=(
+            f"sentinel.cr2.registration.{registration_suffix}"
+            if registration_suffix is not None
+            else f"sentinel.cr2.registration.{capability.name.lower()}"
+        ),
         registry_id=REGISTRY_ID,
         capability_id=capability,
         operation_id=operation_id,
@@ -180,6 +194,20 @@ BUILTIN_REGISTRY = CapabilityRegistry(
             trust=(TrustLabel.T3_DERIVED, TrustLabel.T4_EXTERNAL),
             authorization=AuthorizationClass.NONE,
             state=RegistrationState.POLICY_ONLY,
+        ),
+        _registration(
+            capability=Capability.C2_WRITE_LOCAL_PROPOSAL,
+            operation_id="sentinel.synthetic.proposal.persist",
+            arguments=(
+                ArgumentSpec(name="issue_number", value_kind=ArgumentKind.INTEGER),
+                ArgumentSpec(name="preview_id", value_kind=ArgumentKind.TEXT),
+                ArgumentSpec(name="source_content_sha256", value_kind=ArgumentKind.TEXT),
+                ArgumentSpec(name="source_item_id", value_kind=ArgumentKind.TEXT),
+            ),
+            trust=(TrustLabel.T3_DERIVED, TrustLabel.T4_EXTERNAL),
+            authorization=AuthorizationClass.NONE,
+            state=RegistrationState.POLICY_ONLY,
+            registration_suffix="c2-persist-pending",
         ),
         _registration(
             capability=Capability.C3_WRITE_LOCAL_ACCEPTED,
@@ -268,7 +296,8 @@ POLICY_RULES: tuple[PolicyRuleContract, ...] = (
         priority=7,
         outcome=PolicyOutcome.ALLOW,
         summary=(
-            "Allow only a body-free in-memory C2 preview for one verified synthetic PUBLIC issue."
+            "Allow only the fixed body-free preview and pending-review persistence paths "
+            "for one verified synthetic PUBLIC issue."
         ),
         hard=False,
     ),

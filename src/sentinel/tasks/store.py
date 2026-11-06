@@ -22,7 +22,7 @@ from sentinel.storage.migrations import (
     inspect_migration_state_readonly,
     verify_integrity,
 )
-from sentinel.storage.schema import CR1_J_SCHEMA
+from sentinel.storage.schema import CURRENT_SCHEMA
 from sentinel.storage.writer import (
     WriterLeaseError,
     WriterLeaseErrorCode,
@@ -143,7 +143,7 @@ def _read_connection(database: str | Path) -> Iterator[sqlite3.Connection]:
     try:
         with readonly_database_connection(database) as connection:
             state = inspect_migration_state_readonly(connection)
-            if not state.is_current or state.schema_version != CR1_J_SCHEMA.schema_version:
+            if not state.is_current or state.schema_version != CURRENT_SCHEMA.schema_version:
                 raise TaskStoreError(TaskStoreErrorCode.SCHEMA_NOT_CURRENT)
             verify_integrity(connection)
             yield connection
@@ -182,7 +182,7 @@ def _require_current_in_transaction(connection: sqlite3.Connection) -> None:
                  AND type IN ('table', 'index', 'view', 'trigger')"""
         ).fetchall()
         actual = {(str(kind), str(name)): sql for kind, name, sql in actual_rows}
-        expected = {(item.object_type, item.name): item.sql for item in CR1_J_SCHEMA.objects}
+        expected = {(item.object_type, item.name): item.sql for item in CURRENT_SCHEMA.objects}
         if actual.keys() != expected.keys() or any(
             not isinstance(actual[key], str) or actual[key].strip() != sql.strip()
             for key, sql in expected.items()

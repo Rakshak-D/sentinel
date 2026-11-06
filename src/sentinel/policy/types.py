@@ -24,12 +24,15 @@ from sentinel.gateways.types import ExecutionMode
 
 POLICY_REQUEST_SCHEMA: Literal["sentinel.policy-request.v2"] = "sentinel.policy-request.v2"
 POLICY_CONTEXT_SCHEMA: Literal["sentinel.policy-context.v2"] = "sentinel.policy-context.v2"
-POLICY_STATUS_SCHEMA: Literal["sentinel.policy-status.v3"] = "sentinel.policy-status.v3"
-POLICY_DECISION_SCHEMA: Literal["sentinel.policy-decision.v3"] = "sentinel.policy-decision.v3"
+POLICY_STATUS_SCHEMA: Literal["sentinel.policy-status.v4"] = "sentinel.policy-status.v4"
+POLICY_DECISION_SCHEMA: Literal["sentinel.policy-decision.v4"] = "sentinel.policy-decision.v4"
 CAPABILITY_REGISTRATION_SCHEMA: Literal["sentinel.capability-registration.v1"] = (
     "sentinel.capability-registration.v1"
 )
 POLICY_RULE_SCHEMA: Literal["sentinel.policy-rule.v3"] = "sentinel.policy-rule.v3"
+CAPABILITY_REGISTRY_SCHEMA: Literal["sentinel.capability-registry.v2"] = (
+    "sentinel.capability-registry.v2"
+)
 MAX_POLICY_ARGUMENTS = 32
 MAX_POLICY_ARGUMENT_BYTES = 16_384
 MAX_POLICY_SOURCE_IDS = 32
@@ -157,6 +160,8 @@ class PolicyReasonCode(StrEnum):
     PUBLIC_READ_ALLOWED = "PUBLIC_READ_ALLOWED"
     PROPOSAL_PREVIEW_SCOPE_MISMATCH = "PROPOSAL_PREVIEW_SCOPE_MISMATCH"
     PROPOSAL_PREVIEW_ALLOWED = "PROPOSAL_PREVIEW_ALLOWED"
+    PROPOSAL_PERSISTENCE_SCOPE_MISMATCH = "PROPOSAL_PERSISTENCE_SCOPE_MISMATCH"
+    PROPOSAL_PERSISTENCE_ALLOWED = "PROPOSAL_PERSISTENCE_ALLOWED"
     UNSUPPORTED_POLICY = "UNSUPPORTED_POLICY"
     INTERNAL_FAILURE = "INTERNAL_FAILURE"
 
@@ -368,7 +373,7 @@ class PolicyContext(_FrozenPolicyModel):
 class PolicyDecision(_FrozenPolicyModel):
     """Deterministic decision metadata; never an executable authorization receipt."""
 
-    schema_version: Literal["sentinel.policy-decision.v3"] = POLICY_DECISION_SCHEMA
+    schema_version: Literal["sentinel.policy-decision.v4"] = POLICY_DECISION_SCHEMA
     outcome: PolicyOutcome
     rule_id: PolicyRuleId
     reason_code: PolicyReasonCode
@@ -395,11 +400,11 @@ class PolicyDecision(_FrozenPolicyModel):
             and self.reason_code is not PolicyReasonCode.PUBLIC_READ_ALLOWED
         ):
             raise ValueError("P04 decisions must use the registered public-read reason")
-        if (
-            self.rule_id is PolicyRuleId.P06
-            and self.reason_code is not PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED
-        ):
-            raise ValueError("P06 decisions must use the registered preview reason")
+        if self.rule_id is PolicyRuleId.P06 and self.reason_code not in {
+            PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED,
+            PolicyReasonCode.PROPOSAL_PERSISTENCE_ALLOWED,
+        }:
+            raise ValueError("P06 decisions must use a registered bounded proposal reason")
         if self.executable is not False:
             raise ValueError("policy decisions are not executable authorization receipts")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
@@ -455,7 +460,7 @@ class PolicyRuleStatus(_FrozenPolicyModel):
 class PolicyStatusReport(_FrozenPolicyModel):
     """Deterministic status DTO used by the read-only policy CLI."""
 
-    schema_version: Literal["sentinel.policy-status.v3"] = POLICY_STATUS_SCHEMA
+    schema_version: Literal["sentinel.policy-status.v4"] = POLICY_STATUS_SCHEMA
     policy_id: PolicyIdentifier
     policy_version: PolicyVersion
     policy_sha256: Sha256Digest
@@ -473,6 +478,10 @@ class PolicyStatusReport(_FrozenPolicyModel):
         "sentinel.synthetic.proposal.local"
     )
     bounded_proposal_preview_state: Literal["IN_MEMORY_PREVIEW_ONLY"] = "IN_MEMORY_PREVIEW_ONLY"
+    bounded_proposal_persistence_operation: Literal[
+        "sentinel.synthetic.proposal.persist"
+    ] = "sentinel.synthetic.proposal.persist"
+    bounded_proposal_persistence_state: Literal["PENDING_REVIEW_ONLY"] = "PENDING_REVIEW_ONLY"
     inactive_capabilities: tuple[Capability, ...] = (
         Capability.C1_READ_PRIVATE,
         Capability.C3_WRITE_LOCAL_ACCEPTED,

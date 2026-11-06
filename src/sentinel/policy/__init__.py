@@ -11,6 +11,7 @@ from sentinel.policy.canonical import (
 from sentinel.policy.evaluator import (
     build_policy_context,
     build_policy_status_report,
+    build_proposal_persistence_policy_request,
     evaluate_policy,
 )
 from sentinel.policy.formatters import format_json_policy_status, format_text_policy_status
@@ -75,6 +76,7 @@ __all__ = [
     "PolicyStatusReport",
     "RegistrationState",
     "build_policy_context",
+    "build_proposal_persistence_policy_request",
     "build_policy_status_report",
     "builtin_registry_sha256",
     "canonical_policy_bytes",

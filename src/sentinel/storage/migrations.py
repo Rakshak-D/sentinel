@@ -12,6 +12,7 @@ from typing import Final
 from sentinel import __version__
 from sentinel.storage.connection import database_connection
 from sentinel.storage.schema import (
+    ACTION_PROPOSALS_CR2_D_INSERT_GUARD_DDL,
     ACTION_PROPOSALS_STATUS_EXPIRES_AT_INDEX_DDL,
     ACTION_PROPOSALS_TABLE_DDL,
     BOUNDARY_ENVELOPES_KIND_ADAPTER_INDEX_DDL,
@@ -24,6 +25,9 @@ from sentinel.storage.schema import (
     CR1_J_SCHEMA_DEFINITION_SHA256,
     CR1_SOURCE_SCHEMA,
     CR1_SOURCE_SCHEMA_DEFINITION_SHA256,
+    CR2_D_ACTION_PROPOSAL_COLUMNS,
+    CR2_D_SCHEMA,
+    CR2_D_SCHEMA_DEFINITION_SHA256,
     FOUNDATION_SCHEMA,
     FOUNDATION_SCHEMA_DEFINITION_SHA256,
     MIGRATION_INDEX_DDL,
@@ -32,6 +36,8 @@ from sentinel.storage.schema import (
     PLUGIN_MANIFESTS_TABLE_DDL,
     PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL,
     PRINCIPALS_TABLE_DDL,
+    PROPOSAL_SOURCES_ITEM_ID_INDEX_DDL,
+    PROPOSAL_SOURCES_TABLE_DDL,
     RUN_MANIFESTS_CREATED_AT_INDEX_DDL,
     RUN_MANIFESTS_TABLE_DDL,
     RUNS_STATUS_STARTED_AT_INDEX_DDL,
@@ -40,6 +46,7 @@ from sentinel.storage.schema import (
     SOURCE_ITEMS_CONTENT_SHA256_INDEX_DDL,
     SOURCE_ITEMS_SOURCE_OBSERVED_AT_INDEX_DDL,
     SOURCE_ITEMS_TABLE_DDL,
+    SOURCE_SPANS_ITEM_SPAN_UNIQUE_INDEX_DDL,
     SOURCE_SPANS_ITEM_START_BYTE_INDEX_DDL,
     SOURCE_SPANS_TABLE_DDL,
     SOURCES_ENABLED_TYPE_INDEX_DDL,
@@ -72,6 +79,10 @@ _CR1_F_MIGRATION_ARTIFACT_SHA256: Final = (
 _CR1_J_MIGRATION_ID: Final = "cr1-j-0004-local-tasks"
 _CR1_J_MIGRATION_ARTIFACT_SHA256: Final = (
     "a75bfcff37255e1fb0cc49eb72254c8e83d049828faa2653a8495ca2f749120a"
+)
+_CR2_D_MIGRATION_ID: Final = "cr2-d-0005-durable-pending-proposals"
+_CR2_D_MIGRATION_ARTIFACT_SHA256: Final = (
+    "c4ac15d8270abd0d5165d94944f01d786fcb7269d74700c716de3efce5b56ffa"
 )
 
 
@@ -190,6 +201,17 @@ _CR1_J_STATEMENTS: tuple[str, ...] = (
     TASKS_PROPOSAL_ID_UNIQUE_INDEX_DDL,
 )
 
+_CR2_D_STATEMENTS: tuple[str, ...] = (
+    *(
+        f"ALTER TABLE action_proposals ADD COLUMN {column}"
+        for column in CR2_D_ACTION_PROPOSAL_COLUMNS
+    ),
+    SOURCE_SPANS_ITEM_SPAN_UNIQUE_INDEX_DDL,
+    PROPOSAL_SOURCES_TABLE_DDL,
+    PROPOSAL_SOURCES_ITEM_ID_INDEX_DDL,
+    ACTION_PROPOSALS_CR2_D_INSERT_GUARD_DDL,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         _FOUNDATION_MIGRATION_ID,
@@ -213,6 +235,12 @@ MIGRATIONS: tuple[Migration, ...] = (
         _CR1_J_MIGRATION_ID,
         _CR1_J_STATEMENTS,
         CR1_J_SCHEMA,
+        artifact_version=2,
+    ),
+    Migration(
+        _CR2_D_MIGRATION_ID,
+        _CR2_D_STATEMENTS,
+        CR2_D_SCHEMA,
         artifact_version=2,
     ),
 )
@@ -258,6 +286,13 @@ def _registered_migrations() -> tuple[Migration, ...]:
         raise MigrationIntegrityError("CR1-J migration artifact digest mismatch")
     if local_tasks.schema_after.sha256 != CR1_J_SCHEMA_DEFINITION_SHA256:
         raise MigrationIntegrityError("CR1-J schema checkpoint digest mismatch")
+    if len(migrations) < 5 or migrations[4].migration_id != _CR2_D_MIGRATION_ID:
+        raise MigrationIntegrityError("registered migrations lack the CR2-D proposal schema")
+    proposals = migrations[4]
+    if proposals.artifact_sha256 != _CR2_D_MIGRATION_ARTIFACT_SHA256:
+        raise MigrationIntegrityError("CR2-D migration artifact digest mismatch")
+    if proposals.schema_after.sha256 != CR2_D_SCHEMA_DEFINITION_SHA256:
+        raise MigrationIntegrityError("CR2-D schema checkpoint digest mismatch")
     if any(migration.artifact_version != 2 for migration in migrations[1:]):
         raise MigrationIntegrityError("new migrations must use checkpoint-aware artifact v2")
     return migrations

@@ -77,20 +77,20 @@ def registration_sha256(registration: CapabilityRegistration) -> str:
 
 def registry_sha256(registry: CapabilityRegistry) -> str:
     """Hash exact canonical registry bytes under the registry domain."""
-    return _domain_sha256("sentinel.capability-registry.v1", canonical_policy_bytes(registry))
+    return _domain_sha256("sentinel.capability-registry.v2", canonical_policy_bytes(registry))
 
 
 def policy_sha256() -> str:
     """Hash the CR2-C rule manifest; this identifies metadata, not code trust."""
     manifest = {
-        "schema_version": "sentinel.policy-manifest.v3",
+        "schema_version": "sentinel.policy-manifest.v4",
         "policy_id": POLICY_ID,
         "policy_version": POLICY_VERSION,
         "ordered_rules": [rule.model_dump(mode="json") for rule in POLICY_RULES],
         "unimplemented_rules": list(UNIMPLEMENTED_RULE_IDS),
         "default_outcome": "DENY",
     }
-    return _domain_sha256("sentinel.policy-manifest.v3", _json_bytes(manifest))
+    return _domain_sha256("sentinel.policy-manifest.v4", _json_bytes(manifest))
 
 
 def builtin_registry_sha256() -> str:

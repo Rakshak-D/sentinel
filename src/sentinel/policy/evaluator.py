@@ -16,6 +16,7 @@ from sentinel.policy.canonical import (
     registry_sha256,
     request_sha256,
 )
+from sentinel.policy.identities import proposal_preview_identity
 from sentinel.policy.registry import (
     BUILTIN_REGISTRY,
     POLICY_ID,
@@ -29,6 +30,7 @@ from sentinel.policy.registry import (
 from sentinel.policy.source_binding import (
     PublicSourceBinding,
     VerifiedGithubPublicRead,
+    VerifiedPublicSourceSet,
     source_binding_sha256,
     validate_verified_github_public_read,
 )
@@ -160,6 +162,68 @@ def build_verified_proposal_preview_policy_input(
         requested_effect_class=EffectClass.LOCAL_PROPOSAL,
     )
     return request, context
+
+
+def build_proposal_persistence_policy_request(
+    *,
+    binding: VerifiedPublicSourceSet,
+    issue_number: int,
+    preview_id: str,
+) -> PolicyRequest:
+    """Build the distinct C2 persistence request from body-free verified metadata.
+
+    A request produced here is still only claims. ``evaluate_policy`` requires
+    the resolver-created read object as its separate evidence binding.
+    """
+    if (
+        type(binding) is not VerifiedPublicSourceSet
+        or type(issue_number) is not int
+        or issue_number not in {101, 102, 103}
+        or type(preview_id) is not str
+    ):
+        raise ValueError("verified synthetic source is unavailable")
+    provider_item_id = f"example-owner/fixture-project#{issue_number}"
+    selected = tuple(item for item in binding.sources if item.provider_item_id == provider_item_id)
+    if len(selected) != 1:
+        raise ValueError("verified synthetic source is unavailable")
+    source = selected[0]
+    if preview_id != proposal_preview_identity(source.item_id, binding.source_set_sha256):
+        raise ValueError("verified synthetic source is unavailable")
+    context = build_policy_context(source_binding_sha256=binding.source_set_sha256)
+    return PolicyRequest(
+        request_id=uuid5(
+            NAMESPACE_URL,
+            "sentinel.policy.github-proposal-persist.v1:"
+            + binding.source_set_sha256
+            + ":"
+            + str(source.item_id),
+        ),
+        operation_id="sentinel.synthetic.proposal.persist",
+        capability=Capability.C2_WRITE_LOCAL_PROPOSAL,
+        execution_mode=ExecutionMode.LIVE,
+        execution_boundary=ExecutionBoundary.CORE,
+        arguments=(
+            ("issue_number", issue_number),
+            ("preview_id", preview_id),
+            ("source_content_sha256", source.content_sha256),
+            ("source_item_id", str(source.item_id)),
+        ),
+        source_ids=tuple(source.source_id for source in binding.sources),
+        evidence_span_ids=tuple(
+            citation.span_id for source in binding.sources for citation in source.citations
+        ),
+        source_binding_sha256=binding.source_set_sha256,
+        declared_sensitivity=SensitivityLabel.PUBLIC,
+        registry_id=REGISTRY_ID,
+        registry_version=REGISTRY_VERSION,
+        registry_sha256=_BUILTIN_REGISTRY_SHA256,
+        policy_id=POLICY_ID,
+        policy_version=POLICY_VERSION,
+        policy_sha256=_BUILTIN_POLICY_SHA256,
+        config_version=context.config_version,
+        config_sha256=context.config_sha256,
+        requested_effect_class=EffectClass.LOCAL_PROPOSAL,
+    )
 
 
 def build_policy_context(
@@ -540,7 +604,11 @@ def _evaluate_validated(
         request.operation_id == "sentinel.synthetic.proposal.local"
         and request.capability is Capability.C2_WRITE_LOCAL_PROPOSAL
     )
-    if public_read_operation or proposal_preview_operation:
+    proposal_persistence_operation = (
+        request.operation_id == "sentinel.synthetic.proposal.persist"
+        and request.capability is Capability.C2_WRITE_LOCAL_PROPOSAL
+    )
+    if public_read_operation or proposal_preview_operation or proposal_persistence_operation:
         if request.requested_effect_class is not registration.effect_class:
             return _deny(
                 PolicyRuleId.P09,
@@ -635,11 +703,23 @@ def _evaluate_validated(
             or registration.state is not RegistrationState.POLICY_ONLY
             or registration.required_authorization_class is not AuthorizationClass.NONE
         )
-        if common_route_invalid or public_read_invalid or preview_route_invalid:
+        persistence_route_invalid = proposal_persistence_operation and (
+            request.requested_effect_class is not EffectClass.LOCAL_PROPOSAL
+            or registration.state is not RegistrationState.POLICY_ONLY
+            or registration.required_authorization_class is not AuthorizationClass.NONE
+        )
+        if (
+            common_route_invalid
+            or public_read_invalid
+            or preview_route_invalid
+            or persistence_route_invalid
+        ):
             return _deny(
                 PolicyRuleId.P09,
                 (
-                    PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH
+                    PolicyReasonCode.PROPOSAL_PERSISTENCE_SCOPE_MISMATCH
+                    if proposal_persistence_operation
+                    else PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH
                     if proposal_preview_operation
                     else PolicyReasonCode.PUBLIC_READ_SCOPE_MISMATCH
                 ),
@@ -707,6 +787,30 @@ def _evaluate_validated(
                 ),
                 executable=False,
             )
+        if proposal_persistence_operation:
+            selected_source = _selected_persistence_source(request, binding.sources)
+            if selected_source is None:
+                return _deny(
+                    PolicyRuleId.P09,
+                    PolicyReasonCode.PROPOSAL_PERSISTENCE_SCOPE_MISMATCH,
+                    request_digest=request_digest,
+                    evidence_ids=evidence_ids,
+                )
+            return PolicyDecision(
+                outcome=PolicyOutcome.ALLOW,
+                rule_id=PolicyRuleId.P06,
+                reason_code=PolicyReasonCode.PROPOSAL_PERSISTENCE_ALLOWED,
+                policy_sha256=_BUILTIN_POLICY_SHA256,
+                registry_sha256=_BUILTIN_REGISTRY_SHA256,
+                request_sha256=request_digest,
+                evidence_binding_sha256=binding.source_set_sha256,
+                evidence_ids=(
+                    request.request_id,
+                    selected_source.source_id,
+                    *(citation.span_id for citation in selected_source.citations),
+                ),
+                executable=False,
+            )
         return _deny(
             PolicyRuleId.P09,
             PolicyReasonCode.SOURCE_SET_MISMATCH,
@@ -751,6 +855,47 @@ def _selected_preview_source(
     return matches[0]
 
 
+def _selected_persistence_source(
+    request: PolicyRequest,
+    sources: tuple[PublicSourceBinding, ...],
+) -> PublicSourceBinding | None:
+    """Resolve one exact fixed persistence request against the pinned source set."""
+    expected_names = (
+        "issue_number",
+        "preview_id",
+        "source_content_sha256",
+        "source_item_id",
+    )
+    if tuple(name for name, _value in request.arguments) != expected_names:
+        return None
+    arguments = dict(request.arguments)
+    issue_number = arguments.get("issue_number")
+    if type(issue_number) is not int or issue_number not in {101, 102, 103}:
+        return None
+    provider_item_id = f"example-owner/fixture-project#{issue_number}"
+    matches = tuple(source for source in sources if source.provider_item_id == provider_item_id)
+    if len(matches) != 1:
+        return None
+    selected = matches[0]
+    if (
+        arguments.get("source_item_id") != str(selected.item_id)
+        or arguments.get("source_content_sha256") != selected.content_sha256
+        or arguments.get("preview_id")
+        != proposal_preview_identity(selected.item_id, request.source_binding_sha256 or "")
+    ):
+        return None
+    expected_request_id = uuid5(
+        NAMESPACE_URL,
+        "sentinel.policy.github-proposal-persist.v1:"
+        + str(request.source_binding_sha256)
+        + ":"
+        + str(selected.item_id),
+    )
+    if request.request_id != expected_request_id:
+        return None
+    return selected
+
+
 def evaluate_policy(
     *,
     request: object,
@@ -763,8 +908,8 @@ def evaluate_policy(
     The registry and context are revalidated at entry. No callback, storage,
     credential, gateway, environment, filesystem, network, or clock access occurs.
     P04 can ALLOW the resolver-bound synthetic PUBLIC GitHub read; P06 can
-    ALLOW only the body-free in-memory preview for one pinned issue. Both are
-    metadata decisions, never executable authorization receipts.
+    ALLOW only the fixed preview or pending-review persistence route for one
+    pinned issue. Decisions are never executable authorization receipts.
     """
     try:
         validated_request = _validate_request(request)
@@ -807,6 +952,10 @@ def build_policy_status_report() -> PolicyStatusReport:
     """Build a deterministic read-only report from static policy metadata."""
     registry_digest = registry_sha256(BUILTIN_REGISTRY)
     policy_digest = policy_sha256()
+    status_entries = tuple(
+        next(entry for entry in BUILTIN_REGISTRY.entries if entry.capability_id is capability)
+        for capability in Capability
+    )
     statuses = tuple(
         CapabilityStatus(
             capability_id=entry.capability_id,
@@ -814,7 +963,7 @@ def build_policy_status_report() -> PolicyStatusReport:
             registration_state=entry.state,
             execution_available=False,
         )
-        for entry in BUILTIN_REGISTRY.entries
+        for entry in status_entries
     )
     return PolicyStatusReport(
         policy_id=POLICY_ID,
@@ -833,11 +982,14 @@ def build_policy_status_report() -> PolicyStatusReport:
             for rule in POLICY_RULES
         ),
         unimplemented_rules=UNIMPLEMENTED_RULE_IDS,
+        bounded_proposal_persistence_operation="sentinel.synthetic.proposal.persist",
+        bounded_proposal_persistence_state="PENDING_REVIEW_ONLY",
     )
 
 
 __all__ = [
     "build_policy_context",
+    "build_proposal_persistence_policy_request",
     "build_policy_status_report",
     "evaluate_policy",
 ]

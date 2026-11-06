@@ -39,10 +39,22 @@ from sentinel.policy import (
     format_json_policy_status,
     format_text_policy_status,
 )
-from sentinel.proposals import ProposalPreviewError, build_github_issue_proposal_preview
+from sentinel.proposals import (
+    ProposalPersistenceError,
+    ProposalPreviewError,
+    build_github_issue_proposal_preview,
+    list_github_fixture_proposals,
+    save_github_fixture_proposal,
+)
 from sentinel.proposals.formatters import (
     format_json_proposal_preview,
     format_text_proposal_preview,
+)
+from sentinel.proposals.persistence_formatters import (
+    format_json_proposal_list,
+    format_json_proposal_save,
+    format_text_proposal_list,
+    format_text_proposal_save,
 )
 from sentinel.readers.calendar_fixture import read_packaged_calendar_fixture
 from sentinel.readers.calendar_formatters import (
@@ -133,7 +145,7 @@ policy_app = typer.Typer(
 )
 proposal_app = typer.Typer(
     no_args_is_help=True,
-    help="Construct explicitly selected, in-memory source review previews.",
+    help="Create in-memory previews and inspect bounded pending synthetic proposals.",
 )
 
 
@@ -1212,6 +1224,74 @@ def proposal_preview_github_fixture(
         raise typer.Exit(code=1) from None
     except Exception:
         typer.echo("Proposal preview failed: verified synthetic source is unavailable.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@proposal_app.command("save-github-fixture")
+def proposal_save_github_fixture(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing current Sentinel database."),
+    ],
+    store_root: Annotated[
+        Path,
+        typer.Option("--store-root", help="Explicit verified PUBLIC fixture-store root."),
+    ],
+    issue_number: Annotated[
+        int,
+        typer.Option("--issue", help="Explicit fixture issue number: 101, 102 or 103."),
+    ],
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Persist one source-verified proposal in PENDING_REVIEW state."""
+    try:
+        report = save_github_fixture_proposal(
+            database,
+            store_root=store_root,
+            issue_number=issue_number,
+        )
+        output = (
+            format_text_proposal_save(report)
+            if output_format == "text"
+            else format_json_proposal_save(report)
+        )
+    except ProposalPersistenceError as error:
+        typer.echo(f"Proposal save failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Proposal save failed: pending proposal could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@proposal_app.command("list")
+def proposal_list(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing current Sentinel database."),
+    ],
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Read and validate every stored bounded pending proposal."""
+    try:
+        report = list_github_fixture_proposals(database)
+        output = (
+            format_text_proposal_list(report)
+            if output_format == "text"
+            else format_json_proposal_list(report)
+        )
+    except ProposalPersistenceError as error:
+        typer.echo(f"Proposal listing failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Proposal listing failed: stored proposal metadata is unavailable.", err=True)
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 

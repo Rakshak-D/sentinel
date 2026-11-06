@@ -30,8 +30,11 @@ def test_registered_migration_adds_task_and_proposal_schema(tmp_path: Path) -> N
 
     applied = initialize_storage(database, create=True)
 
-    assert applied[-1:] == ("cr1-j-0004-local-tasks",)
-    assert migration_module.MIGRATIONS[-1].migration_id == "cr1-j-0004-local-tasks"
+    assert applied[-2:] == (
+        "cr1-j-0004-local-tasks",
+        "cr2-d-0005-durable-pending-proposals",
+    )
+    assert migration_module.MIGRATIONS[3].migration_id == "cr1-j-0004-local-tasks"
     with database_connection(database) as connection:
         objects = {
             (str(kind), str(name))
@@ -45,7 +48,7 @@ def test_registered_migration_adds_task_and_proposal_schema(tmp_path: Path) -> N
 
 
 def test_cr1_j_pins_new_migration_and_complete_checkpoint() -> None:
-    migration = migration_module.MIGRATIONS[-1]
+    migration = migration_module.MIGRATIONS[3]
     assert migration.migration_id == "cr1-j-0004-local-tasks"
     assert migration.artifact_sha256 == (
         "a75bfcff37255e1fb0cc49eb72254c8e83d049828faa2653a8495ca2f749120a"
@@ -60,6 +63,7 @@ def test_cr1_j_pins_new_migration_and_complete_checkpoint() -> None:
         "cr1-e-0002-source-registry",
         "cr1-f-0003-source-spans",
         "cr1-j-0004-local-tasks",
+        "cr2-d-0005-durable-pending-proposals",
     ]
 
 
@@ -94,7 +98,7 @@ def test_task_and_proposal_columns_foreign_keys_and_indexes_match_checkpoint(
         "updated_at",
         "completed_at",
     ]
-    assert [row[1] for row in proposal_columns] == [
+    assert [row[1] for row in proposal_columns[:13]] == [
         "proposal_id",
         "run_id",
         "principal_id",
@@ -108,6 +112,22 @@ def test_task_and_proposal_columns_foreign_keys_and_indexes_match_checkpoint(
         "created_at",
         "expires_at",
         "credential_alias",
+    ]
+    assert [row[1] for row in proposal_columns[13:]] == [
+        "proposal_schema_version",
+        "proposal_kind",
+        "preview_id",
+        "selected_source_item_id",
+        "selected_source_envelope_id",
+        "source_content_sha256",
+        "source_binding_sha256",
+        "source_manifest_sha256",
+        "policy_request_sha256",
+        "policy_sha256",
+        "registry_sha256",
+        "config_sha256",
+        "canonical_args_json",
+        "executable",
     ]
     assert {row[2] for row in task_foreign_keys} == {
         "principals",
@@ -165,13 +185,17 @@ def test_required_columns_and_sqlite_checks_reject_invalid_task_state(tmp_path: 
 def test_tampered_cr1_j_artifact_is_rejected_before_upgrade(tmp_path: Path, monkeypatch) -> None:
     database = historical_prefix_database(tmp_path / "tampered-j.sqlite3", 3)
     before = migration_history(database)
-    migration = migration_module.MIGRATIONS[-1]
+    migration = migration_module.MIGRATIONS[3]
     changed = Migration(
         migration.migration_id,
         (*migration.statements, "SELECT 1"),
         migration.schema_after,
     )
-    monkeypatch.setattr(migration_module, "MIGRATIONS", (*migration_module.MIGRATIONS[:3], changed))
+    monkeypatch.setattr(
+        migration_module,
+        "MIGRATIONS",
+        (*migration_module.MIGRATIONS[:3], changed, migration_module.MIGRATIONS[4]),
+    )
     with pytest.raises(MigrationIntegrityError, match="CR1-J migration artifact digest mismatch"):
         initialize_storage(database)
     assert migration_history(database) == before
@@ -298,7 +322,10 @@ def test_idle_writer_lease_does_not_arbitrate_task_migration(tmp_path: Path) -> 
     database = historical_prefix_database(tmp_path / "idle-task-upgrade.sqlite3", 3)
     with acquire_writer_lease(database):
         # Maintenance is still able to migrate while a lease is open but idle.
-        assert initialize_storage(database) == ("cr1-j-0004-local-tasks",)
+        assert initialize_storage(database) == (
+            "cr1-j-0004-local-tasks",
+            "cr2-d-0005-durable-pending-proposals",
+        )
     assert tuple(row[0] for row in migration_history(database)) == tuple(
         migration.migration_id for migration in migration_module.MIGRATIONS
     )
