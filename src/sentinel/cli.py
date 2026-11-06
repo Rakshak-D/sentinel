@@ -34,6 +34,11 @@ from sentinel.overview import (
     format_text_local_overview,
 )
 from sentinel.overview.assembly import parse_as_of_timestamp
+from sentinel.policy import (
+    build_policy_status_report,
+    format_json_policy_status,
+    format_text_policy_status,
+)
 from sentinel.readers.calendar_fixture import read_packaged_calendar_fixture
 from sentinel.readers.calendar_formatters import (
     format_json_calendar_fixture,
@@ -116,6 +121,10 @@ notes_registry_app = typer.Typer(
 fixture_workspace_app = typer.Typer(
     no_args_is_help=True,
     help="Prepare or verify the bounded offline synthetic workspace.",
+)
+policy_app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect the deny-only deterministic policy foundation.",
 )
 
 
@@ -1132,6 +1141,30 @@ def fixture_workspace_verify(
 
 
 app.add_typer(fixture_workspace_app, name="fixture-workspace")
+
+
+@policy_app.command("status")
+def policy_status(
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Display static policy metadata without evaluating or authorizing actions."""
+    try:
+        report = build_policy_status_report()
+        output = (
+            format_text_policy_status(report)
+            if output_format == "text"
+            else format_json_policy_status(report)
+        )
+    except Exception:
+        typer.echo("Policy status failed: static policy metadata could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+app.add_typer(policy_app, name="policy")
 
 
 if __name__ == "__main__":
