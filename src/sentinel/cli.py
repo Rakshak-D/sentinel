@@ -42,7 +42,9 @@ from sentinel.policy import (
 from sentinel.proposals import (
     ProposalPersistenceError,
     ProposalPreviewError,
+    ProposalReviewError,
     build_github_issue_proposal_preview,
+    check_github_fixture_proposal,
     list_github_fixture_proposals,
     save_github_fixture_proposal,
 )
@@ -55,6 +57,10 @@ from sentinel.proposals.persistence_formatters import (
     format_json_proposal_save,
     format_text_proposal_list,
     format_text_proposal_save,
+)
+from sentinel.proposals.review_formatters import (
+    format_json_proposal_review,
+    format_text_proposal_review,
 )
 from sentinel.readers.calendar_fixture import read_packaged_calendar_fixture
 from sentinel.readers.calendar_formatters import (
@@ -145,7 +151,7 @@ policy_app = typer.Typer(
 )
 proposal_app = typer.Typer(
     no_args_is_help=True,
-    help="Create in-memory previews and inspect bounded pending synthetic proposals.",
+    help="Preview, save, inspect, and check bounded synthetic proposals.",
 )
 
 
@@ -1292,6 +1298,46 @@ def proposal_list(
         raise typer.Exit(code=1) from None
     except Exception:
         typer.echo("Proposal listing failed: stored proposal metadata is unavailable.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+@proposal_app.command("check")
+def proposal_check(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing current Sentinel database."),
+    ],
+    store_root: Annotated[
+        Path,
+        typer.Option("--store-root", help="Explicit verified PUBLIC fixture-store root."),
+    ],
+    proposal_id: Annotated[
+        str,
+        typer.Option("--id", help="Explicit pending proposal SHA-256 identity."),
+    ],
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Check stored proposal lineage, current source evidence and expiry read-only."""
+    try:
+        report = check_github_fixture_proposal(
+            database,
+            store_root=store_root,
+            proposal_id=proposal_id,
+        )
+        output = (
+            format_text_proposal_review(report)
+            if output_format == "text"
+            else format_json_proposal_review(report)
+        )
+    except ProposalReviewError as error:
+        typer.echo(f"Proposal review check failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Proposal review check failed: stored evidence could not be verified.", err=True)
         raise typer.Exit(code=1) from None
     _write_brief_stdout(output)
 

@@ -83,6 +83,7 @@ _ATTRIBUTION = "SOURCE_CITATION"
 
 class ProposalPersistenceErrorCode(StrEnum):
     INVALID_SELECTION = "invalid_selection"
+    NOT_FOUND = "not_found"
     SOURCE_UNAVAILABLE = "source_unavailable"
     POLICY_DENIED = "policy_denied"
     SCHEMA_INVALID = "schema_invalid"
@@ -93,6 +94,7 @@ class ProposalPersistenceErrorCode(StrEnum):
 
 _ERROR_MESSAGES = {
     ProposalPersistenceErrorCode.INVALID_SELECTION: "Select one supported synthetic issue number.",
+    ProposalPersistenceErrorCode.NOT_FOUND: "The selected pending proposal was not found.",
     ProposalPersistenceErrorCode.SOURCE_UNAVAILABLE: (
         "Verified synthetic GitHub evidence is unavailable."
     ),
@@ -1110,6 +1112,63 @@ def _expected_materials_for_row(row: Sequence[object]) -> _Materials:
         raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID) from None
 
 
+def _readback_proposal_row(
+    connection: sqlite3.Connection,
+    row: Sequence[object],
+) -> SyntheticPendingProposal:
+    if len(row) != 27:
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID)
+    materials = _expected_materials_for_row(row)
+    return _validate_persisted_proposal(
+        connection,
+        proposal_id=str(row[0]),
+        materials=materials,
+    )
+
+
+def get_github_fixture_proposal(
+    database: str | Path,
+    *,
+    proposal_id: str,
+) -> SyntheticPendingProposal:
+    """Read one proposal using the same strict lineage and row validators as list."""
+    if (
+        type(proposal_id) is not str
+        or len(proposal_id) != 64
+        or any(character not in "0123456789abcdef" for character in proposal_id)
+    ):
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID)
+    try:
+        with readonly_database_connection(database) as connection:
+            state = inspect_migration_state_readonly(connection)
+            if not state.is_current or state.schema_version != CURRENT_SCHEMA.schema_version:
+                raise ProposalPersistenceError(ProposalPersistenceErrorCode.SCHEMA_INVALID)
+            _require_registered_schema(connection)
+            verify_integrity(connection)
+            row = connection.execute(
+                _PROPOSAL_SELECT + " WHERE proposal_id = ?",
+                (proposal_id,),
+            ).fetchone()
+            if row is None:
+                raise ProposalPersistenceError(ProposalPersistenceErrorCode.NOT_FOUND)
+            proposal = _readback_proposal_row(connection, tuple(row))
+            verify_integrity(connection)
+            return proposal
+    except ProposalPersistenceError:
+        raise
+    except (
+        DatabaseOpenError,
+        MigrationIntegrityError,
+        sqlite3.Error,
+        OSError,
+        ValueError,
+        TypeError,
+    ):
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.DATABASE_UNAVAILABLE) from None
+    except Exception:
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID) from None
+
+
 def list_github_fixture_proposals(database: str | Path) -> ProposalListReport:
     """Read and strictly validate every persisted bounded proposal record."""
     try:
@@ -1130,16 +1189,7 @@ def list_github_fixture_proposals(database: str | Path) -> ProposalListReport:
             proposals: list[SyntheticPendingProposal] = []
             verify_integrity(connection)
             for row_value in rows:
-                row = tuple(row_value)
-                if len(row) != 27:
-                    raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID)
-                materials = _expected_materials_for_row(row)
-                proposal = _validate_persisted_proposal(
-                    connection,
-                    proposal_id=str(row[0]),
-                    materials=materials,
-                )
-                proposals.append(proposal)
+                proposals.append(_readback_proposal_row(connection, tuple(row_value)))
             return ProposalListReport(proposal_count=len(proposals), proposals=tuple(proposals))
     except ProposalPersistenceError:
         raise
@@ -1159,6 +1209,7 @@ def list_github_fixture_proposals(database: str | Path) -> ProposalListReport:
 __all__ = [
     "ProposalPersistenceError",
     "ProposalPersistenceErrorCode",
+    "get_github_fixture_proposal",
     "list_github_fixture_proposals",
     "save_github_fixture_proposal",
 ]
