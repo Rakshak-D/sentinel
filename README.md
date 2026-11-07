@@ -59,6 +59,45 @@ An identical repeat returns `ALREADY_EXISTS` with the original identity and time
 
 CR2-D adds the append-only migration `cr2-d-0005-durable-pending-proposals`; the first four registered migration artifacts and their historical checkpoints remain pinned. Existing databases upgrade through the registered migration path. This single synthetic operation does not establish general C2 storage or a complete reference monitor. SQLite transaction and process-restart tests do not claim power-loss durability; filesystem replacement races and same-user tampering remain outside the guarantee.
 
+### CR2-E read-only proposal review check (development)
+
+After saving a pending proposal, check its stored lineage and currently
+available source evidence by selecting the exact proposal ID:
+
+```powershell
+$proposalId = "replace-with-the-64-character-ID-returned-by-save"
+sentinel proposal check `
+  --database C:\Data\sentinel.sqlite3 `
+  --store-root C:\Data\sentinel-public `
+  --id $proposalId `
+  --format json
+```
+
+Replace the example variable with the exact ID returned by the save command.
+
+The check uses the strict CR2-D single-record readback validator for schema,
+canonical arguments, principal/config/run/manifest lineage, citation links,
+pending-only state, and non-executable metadata. It re-resolves the complete
+pinned GitHub fixture from the selected PUBLIC store, validating blob bytes,
+source identities, all citation spans, and the saved source-set binding. A
+missing, changed, or malformed record or blob fails closed with bounded
+stderr and no report. It does not fall back to packaged fixture bodies.
+
+The command captures the current UTC time once after verification. At or after
+`expires_at`, it reports `EXPIRED`; before that instant, a matching record and
+source report `READY_FOR_OWNER_REVIEW`. Reading never changes status, expiry,
+or any database/blob record. The report includes only metadata and hashes, not
+source bodies or credentials. Output schema is
+`sentinel.proposal-review-check.v1` and is deterministic for the same report
+and captured check time.
+
+`READY_FOR_OWNER_REVIEW` means only that the stored pending metadata is valid,
+the pinned source/citations remain available and matched, and the proposal has
+not expired. It does not mean an authenticated owner reviewed or approved it;
+it is not a task, grant, execution receipt, or reusable authorization. The
+check adds no approval proof or P11 behavior. Owner verification, approval,
+accepted-task conversion, grants, and execution remain unavailable.
+
 ## CR0-B contract API
 
 `sentinel.contracts` exports the immutable `SourceEnvelope`, `ByteSpan`, and `BoundaryEnvelope` models, their `TrustLabel`, `SensitivityLabel`, and `BoundaryKind` enums, and `canonical_json_bytes` / `canonical_sha256` helpers. The models use UUID identifiers, timezone-aware UTC-normalized timestamps, lowercase 64-character SHA-256 hex digests, `sha256:<hex>` content references, tuples for nested collections, and reject undeclared fields.
