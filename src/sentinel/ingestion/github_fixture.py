@@ -46,6 +46,7 @@ from sentinel.storage.migrations import (
     MIGRATIONS,
     MigrationIntegrityError,
     MigrationState,
+    has_registered_migration,
     inspect_migration_state_readonly,
     verify_integrity,
 )
@@ -81,7 +82,6 @@ _CONTENT_REF_PREFIX: Final = f"fixture:{FIXTURE_SCHEMA_VERSION}:"
 _DIGEST_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
 _REPARSE_POINT_ATTRIBUTE: Final = 0x0400
 _SUPPORTED_LOCAL_DRIVE_TYPES: Final = frozenset({2, 3, 6})
-_EXPECTED_MIGRATION_IDS: Final = tuple(migration.migration_id for migration in MIGRATIONS)
 
 _PRINCIPAL_COLUMNS: Final = (
     "principal_id, kind, display_name, os_binding, created_at, revoked_at"
@@ -467,11 +467,7 @@ def _validate_migration_state(connection: sqlite3.Connection) -> MigrationState:
         state = inspect_migration_state_readonly(connection)
     except (MigrationIntegrityError, sqlite3.Error):
         _raise(GithubFixtureIngestionErrorCode.SCHEMA_NOT_CURRENT)
-    if (
-        not state.is_current
-        or state.applied_migration_ids != _EXPECTED_MIGRATION_IDS
-        or state.schema_version != MIGRATIONS[-1].migration_id
-    ):
+    if not has_registered_migration(state, MIGRATIONS[2].migration_id):
         _raise(GithubFixtureIngestionErrorCode.SCHEMA_NOT_CURRENT)
     try:
         verify_integrity(connection)

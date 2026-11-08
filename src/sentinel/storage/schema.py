@@ -615,6 +615,201 @@ CURRENT_SCHEMA = CR2_D_SCHEMA
 # Filled from the exact registered schema artifact, then pinned in migrations.py.
 CR2_D_SCHEMA_DEFINITION_SHA256 = "bf0ec109fd2495d2d45253bcf79eee3cdd5e554a05b58d249adb482536907484"
 
+# CR2-F stores synthetic-only verifier metadata and one-use challenge state.
+# These rows can validate a signed challenge, but do not establish trusted owner
+# enrollment or authorization. The tables deliberately contain no private keys.
+OWNER_PROOF_CREDENTIALS_TABLE_DDL = """CREATE TABLE owner_proof_credentials (
+    credential_id TEXT NOT NULL PRIMARY KEY
+        CHECK (length(credential_id) BETWEEN 1 AND 684
+               AND credential_id NOT GLOB '*[^A-Za-z0-9_-]*'),
+    owner_association TEXT NOT NULL CHECK (owner_association = 'synthetic-test-owner'),
+    cose_public_key BLOB NOT NULL CHECK (length(cose_public_key) BETWEEN 1 AND 4096),
+    rp_id TEXT NOT NULL CHECK (rp_id = 'sentinel.test'),
+    expected_origin TEXT NOT NULL CHECK (expected_origin = 'https://sentinel.test'),
+    sign_count INTEGER NOT NULL CHECK (sign_count BETWEEN 0 AND 4294967295),
+    registration_state TEXT NOT NULL CHECK (registration_state = 'SYNTHETIC_TEST_ONLY'),
+    revoked INTEGER NOT NULL CHECK (revoked IN (0, 1)),
+    created_at TEXT NOT NULL
+)"""
+OWNER_PROOF_CREDENTIALS_STATE_INDEX_DDL = (
+    "CREATE INDEX owner_proof_credentials_state_idx "
+    "ON owner_proof_credentials(registration_state, revoked)"
+)
+OWNER_PROOF_CREDENTIALS_UPDATE_GUARD_DDL = """CREATE TRIGGER owner_proof_credentials_update_guard
+BEFORE UPDATE ON owner_proof_credentials
+WHEN NEW.credential_id != OLD.credential_id
+  OR NEW.owner_association != OLD.owner_association
+  OR NEW.cose_public_key != OLD.cose_public_key
+  OR NEW.rp_id != OLD.rp_id
+  OR NEW.expected_origin != OLD.expected_origin
+  OR NEW.registration_state != OLD.registration_state
+  OR NEW.revoked != OLD.revoked
+  OR NEW.created_at != OLD.created_at
+  OR (OLD.sign_count > 0 AND NEW.sign_count <= OLD.sign_count)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid owner proof credential update');
+END"""
+OWNER_PROOF_CREDENTIALS_DELETE_GUARD_DDL = """CREATE TRIGGER owner_proof_credentials_delete_guard
+BEFORE DELETE ON owner_proof_credentials
+BEGIN
+    SELECT RAISE(ABORT, 'owner proof credential records are retained');
+END"""
+
+OWNER_PROOF_CHALLENGES_TABLE_DDL = """CREATE TABLE owner_proof_challenges (
+    challenge_id TEXT NOT NULL PRIMARY KEY
+        CHECK (length(challenge_id) = 32 AND challenge_id NOT GLOB '*[^0-9a-f]*'),
+    schema_version TEXT NOT NULL
+        CHECK (schema_version = 'sentinel.owner-proof-challenge.v1'),
+    challenge_b64url TEXT NOT NULL UNIQUE
+        CHECK (length(challenge_b64url) = 43
+               AND challenge_b64url NOT GLOB '*[^A-Za-z0-9_-]*'),
+    proposal_id TEXT NOT NULL,
+    proposal_snapshot_sha256 TEXT NOT NULL
+        CHECK (length(proposal_snapshot_sha256) = 64
+               AND proposal_snapshot_sha256 NOT GLOB '*[^0-9a-f]*'),
+    fixture_sha256 TEXT NOT NULL
+        CHECK (length(fixture_sha256) = 64 AND fixture_sha256 NOT GLOB '*[^0-9a-f]*'),
+    manifest_sha256 TEXT NOT NULL
+        CHECK (length(manifest_sha256) = 64 AND manifest_sha256 NOT GLOB '*[^0-9a-f]*'),
+    source_set_sha256 TEXT NOT NULL
+        CHECK (length(source_set_sha256) = 64 AND source_set_sha256 NOT GLOB '*[^0-9a-f]*'),
+    source_item_id TEXT NOT NULL,
+    source_envelope_id TEXT NOT NULL,
+    source_content_sha256 TEXT NOT NULL
+        CHECK (length(source_content_sha256) = 64
+               AND source_content_sha256 NOT GLOB '*[^0-9a-f]*'),
+    citation_bindings_json TEXT NOT NULL CHECK (length(citation_bindings_json) <= 4096),
+    citation_bindings_sha256 TEXT NOT NULL
+        CHECK (length(citation_bindings_sha256) = 64
+               AND citation_bindings_sha256 NOT GLOB '*[^0-9a-f]*'),
+    policy_request_sha256 TEXT NOT NULL
+        CHECK (length(policy_request_sha256) = 64
+               AND policy_request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    policy_sha256 TEXT NOT NULL
+        CHECK (length(policy_sha256) = 64 AND policy_sha256 NOT GLOB '*[^0-9a-f]*'),
+    registry_sha256 TEXT NOT NULL
+        CHECK (length(registry_sha256) = 64 AND registry_sha256 NOT GLOB '*[^0-9a-f]*'),
+    config_sha256 TEXT NOT NULL
+        CHECK (length(config_sha256) = 64 AND config_sha256 NOT GLOB '*[^0-9a-f]*'),
+    credential_id TEXT NOT NULL,
+    owner_association TEXT NOT NULL CHECK (owner_association = 'synthetic-test-owner'),
+    rp_id TEXT NOT NULL CHECK (rp_id = 'sentinel.test'),
+    expected_origin TEXT NOT NULL CHECK (expected_origin = 'https://sentinel.test'),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    purpose TEXT NOT NULL
+        CHECK (purpose = 'sentinel.pending-proposal-review.webauthn-get.v1'),
+    scope TEXT NOT NULL CHECK (scope = 'SYNTHETIC_TEST_ONLY_NON_EXECUTABLE'),
+    FOREIGN KEY (proposal_id) REFERENCES action_proposals(proposal_id),
+    FOREIGN KEY (credential_id) REFERENCES owner_proof_credentials(credential_id)
+)"""
+OWNER_PROOF_CHALLENGES_PROPOSAL_INDEX_DDL = (
+    "CREATE INDEX owner_proof_challenges_proposal_idx "
+    "ON owner_proof_challenges(proposal_id, created_at)"
+)
+OWNER_PROOF_CHALLENGES_UPDATE_GUARD_DDL = """CREATE TRIGGER owner_proof_challenges_update_guard
+BEFORE UPDATE ON owner_proof_challenges
+BEGIN
+    SELECT RAISE(ABORT, 'owner proof challenge records are immutable');
+END"""
+OWNER_PROOF_CHALLENGES_DELETE_GUARD_DDL = """CREATE TRIGGER owner_proof_challenges_delete_guard
+BEFORE DELETE ON owner_proof_challenges
+BEGIN
+    SELECT RAISE(ABORT, 'owner proof challenge records are retained');
+END"""
+
+OWNER_PROOF_CHALLENGE_CONSUMPTIONS_TABLE_DDL = """CREATE TABLE owner_proof_challenge_consumptions (
+    challenge_id TEXT NOT NULL PRIMARY KEY,
+    consumed_at TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('VERIFIED_SYNTHETIC_ONLY', 'FAILED')),
+    reason_code TEXT NOT NULL
+        CHECK (reason_code IN ('ASSERTION_VERIFIED', 'ASSERTION_REJECTED')),
+    verified_sign_count INTEGER
+        CHECK (verified_sign_count IS NULL OR verified_sign_count BETWEEN 0 AND 4294967295),
+    FOREIGN KEY (challenge_id) REFERENCES owner_proof_challenges(challenge_id),
+    CHECK ((outcome = 'VERIFIED_SYNTHETIC_ONLY'
+            AND reason_code = 'ASSERTION_VERIFIED'
+            AND verified_sign_count IS NOT NULL)
+        OR (outcome = 'FAILED'
+            AND reason_code = 'ASSERTION_REJECTED'
+            AND verified_sign_count IS NULL))
+)"""
+OWNER_PROOF_CHALLENGE_CONSUMPTIONS_UPDATE_GUARD_DDL = """\
+CREATE TRIGGER owner_proof_consumptions_update_guard
+BEFORE UPDATE ON owner_proof_challenge_consumptions
+BEGIN
+    SELECT RAISE(ABORT, 'owner proof consumption records are immutable');
+END"""
+OWNER_PROOF_CHALLENGE_CONSUMPTIONS_DELETE_GUARD_DDL = """\
+CREATE TRIGGER owner_proof_consumptions_delete_guard
+BEFORE DELETE ON owner_proof_challenge_consumptions
+BEGIN
+    SELECT RAISE(ABORT, 'owner proof consumption records are retained');
+END"""
+
+CR2_F_SCHEMA_VERSION = "cr2-f-0006-owner-proof-challenges"
+CR2_F_SCHEMA = SchemaDefinition(
+    schema_version=CR2_F_SCHEMA_VERSION,
+    objects=(
+        *CR2_D_SCHEMA.objects,
+        SchemaObjectDefinition(
+            "table",
+            "owner_proof_credentials",
+            OWNER_PROOF_CREDENTIALS_TABLE_DDL,
+        ),
+        SchemaObjectDefinition(
+            "index", "owner_proof_credentials_state_idx", OWNER_PROOF_CREDENTIALS_STATE_INDEX_DDL
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "owner_proof_credentials_update_guard",
+            OWNER_PROOF_CREDENTIALS_UPDATE_GUARD_DDL,
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "owner_proof_credentials_delete_guard",
+            OWNER_PROOF_CREDENTIALS_DELETE_GUARD_DDL,
+        ),
+        SchemaObjectDefinition(
+            "table",
+            "owner_proof_challenges",
+            OWNER_PROOF_CHALLENGES_TABLE_DDL,
+        ),
+        SchemaObjectDefinition(
+            "index",
+            "owner_proof_challenges_proposal_idx",
+            OWNER_PROOF_CHALLENGES_PROPOSAL_INDEX_DDL,
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "owner_proof_challenges_update_guard",
+            OWNER_PROOF_CHALLENGES_UPDATE_GUARD_DDL,
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "owner_proof_challenges_delete_guard",
+            OWNER_PROOF_CHALLENGES_DELETE_GUARD_DDL,
+        ),
+        SchemaObjectDefinition(
+            "table",
+            "owner_proof_challenge_consumptions",
+            OWNER_PROOF_CHALLENGE_CONSUMPTIONS_TABLE_DDL,
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "owner_proof_consumptions_update_guard",
+            OWNER_PROOF_CHALLENGE_CONSUMPTIONS_UPDATE_GUARD_DDL,
+        ),
+        SchemaObjectDefinition(
+            "trigger",
+            "owner_proof_consumptions_delete_guard",
+            OWNER_PROOF_CHALLENGE_CONSUMPTIONS_DELETE_GUARD_DDL,
+        ),
+    ),
+)
+CR2_F_SCHEMA_DEFINITION_SHA256 = "996f4c5ae2e1eba6f6cf409834d8a4ec48e514c7411ed7653640b518cb6b4b51"
+CURRENT_SCHEMA = CR2_F_SCHEMA
+
 
 def _normalized_sql(value: object) -> str | None:
     if not isinstance(value, str):

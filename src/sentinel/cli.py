@@ -34,6 +34,12 @@ from sentinel.overview import (
     format_text_local_overview,
 )
 from sentinel.overview.assembly import parse_as_of_timestamp
+from sentinel.owner_proof import (
+    OwnerProofError,
+    build_owner_proof_status,
+    format_json_owner_proof_status,
+    format_text_owner_proof_status,
+)
 from sentinel.policy import (
     build_policy_status_report,
     format_json_policy_status,
@@ -152,6 +158,10 @@ policy_app = typer.Typer(
 proposal_app = typer.Typer(
     no_args_is_help=True,
     help="Preview, save, inspect, and check bounded synthetic proposals.",
+)
+auth_app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect the read-only synthetic WebAuthn verification foundation.",
 )
 
 
@@ -1192,6 +1202,37 @@ def policy_status(
 
 
 app.add_typer(policy_app, name="policy")
+
+
+@auth_app.command("status")
+def auth_status(
+    database: Annotated[
+        Path,
+        typer.Option("--database", help="Existing Sentinel database to inspect read-only."),
+    ],
+    output_format: Annotated[
+        Literal["text", "json"],
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Report authentication backend availability; production owner proof stays unavailable."""
+    try:
+        report = build_owner_proof_status(database)
+        output = (
+            format_text_owner_proof_status(report)
+            if output_format == "text"
+            else format_json_owner_proof_status(report)
+        )
+    except OwnerProofError as error:
+        typer.echo(f"Authentication status failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception:
+        typer.echo("Authentication status failed: local state could not be verified.", err=True)
+        raise typer.Exit(code=1) from None
+    _write_brief_stdout(output)
+
+
+app.add_typer(auth_app, name="auth")
 
 
 @proposal_app.command("preview-github-fixture")

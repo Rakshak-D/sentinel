@@ -24,6 +24,7 @@ CR1_E_MIGRATION_ID = "cr1-e-0002-source-registry"
 CR1_F_MIGRATION_ID = "cr1-f-0003-source-spans"
 CR1_J_MIGRATION_ID = "cr1-j-0004-local-tasks"
 CR2_D_MIGRATION_ID = "cr2-d-0005-durable-pending-proposals"
+CR2_F_MIGRATION_ID = "cr2-f-0006-owner-proof-challenges"
 FOUNDATION_SHA256 = "b69c069e019213d1aa1ecc5bb29b34cde252d41fbff390ef0219c1d013632217"
 
 
@@ -57,6 +58,7 @@ def test_existing_cr0_database_upgrades_without_rewriting_old_metadata(
         CR1_F_MIGRATION_ID,
         CR1_J_MIGRATION_ID,
         CR2_D_MIGRATION_ID,
+        CR2_F_MIGRATION_ID,
     )
     assert initialize_storage(database) == ()
 
@@ -78,12 +80,15 @@ def test_existing_cr0_database_upgrades_without_rewriting_old_metadata(
     assert rows[3][4] == 1
     assert rows[4][0] == CR2_D_MIGRATION_ID
     assert rows[4][4] == 1
+    assert rows[5][0] == CR2_F_MIGRATION_ID
+    assert rows[5][4] == 1
     assert upgraded_state.applied_migration_ids == (
         FOUNDATION_ID,
         CR1_E_MIGRATION_ID,
         CR1_F_MIGRATION_ID,
         CR1_J_MIGRATION_ID,
         CR2_D_MIGRATION_ID,
+        CR2_F_MIGRATION_ID,
     )
     assert upgraded_state.pending_migration_ids == ()
     assert upgraded_state.is_current is True
@@ -111,6 +116,7 @@ def test_schema_integrity_and_pending_migrations_are_distinguished_readonly(
         CR1_F_MIGRATION_ID,
         CR1_J_MIGRATION_ID,
         CR2_D_MIGRATION_ID,
+        CR2_F_MIGRATION_ID,
     )
     assert state.is_current is False
     assert report.successful is True

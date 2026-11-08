@@ -28,10 +28,23 @@ from sentinel.storage.schema import (
     CR2_D_ACTION_PROPOSAL_COLUMNS,
     CR2_D_SCHEMA,
     CR2_D_SCHEMA_DEFINITION_SHA256,
+    CR2_F_SCHEMA,
+    CR2_F_SCHEMA_DEFINITION_SHA256,
     FOUNDATION_SCHEMA,
     FOUNDATION_SCHEMA_DEFINITION_SHA256,
     MIGRATION_INDEX_DDL,
     MIGRATION_TABLE_DDL,
+    OWNER_PROOF_CHALLENGE_CONSUMPTIONS_DELETE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGE_CONSUMPTIONS_TABLE_DDL,
+    OWNER_PROOF_CHALLENGE_CONSUMPTIONS_UPDATE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGES_DELETE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGES_PROPOSAL_INDEX_DDL,
+    OWNER_PROOF_CHALLENGES_TABLE_DDL,
+    OWNER_PROOF_CHALLENGES_UPDATE_GUARD_DDL,
+    OWNER_PROOF_CREDENTIALS_DELETE_GUARD_DDL,
+    OWNER_PROOF_CREDENTIALS_STATE_INDEX_DDL,
+    OWNER_PROOF_CREDENTIALS_TABLE_DDL,
+    OWNER_PROOF_CREDENTIALS_UPDATE_GUARD_DDL,
     PLUGIN_MANIFESTS_ENABLED_TRUST_INDEX_DDL,
     PLUGIN_MANIFESTS_TABLE_DDL,
     PRINCIPALS_KIND_REVOKED_AT_INDEX_DDL,
@@ -83,6 +96,10 @@ _CR1_J_MIGRATION_ARTIFACT_SHA256: Final = (
 _CR2_D_MIGRATION_ID: Final = "cr2-d-0005-durable-pending-proposals"
 _CR2_D_MIGRATION_ARTIFACT_SHA256: Final = (
     "c4ac15d8270abd0d5165d94944f01d786fcb7269d74700c716de3efce5b56ffa"
+)
+_CR2_F_MIGRATION_ID: Final = "cr2-f-0006-owner-proof-challenges"
+_CR2_F_MIGRATION_ARTIFACT_SHA256: Final = (
+    "741f0084f578784ad57bafc50c2d811ee47d366e4cc5b39d8d94ec2ad2232f6b"
 )
 
 
@@ -212,6 +229,20 @@ _CR2_D_STATEMENTS: tuple[str, ...] = (
     ACTION_PROPOSALS_CR2_D_INSERT_GUARD_DDL,
 )
 
+_CR2_F_STATEMENTS: tuple[str, ...] = (
+    OWNER_PROOF_CREDENTIALS_TABLE_DDL,
+    OWNER_PROOF_CREDENTIALS_STATE_INDEX_DDL,
+    OWNER_PROOF_CREDENTIALS_UPDATE_GUARD_DDL,
+    OWNER_PROOF_CREDENTIALS_DELETE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGES_TABLE_DDL,
+    OWNER_PROOF_CHALLENGES_PROPOSAL_INDEX_DDL,
+    OWNER_PROOF_CHALLENGES_UPDATE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGES_DELETE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGE_CONSUMPTIONS_TABLE_DDL,
+    OWNER_PROOF_CHALLENGE_CONSUMPTIONS_UPDATE_GUARD_DDL,
+    OWNER_PROOF_CHALLENGE_CONSUMPTIONS_DELETE_GUARD_DDL,
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(
         _FOUNDATION_MIGRATION_ID,
@@ -241,6 +272,12 @@ MIGRATIONS: tuple[Migration, ...] = (
         _CR2_D_MIGRATION_ID,
         _CR2_D_STATEMENTS,
         CR2_D_SCHEMA,
+        artifact_version=2,
+    ),
+    Migration(
+        _CR2_F_MIGRATION_ID,
+        _CR2_F_STATEMENTS,
+        CR2_F_SCHEMA,
         artifact_version=2,
     ),
 )
@@ -293,6 +330,13 @@ def _registered_migrations() -> tuple[Migration, ...]:
         raise MigrationIntegrityError("CR2-D migration artifact digest mismatch")
     if proposals.schema_after.sha256 != CR2_D_SCHEMA_DEFINITION_SHA256:
         raise MigrationIntegrityError("CR2-D schema checkpoint digest mismatch")
+    if len(migrations) < 6 or migrations[5].migration_id != _CR2_F_MIGRATION_ID:
+        raise MigrationIntegrityError("registered migrations lack the CR2-F owner-proof schema")
+    owner_proof = migrations[5]
+    if owner_proof.artifact_sha256 != _CR2_F_MIGRATION_ARTIFACT_SHA256:
+        raise MigrationIntegrityError("CR2-F migration artifact digest mismatch")
+    if owner_proof.schema_after.sha256 != CR2_F_SCHEMA_DEFINITION_SHA256:
+        raise MigrationIntegrityError("CR2-F schema checkpoint digest mismatch")
     if any(migration.artifact_version != 2 for migration in migrations[1:]):
         raise MigrationIntegrityError("new migrations must use checkpoint-aware artifact v2")
     return migrations
@@ -432,6 +476,18 @@ def inspect_migration_state_readonly(connection: sqlite3.Connection) -> Migratio
         )
     except sqlite3.Error:
         raise MigrationIntegrityError("migration state could not be read") from None
+
+
+def has_registered_migration(state: MigrationState, migration_id: str) -> bool:
+    """Return whether a validated registered schema prefix contains one migration.
+
+    Read-only compatibility paths may accept an earlier valid checkpoint when it
+    already contains the tables they consume. This helper never upgrades a database.
+    Mutations continue to require the exact current schema through the writer lease.
+    """
+    if type(state) is not MigrationState or type(migration_id) is not str:
+        return False
+    return migration_id in state.applied_migration_ids
 
 
 def verify_schema_checkpoint_readonly(

@@ -128,6 +128,7 @@ def test_registry_migrations_apply_in_declared_order(
         "cr1-f-0003-source-spans",
         "cr1-j-0004-local-tasks",
         "cr2-d-0005-durable-pending-proposals",
+        "cr2-f-0006-owner-proof-challenges",
         "test-0002",
         "test-0003",
     ]
@@ -152,6 +153,7 @@ def test_trusted_schema_expansion_creates_a_real_table_and_index(
         "cr1-f-0003-source-spans",
         "cr1-j-0004-local-tasks",
         "cr2-d-0005-durable-pending-proposals",
+        "cr2-f-0006-owner-proof-challenges",
         migration.migration_id,
     )
     with database_connection(database) as connection:

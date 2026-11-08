@@ -70,6 +70,7 @@ from sentinel.storage.migrations import (
     MIGRATIONS,
     MigrationIntegrityError,
     MigrationState,
+    has_registered_migration,
     inspect_migration_state_readonly,
     verify_integrity,
 )
@@ -269,6 +270,30 @@ def _require_current_database(database: Path) -> None:
     try:
         with readonly_database_connection(database) as connection:
             _require_current_state(connection)
+    except FixtureSyncError:
+        raise
+    except (DatabaseOpenError, OSError, sqlite3.Error):
+        _fail(FixtureSyncErrorCode.DATABASE_UNAVAILABLE)
+
+
+def _require_readable_state(connection: sqlite3.Connection) -> MigrationState:
+    """Validate historical read schemas that include source spans and cursors."""
+    try:
+        state = inspect_migration_state_readonly(connection)
+        if not has_registered_migration(state, MIGRATIONS[4].migration_id):
+            _fail(FixtureSyncErrorCode.SCHEMA_NOT_CURRENT)
+        verify_integrity(connection)
+        return state
+    except FixtureSyncError:
+        raise
+    except (MigrationIntegrityError, sqlite3.Error):
+        _fail(FixtureSyncErrorCode.INTEGRITY_FAILURE)
+
+
+def _require_readable_database(database: Path) -> None:
+    try:
+        with readonly_database_connection(database) as connection:
+            _require_readable_state(connection)
     except FixtureSyncError:
         raise
     except (DatabaseOpenError, OSError, sqlite3.Error):
@@ -1194,12 +1219,12 @@ def read_incremental_github_fixture_state(
 
     path = _database_path(database)
     _database_identity(path)
-    _require_current_database(path)
+    _require_readable_database(path)
     _verify_h1_precondition(path, store_root)
     try:
         with readonly_database_connection(path) as connection:
             connection.execute("BEGIN")
-            _require_current_state(connection)
+            _require_readable_state(connection)
             return _verify_complete_state(connection, store_root=store_root)
     except FixtureSyncError:
         raise

@@ -19,6 +19,7 @@ from sentinel.storage.connection import readonly_database_connection
 from sentinel.storage.migrations import (
     MIGRATIONS,
     MigrationIntegrityError,
+    has_registered_migration,
     inspect_migration_state_readonly,
     verify_integrity,
 )
@@ -143,7 +144,7 @@ def _read_connection(database: str | Path) -> Iterator[sqlite3.Connection]:
     try:
         with readonly_database_connection(database) as connection:
             state = inspect_migration_state_readonly(connection)
-            if not state.is_current or state.schema_version != CURRENT_SCHEMA.schema_version:
+            if not has_registered_migration(state, MIGRATIONS[3].migration_id):
                 raise TaskStoreError(TaskStoreErrorCode.SCHEMA_NOT_CURRENT)
             verify_integrity(connection)
             yield connection

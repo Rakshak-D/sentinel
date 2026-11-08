@@ -30,9 +30,10 @@ def test_registered_migration_adds_task_and_proposal_schema(tmp_path: Path) -> N
 
     applied = initialize_storage(database, create=True)
 
-    assert applied[-2:] == (
+    assert applied[-3:] == (
         "cr1-j-0004-local-tasks",
         "cr2-d-0005-durable-pending-proposals",
+        "cr2-f-0006-owner-proof-challenges",
     )
     assert migration_module.MIGRATIONS[3].migration_id == "cr1-j-0004-local-tasks"
     with database_connection(database) as connection:
@@ -64,6 +65,7 @@ def test_cr1_j_pins_new_migration_and_complete_checkpoint() -> None:
         "cr1-f-0003-source-spans",
         "cr1-j-0004-local-tasks",
         "cr2-d-0005-durable-pending-proposals",
+        "cr2-f-0006-owner-proof-challenges",
     ]
 
 
@@ -325,6 +327,7 @@ def test_idle_writer_lease_does_not_arbitrate_task_migration(tmp_path: Path) -> 
         assert initialize_storage(database) == (
             "cr1-j-0004-local-tasks",
             "cr2-d-0005-durable-pending-proposals",
+            "cr2-f-0006-owner-proof-challenges",
         )
     assert tuple(row[0] for row in migration_history(database)) == tuple(
         migration.migration_id for migration in migration_module.MIGRATIONS

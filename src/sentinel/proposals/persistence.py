@@ -50,10 +50,10 @@ from sentinel.storage.connection import DatabaseOpenError, readonly_database_con
 from sentinel.storage.migrations import (
     MIGRATIONS,
     MigrationIntegrityError,
+    has_registered_migration,
     inspect_migration_state_readonly,
     verify_integrity,
 )
-from sentinel.storage.schema import CURRENT_SCHEMA
 from sentinel.storage.writer import WriterLeaseError, acquire_writer_lease
 
 _PROPOSAL_SCHEMA = "sentinel.synthetic-pending-proposal.v1"
@@ -441,7 +441,12 @@ def _require_registered_schema(connection: sqlite3.Connection) -> None:
             "SELECT migration_id, artifact_sha256, success FROM schema_migrations "
             "ORDER BY applied_at, migration_id"
         ).fetchall()
-        if tuple(tuple(row) for row in history_rows) != expected_history:
+        actual_history = tuple(tuple(row) for row in history_rows)
+        if (
+            len(actual_history) < 5
+            or len(actual_history) > len(expected_history)
+            or actual_history != expected_history[: len(actual_history)]
+        ):
             raise ProposalPersistenceError(ProposalPersistenceErrorCode.SCHEMA_INVALID)
         schema_rows = connection.execute(
             """SELECT type, name, sql FROM sqlite_master
@@ -449,7 +454,8 @@ def _require_registered_schema(connection: sqlite3.Connection) -> None:
                  AND type IN ('table', 'index', 'view', 'trigger')"""
         ).fetchall()
         actual = {(str(kind), str(name)): sql for kind, name, sql in schema_rows}
-        expected = {(item.object_type, item.name): item.sql for item in CURRENT_SCHEMA.objects}
+        schema = MIGRATIONS[len(actual_history) - 1].schema_after
+        expected = {(item.object_type, item.name): item.sql for item in schema.objects}
         if actual.keys() != expected.keys() or any(
             not isinstance(actual[key], str) or actual[key].strip() != sql.strip()
             for key, sql in expected.items()
@@ -1141,7 +1147,7 @@ def get_github_fixture_proposal(
     try:
         with readonly_database_connection(database) as connection:
             state = inspect_migration_state_readonly(connection)
-            if not state.is_current or state.schema_version != CURRENT_SCHEMA.schema_version:
+            if not has_registered_migration(state, MIGRATIONS[4].migration_id):
                 raise ProposalPersistenceError(ProposalPersistenceErrorCode.SCHEMA_INVALID)
             _require_registered_schema(connection)
             verify_integrity(connection)
@@ -1169,12 +1175,48 @@ def get_github_fixture_proposal(
         raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID) from None
 
 
+def get_github_fixture_proposal_in_transaction(
+    connection: sqlite3.Connection,
+    *,
+    proposal_id: str,
+) -> SyntheticPendingProposal:
+    """Revalidate one proposal on a caller-owned active SQLite transaction.
+
+    This narrow readback supports operations that must compare proposal state
+    while holding the existing writer lease. The caller remains responsible for
+    acquiring the lease and validating the transaction's current schema.
+    """
+    if type(connection) is not sqlite3.Connection or not connection.in_transaction:
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.SCHEMA_INVALID)
+    if (
+        type(proposal_id) is not str
+        or len(proposal_id) != 64
+        or any(character not in "0123456789abcdef" for character in proposal_id)
+    ):
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID)
+    try:
+        _require_registered_schema(connection)
+        row = connection.execute(
+            _PROPOSAL_SELECT + " WHERE proposal_id = ?",
+            (proposal_id,),
+        ).fetchone()
+        if row is None:
+            raise ProposalPersistenceError(ProposalPersistenceErrorCode.NOT_FOUND)
+        return _readback_proposal_row(connection, tuple(row))
+    except ProposalPersistenceError:
+        raise
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.DATABASE_UNAVAILABLE) from None
+    except Exception:
+        raise ProposalPersistenceError(ProposalPersistenceErrorCode.RECORD_INVALID) from None
+
+
 def list_github_fixture_proposals(database: str | Path) -> ProposalListReport:
     """Read and strictly validate every persisted bounded proposal record."""
     try:
         with readonly_database_connection(database) as connection:
             state = inspect_migration_state_readonly(connection)
-            if not state.is_current or state.schema_version != CURRENT_SCHEMA.schema_version:
+            if not has_registered_migration(state, MIGRATIONS[4].migration_id):
                 raise ProposalPersistenceError(ProposalPersistenceErrorCode.SCHEMA_INVALID)
             _require_registered_schema(connection)
             verify_integrity(connection)
@@ -1210,6 +1252,7 @@ __all__ = [
     "ProposalPersistenceError",
     "ProposalPersistenceErrorCode",
     "get_github_fixture_proposal",
+    "get_github_fixture_proposal_in_transaction",
     "list_github_fixture_proposals",
     "save_github_fixture_proposal",
 ]

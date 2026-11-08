@@ -47,7 +47,9 @@ from sentinel.normalization import (
 from sentinel.normalization.types import NormalizedPlainTextSource, SourceBoundCitation
 from sentinel.storage.connection import DatabaseOpenError, readonly_database_connection
 from sentinel.storage.migrations import (
+    MIGRATIONS,
     MigrationIntegrityError,
+    has_registered_migration,
     inspect_migration_state_readonly,
     verify_integrity,
 )
@@ -107,7 +109,7 @@ def _open_verified_database(database: str | Path) -> tuple[Path, dict[str, str]]
         with readonly_database_connection(path) as connection:
             connection.execute("BEGIN")
             state = inspect_migration_state_readonly(connection)
-            if not state.is_current:
+            if not has_registered_migration(state, MIGRATIONS[2].migration_id):
                 fail(GithubBlobIntegrationErrorCode.SCHEMA_NOT_CURRENT)
             try:
                 verify_integrity(connection)
