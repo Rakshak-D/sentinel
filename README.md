@@ -1716,3 +1716,37 @@ model-mediated F13 a CR1 exit test; its row D passes only for the bounded CR1
 criterion. This is not F13 completion or CR1 release approval. The separate
 release scope is accepted for the bounded offline CR1 core. Full F13 remains
 IN_PROGRESS, and model-mediated PRIVATE triage remains gated.
+
+## CR2-F synthetic WebAuthn verification foundation (development)
+
+The optional `auth` extra installs the pinned WebAuthn verifier used by the
+bounded synthetic assertion API:
+
+```powershell
+python -m pip install -e ".[auth]"
+sentinel auth status --database C:\Data\sentinel.sqlite3 --format text
+```
+
+`sentinel auth status` is read-only. It reports the verifier dependency and
+whether the explicit authentication schema is present; it never inspects
+Windows Credential Manager, environment variables, account state, or provider
+credentials. The core package remains usable without the optional verifier.
+
+CR2-F stores only a synthetic test credential's public COSE key, fixed test RP
+and origin metadata, a short-lived random challenge, and one-use verification
+outcome/counter metadata. The verification API delegates WebAuthn response,
+RP hash, user-presence, user-verification, signature, and counter checks to the
+maintained `webauthn` library, after strict validation of the original
+`clientDataJSON` bytes. Invalid assertions for an identifiable issued
+challenge are recorded as consumed when that failure record commits, without
+advancing the counter. Successful consumption and counter advancement commit
+together; transaction or commit failure returns no verification success.
+
+This milestone has no credential enrollment or assertion CLI and cannot
+authenticate a production owner. Synthetic verification always reports
+`owner_verified=false` and `executable=false`; it does not create owner intent,
+approval, grants, accepted tasks, or proposal transitions. It is not a P11
+authorization decision. Same-user database modification is not defeated by
+WebAuthn verification alone, and separate SQLite/blob checks are not an atomic
+filesystem snapshot. Owner enrollment, production WebAuthn verification,
+approval, task acceptance, and executable grants remain unavailable.
