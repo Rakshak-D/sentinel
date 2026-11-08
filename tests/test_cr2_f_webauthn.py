@@ -1500,6 +1500,213 @@ def test_source_change_during_crypto_verification_is_rechecked_before_commit(
         ).fetchone() == (0,)
 
 
+def test_real_signed_assertion_expiring_during_verification_is_consumed_as_failed(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """A genuinely verified signature cannot outlive its challenge window."""
+    import sentinel.owner_proof.service as service
+    from sentinel.owner_proof import OwnerProofError
+
+    database, store_root, _proposal, key, credential_id, issued = _setup_assertion_case(
+        tmp_path,
+        name="cr2-f-expiry-during-crypto",
+    )
+    with sqlite3.connect(database) as connection:
+        expires_value = connection.execute(
+            "SELECT expires_at FROM owner_proof_challenges WHERE challenge_id = ?",
+            (issued.challenge_id,),
+        ).fetchone()[0]
+    expires_at = datetime.fromisoformat(expires_value)
+    virtual_now = expires_at - timedelta(microseconds=1)
+    clock_reads: list[datetime] = []
+
+    def capture_clock() -> datetime:
+        clock_reads.append(virtual_now)
+        return virtual_now
+
+    original_loader = service._load_webauthn
+    api = original_loader()
+    real_verify = api[1]
+
+    def verify_then_advance_clock(**kwargs: object):
+        nonlocal virtual_now
+        verified = real_verify(**kwargs)
+        # Keep the actual library result and signature verification. The test
+        # clock advances only after the real cryptographic check has returned.
+        virtual_now = expires_at
+        return verified
+
+    monkeypatch.setattr(service, "_capture_utc_now", capture_clock)
+    monkeypatch.setattr(
+        service,
+        "_load_webauthn",
+        lambda: (api[0], verify_then_advance_clock, *api[2:]),
+    )
+    assertion = _signed_assertion(
+        options_json=issued.options_json,
+        credential_id=credential_id,
+        credential_bytes=b"cr2f-synthetic-credential-001",
+        private_key=key,
+    )
+
+    with pytest.raises(OwnerProofError):
+        service.verify_synthetic_assertion(
+            database,
+            store_root=store_root,
+            challenge_id=issued.challenge_id,
+            assertion_json=assertion,
+        )
+
+    assert len(clock_reads) == 2
+    assert clock_reads == [expires_at - timedelta(microseconds=1), expires_at]
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT consumed_at, outcome FROM owner_proof_challenge_consumptions "
+            "WHERE challenge_id = ?",
+            (issued.challenge_id,),
+        ).fetchone() == (
+            expires_at.isoformat(timespec="microseconds"),
+            "FAILED",
+        )
+        assert connection.execute(
+            "SELECT sign_count FROM owner_proof_credentials WHERE credential_id = ?",
+            (credential_id,),
+        ).fetchone() == (0,)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_outcome", "expected_counter"),
+    [
+        ("just_before", "VERIFIED_SYNTHETIC_ONLY", 1),
+        ("just_after", "FAILED", 0),
+        ("backward_clock", "FAILED", 0),
+    ],
+)
+def test_final_decision_time_checks_expiry_and_clock_order(
+    tmp_path,
+    monkeypatch,
+    scenario: str,
+    expected_outcome: str,
+    expected_counter: int,
+) -> None:
+    import sentinel.owner_proof.service as service
+    from sentinel.owner_proof import OwnerProofError
+
+    database, store_root, _proposal, key, credential_id, issued = _setup_assertion_case(
+        tmp_path,
+        name=f"cr2-f-final-time-{scenario}",
+    )
+    with sqlite3.connect(database) as connection:
+        expires_value = connection.execute(
+            "SELECT expires_at FROM owner_proof_challenges WHERE challenge_id = ?",
+            (issued.challenge_id,),
+        ).fetchone()[0]
+    expires_at = datetime.fromisoformat(expires_value)
+    initial_time = expires_at - timedelta(seconds=2)
+    if scenario == "just_before":
+        final_time = expires_at - timedelta(microseconds=1)
+    elif scenario == "just_after":
+        final_time = expires_at + timedelta(microseconds=1)
+    else:
+        final_time = initial_time - timedelta(seconds=1)
+    virtual_now = initial_time
+    clock_reads: list[datetime] = []
+
+    def capture_clock() -> datetime:
+        clock_reads.append(virtual_now)
+        return virtual_now
+
+    api = service._load_webauthn()
+    real_verify = api[1]
+
+    def verify_then_advance_clock(**kwargs: object):
+        nonlocal virtual_now
+        verified = real_verify(**kwargs)
+        virtual_now = final_time
+        return verified
+
+    monkeypatch.setattr(service, "_capture_utc_now", capture_clock)
+    monkeypatch.setattr(
+        service,
+        "_load_webauthn",
+        lambda: (api[0], verify_then_advance_clock, *api[2:]),
+    )
+    assertion = _signed_assertion(
+        options_json=issued.options_json,
+        credential_id=credential_id,
+        credential_bytes=b"cr2f-synthetic-credential-001",
+        private_key=key,
+    )
+
+    if expected_outcome == "VERIFIED_SYNTHETIC_ONLY":
+        report = service.verify_synthetic_assertion(
+            database,
+            store_root=store_root,
+            challenge_id=issued.challenge_id,
+            assertion_json=assertion,
+        )
+        assert report.outcome == "SYNTHETIC_ASSERTION_VERIFIED"
+    else:
+        with pytest.raises(OwnerProofError):
+            service.verify_synthetic_assertion(
+                database,
+                store_root=store_root,
+                challenge_id=issued.challenge_id,
+                assertion_json=assertion,
+            )
+
+    assert clock_reads == [initial_time, final_time]
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT consumed_at, outcome FROM owner_proof_challenge_consumptions "
+            "WHERE challenge_id = ?",
+            (issued.challenge_id,),
+        ).fetchone() == (
+            final_time.isoformat(timespec="microseconds"),
+            expected_outcome,
+        )
+        assert connection.execute(
+            "SELECT sign_count FROM owner_proof_credentials WHERE credential_id = ?",
+            (credential_id,),
+        ).fetchone() == (expected_counter,)
+
+
+def test_challenge_record_limit_permanently_blocks_later_issuance(tmp_path, monkeypatch) -> None:
+    import sentinel.owner_proof.service as service
+    from sentinel.owner_proof import OwnerProofError
+
+    database, store_root = promoted_case(tmp_path, name="cr2-f-challenge-capacity-limit")
+    saved = save_github_fixture_proposal(database, store_root=store_root, issue_number=101)
+    key = ec.generate_private_key(ec.SECP256R1())
+    credential_id = _register_test_credential(database, key)
+    monkeypatch.setattr(service, "_MAX_CHALLENGES", 1)
+
+    first = service.issue_synthetic_assertion_options(
+        database,
+        store_root=store_root,
+        proposal_id=saved.proposal.proposal_id,
+        credential_id=credential_id,
+    )
+    for _ in range(2):
+        with pytest.raises(OwnerProofError):
+            service.issue_synthetic_assertion_options(
+                database,
+                store_root=store_root,
+                proposal_id=saved.proposal.proposal_id,
+                credential_id=credential_id,
+            )
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM owner_proof_challenges"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT challenge_id FROM owner_proof_challenges"
+        ).fetchone() == (first.challenge_id,)
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("DELETE FROM owner_proof_challenges")
+
+
 def test_status_is_read_only_and_never_reports_production_owner_verification(tmp_path) -> None:
     import sentinel.owner_proof as owner_proof
 

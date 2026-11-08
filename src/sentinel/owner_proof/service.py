@@ -669,7 +669,7 @@ def verify_synthetic_assertion(
             consumed_at: str | None = None
             challenge: OwnerProofChallenge | None = None
             original_counter: int | None = None
-            attempt_time: datetime | None = None
+            final_decision_time: datetime | None = None
             with lease.transaction() as connection:
                 raw_row = _challenge_select(connection, challenge_id)
                 if raw_row is None:
@@ -692,18 +692,17 @@ def verify_synthetic_assertion(
                         store_root=store_root,
                         proposal_id=challenge.proposal_id,
                     )
-                    now = _capture_utc_now()
-                    attempt_time = now
+                    initial_time = _capture_utc_now()
                     _validate_saved_binding(
                         challenge,
                         proposal,
                         verified_source,
                         source,
-                        now=now,
+                        now=initial_time,
                     )
                     if (
-                        proposal.created_at > now
-                        or proposal.expires_at <= now
+                        proposal.created_at > initial_time
+                        or proposal.expires_at <= initial_time
                         or connection.execute(
                             "SELECT count(*) FROM tasks WHERE proposal_id = ?",
                             (proposal.proposal_id,),
@@ -752,13 +751,6 @@ def verify_synthetic_assertion(
                         store_root=store_root,
                         proposal_id=challenge.proposal_id,
                     )
-                    _validate_saved_binding(
-                        challenge,
-                        proposal_recheck,
-                        source_recheck,
-                        selected_source_recheck,
-                        now=now,
-                    )
                     current_key, current_counter = _read_credential(
                         connection,
                         challenge.credential_id,
@@ -769,17 +761,35 @@ def verify_synthetic_assertion(
                         or current_counter != counter
                     ):
                         raise OwnerProofError(OwnerProofErrorCode.ASSERTION_REJECTED)
-                    consumed_at = now.isoformat(timespec="microseconds")
+                    final_decision_time = _capture_utc_now()
+                    if final_decision_time < initial_time:
+                        raise OwnerProofError(OwnerProofErrorCode.ASSERTION_REJECTED)
+                    _validate_saved_binding(
+                        challenge,
+                        proposal_recheck,
+                        source_recheck,
+                        selected_source_recheck,
+                        now=final_decision_time,
+                    )
+                    if proposal_recheck.created_at > final_decision_time:
+                        raise OwnerProofError(OwnerProofErrorCode.ASSERTION_REJECTED)
+                    consumed_at = final_decision_time.isoformat(timespec="microseconds")
                 except OwnerProofError:
                     failure = True
-                    if attempt_time is None:
-                        attempt_time = _capture_utc_now()
-                    consumed_at = attempt_time.isoformat(timespec="microseconds")
+                    decision_time = (
+                        final_decision_time
+                        if final_decision_time is not None
+                        else _capture_utc_now()
+                    )
+                    consumed_at = decision_time.isoformat(timespec="microseconds")
                 except Exception:
                     failure = True
-                    if attempt_time is None:
-                        attempt_time = _capture_utc_now()
-                    consumed_at = attempt_time.isoformat(timespec="microseconds")
+                    decision_time = (
+                        final_decision_time
+                        if final_decision_time is not None
+                        else _capture_utc_now()
+                    )
+                    consumed_at = decision_time.isoformat(timespec="microseconds")
 
                 if consumed_at is None or challenge is None:
                     raise OwnerProofError(OwnerProofErrorCode.OPERATION_FAILED)
