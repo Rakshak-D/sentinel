@@ -1750,3 +1750,9 @@ authorization decision. Same-user database modification is not defeated by
 WebAuthn verification alone, and separate SQLite/blob checks are not an atomic
 filesystem snapshot. Owner enrollment, production WebAuthn verification,
 approval, task acceptance, and executable grants remain unavailable.
+
+The synthetic challenge table is capped at 10,000 issued records per database.
+Challenge rows are retained and immutable, including expired and consumed
+records, so reaching that cap permanently prevents further challenge issuance
+in that database. This is a CR2-F synthetic-test database limitation; no
+challenge cleanup or retention workflow is provided.
