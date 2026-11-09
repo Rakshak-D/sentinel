@@ -18,8 +18,10 @@ from typing import Any
 from tools.cr2_g_b1.protocol import MAX_FRAME_BYTES, ProtocolError, process_frame
 from tools.cr2_g_b1.store import CanaryStore
 
-_PIPE_NAME = re.compile(r"\\\\\.\\pipe\\SentinelCR2GB1-[A-Za-z0-9-]{1,64}\Z", re.ASCII)
+_PIPE_NAME = re.compile(r"\\\\\.\\pipe\\SentinelCR2GB[12]-[A-Za-z0-9-]{1,64}\Z", re.ASCII)
 _SID = re.compile(r"S-1-(?:[0-9]+-)*[0-9]+\Z", re.ASCII)
+_LOCAL_USER_SID = re.compile(r"S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+\Z", re.ASCII)
+_SERVICE_SID = re.compile(r"S-1-5-80-(?:[0-9]+-){4}[0-9]+\Z", re.ASCII)
 _ERROR_IO_PENDING = 997
 _ERROR_PIPE_CONNECTED = 535
 _ERROR_ACCESS_DENIED = 5
@@ -43,6 +45,8 @@ _SYNCHRONIZE = 0x00100000
 # that opens and exchanges the protocol: read/write data, read attributes, and
 # synchronization. In particular it excludes FILE_CREATE_PIPE_INSTANCE (0x4).
 _CLIENT_PIPE_ACCESS = _FILE_READ_DATA | _FILE_WRITE_DATA | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE
+_PIPE_AUDITOR_ACCESS = _CLIENT_PIPE_ACCESS | 0x00020000  # READ_CONTROL, no write-DAC rights.
+_BUILTIN_ADMINISTRATORS_SID = "S-1-5-32-544"
 _ERROR_INSUFFICIENT_BUFFER = 122
 _RESPONSE_ACK = b"\x06"
 _WinApi = Any
@@ -205,6 +209,27 @@ def _win_error(kernel32: _WinApi) -> BrokerPipeError:
 
 def _last_error_code() -> int:
     return ctypes.get_last_error()
+
+
+def _pipe_sddl(allowed_client_sid: str, server_sid: str | None = None) -> str:
+    """Build the B1 DACL or the narrower, auditable B2 service DACL."""
+    if not isinstance(allowed_client_sid, str) or not _SID.fullmatch(allowed_client_sid):
+        raise BrokerPipeError("INVALID_ALLOWED_SID")
+    if server_sid is not None:
+        if not isinstance(server_sid, str) or not _SERVICE_SID.fullmatch(server_sid):
+            raise BrokerPipeError("INVALID_SERVER_SID")
+        if not _LOCAL_USER_SID.fullmatch(allowed_client_sid):
+            raise BrokerPipeError("INVALID_ALLOWED_SID")
+    service_ace = f"(A;;GA;;;{server_sid})" if server_sid is not None else ""
+    auditor_ace = (
+        f"(A;;0x{_PIPE_AUDITOR_ACCESS:08X};;;{_BUILTIN_ADMINISTRATORS_SID})"
+        if server_sid is not None
+        else ""
+    )
+    return (
+        f"D:P(A;;GA;;;SY){service_ace}{auditor_ace}"
+        f"(A;;0x{_CLIENT_PIPE_ACCESS:08X};;;{allowed_client_sid})"
+    )
 
 
 def _sid_for_token(advapi32: _WinApi, kernel32: _WinApi, token: wintypes.HANDLE) -> str:
@@ -455,6 +480,7 @@ def serve_one_request(
     pipe_name: str,
     allowed_client_sid: str,
     store: CanaryStore,
+    server_sid: str | None = None,
     timeout_ms: int = 2000,
 ) -> None:
     """Serve exactly one local request under an explicit SID pipe DACL.
@@ -466,12 +492,12 @@ def serve_one_request(
         raise BrokerPipeError("WINDOWS_ONLY")
     if not isinstance(pipe_name, str) or not _PIPE_NAME.fullmatch(pipe_name):
         raise BrokerPipeError("INVALID_PIPE_NAME")
-    if not isinstance(allowed_client_sid, str) or not _SID.fullmatch(allowed_client_sid):
-        raise BrokerPipeError("INVALID_ALLOWED_SID")
     if not 1 <= timeout_ms <= 10_000:
         raise BrokerPipeError("INVALID_TIMEOUT")
     kernel32, advapi32 = _require_windows()
-    sddl = f"D:P(A;;GA;;;SY)(A;;0x{_CLIENT_PIPE_ACCESS:08X};;;{allowed_client_sid})"
+    # The B2-only auditor ACE permits live DACL inspection and bounded pipe
+    # access, but no instance creation or security-descriptor modification.
+    sddl = _pipe_sddl(allowed_client_sid, server_sid)
     descriptor = wintypes.LPVOID()
     descriptor_size = wintypes.DWORD()
     if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
