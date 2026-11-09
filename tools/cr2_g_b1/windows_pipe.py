@@ -7,6 +7,7 @@ service and does not establish protected storage or owner authentication.
 from __future__ import annotations
 
 import ctypes
+import math
 import os
 import re
 import struct
@@ -34,8 +35,14 @@ _PIPE_REJECT_REMOTE_CLIENTS = 0x00000008
 _TOKEN_QUERY = 0x0008
 _TOKEN_USER = 1
 _OPEN_EXISTING = 3
-_GENERIC_READ = 0x80000000
-_GENERIC_WRITE = 0x40000000
+_FILE_READ_DATA = 0x0001
+_FILE_WRITE_DATA = 0x0002
+_FILE_READ_ATTRIBUTES = 0x0080
+_SYNCHRONIZE = 0x00100000
+# The live Windows pipe test confirmed this is the minimum duplex-client mask
+# that opens and exchanges the protocol: read/write data, read attributes, and
+# synchronization. In particular it excludes FILE_CREATE_PIPE_INSTANCE (0x4).
+_CLIENT_PIPE_ACCESS = _FILE_READ_DATA | _FILE_WRITE_DATA | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE
 _ERROR_INSUFFICIENT_BUFFER = 122
 _RESPONSE_ACK = b"\x06"
 _WinApi = Any
@@ -152,20 +159,6 @@ def _require_windows() -> tuple[_WinApi, _WinApi]:
     kernel32.WaitNamedPipeW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
     kernel32.GetLastError.restype = wintypes.DWORD
     kernel32.GetLastError.argtypes = []
-    kernel32.ReadFile.argtypes = [
-        wintypes.HANDLE,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        ctypes.POINTER(wintypes.DWORD),
-        wintypes.LPVOID,
-    ]
-    kernel32.WriteFile.argtypes = [
-        wintypes.HANDLE,
-        wintypes.LPCVOID,
-        wintypes.DWORD,
-        ctypes.POINTER(wintypes.DWORD),
-        wintypes.LPVOID,
-    ]
     kernel32.LocalFree.restype = wintypes.HLOCAL
     kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
 
@@ -279,15 +272,19 @@ def request_pipe(pipe_name: str, frame: bytes, timeout_ms: int = 2000) -> bytes:
     deadline = time.monotonic() + timeout_ms / 1000
     handle = wintypes.HANDLE()
     while time.monotonic() < deadline:
-        remaining = int(max(0.0, deadline - time.monotonic()) * 1000)
+        remaining = _remaining_timeout_ms(deadline)
+        if remaining <= 0:
+            raise BrokerPipeError("PIPE_CONNECT_TIMEOUT")
         kernel32.WaitNamedPipeW(pipe_name, min(remaining, 100))
+        if time.monotonic() >= deadline:
+            raise BrokerPipeError("PIPE_CONNECT_TIMEOUT")
         handle = kernel32.CreateFileW(
             pipe_name,
-            _GENERIC_READ | _GENERIC_WRITE,
+            _CLIENT_PIPE_ACCESS,
             0,
             None,
             _OPEN_EXISTING,
-            0,
+            _FILE_FLAG_OVERLAPPED,
             None,
         )
         invalid_handle = ctypes.c_void_p(-1).value
@@ -301,63 +298,82 @@ def request_pipe(pipe_name: str, frame: bytes, timeout_ms: int = 2000) -> bytes:
     else:
         raise BrokerPipeError("PIPE_CONNECT_TIMEOUT")
     try:
-        written = wintypes.DWORD()
-        write_buffer = ctypes.create_string_buffer(frame)
-        if not kernel32.WriteFile(
-            handle, write_buffer, len(frame), ctypes.byref(written), None
-        ) or written.value != len(frame):
-            raise BrokerPipeError("PIPE_WRITE_FAILED")
-        header = _client_read_exact(kernel32, handle, 4)
+        _write_all(kernel32, handle, frame, deadline)
+        header = _read_exact(kernel32, handle, 4, deadline)
         response_length = struct.unpack(">I", header)[0]
         if not 0 < response_length <= MAX_FRAME_BYTES:
             raise BrokerPipeError("RESPONSE_SIZE")
-        response = header + _client_read_exact(kernel32, handle, response_length)
-        written = wintypes.DWORD()
-        ack = ctypes.create_string_buffer(_RESPONSE_ACK)
-        if not kernel32.WriteFile(
-            handle, ack, 1, ctypes.byref(written), None
-        ) or written.value != 1:
-            raise BrokerPipeError("PIPE_ACK_FAILED")
+        response = header + _read_exact(kernel32, handle, response_length, deadline)
+        _write_all(kernel32, handle, _RESPONSE_ACK, deadline)
         return response
     finally:
         kernel32.CloseHandle(handle)
 
 
-def _client_read_exact(kernel32: _WinApi, handle: wintypes.HANDLE, size: int) -> bytes:
-    result = bytearray()
-    while len(result) < size:
-        buffer = ctypes.create_string_buffer(size - len(result))
-        count = wintypes.DWORD()
-        if not kernel32.ReadFile(
-            handle, buffer, len(buffer), ctypes.byref(count), None
-        ) or count.value == 0:
-            raise BrokerPipeError("PIPE_READ_FAILED")
-        result.extend(buffer.raw[: count.value])
-    return bytes(result)
+def _remaining_timeout_ms(deadline: float) -> int:
+    return max(0, math.ceil((deadline - time.monotonic()) * 1000))
 
 
-def _wait_overlapped(
+def _cancel_and_reap(
     kernel32: _WinApi,
     handle: wintypes.HANDLE,
     overlapped: _Overlapped,
-    timeout_ms: int,
-) -> int:
-    outcome = kernel32.WaitForSingleObject(overlapped.hEvent, max(0, timeout_ms))
-    if outcome == _WAIT_TIMEOUT:
-        kernel32.CancelIoEx(handle, ctypes.byref(overlapped))
-        transferred = wintypes.DWORD()
-        kernel32.GetOverlappedResult(
-            handle, ctypes.byref(overlapped), ctypes.byref(transferred), True
-        )
-        raise BrokerPipeError("PIPE_TIMEOUT")
-    if outcome != _WAIT_OBJECT_0:
-        raise _win_error(kernel32)
+) -> None:
+    # CancelIoEx is asynchronous. Keep the OVERLAPPED and its buffer alive until
+    # GetOverlappedResult confirms completion or cancellation.
+    kernel32.CancelIoEx(handle, ctypes.byref(overlapped))
     transferred = wintypes.DWORD()
-    if not kernel32.GetOverlappedResult(
-        handle, ctypes.byref(overlapped), ctypes.byref(transferred), False
-    ):
+    kernel32.GetOverlappedResult(handle, ctypes.byref(overlapped), ctypes.byref(transferred), True)
+
+
+def _overlapped_transfer(
+    kernel32: _WinApi,
+    handle: wintypes.HANDLE,
+    buffer: ctypes.Array[ctypes.c_char],
+    size: int,
+    deadline: float,
+    *,
+    write: bool,
+) -> int:
+    event = kernel32.CreateEventW(None, True, False, None)
+    if not event:
         raise _win_error(kernel32)
-    return transferred.value
+    overlapped = _Overlapped()
+    overlapped.hEvent = event
+    operation_pending = False
+    try:
+        if write:
+            completed = kernel32.WriteFile(handle, buffer, size, None, ctypes.byref(overlapped))
+        else:
+            completed = kernel32.ReadFile(handle, buffer, size, None, ctypes.byref(overlapped))
+        if not completed:
+            error = _last_error_code()
+            if error != _ERROR_IO_PENDING:
+                raise _win_error(kernel32)
+            operation_pending = True
+            remaining = _remaining_timeout_ms(deadline)
+            outcome = kernel32.WaitForSingleObject(event, remaining)
+            if outcome != _WAIT_OBJECT_0:
+                _cancel_and_reap(kernel32, handle, overlapped)
+                operation_pending = False
+                if outcome == _WAIT_TIMEOUT or _remaining_timeout_ms(deadline) <= 0:
+                    raise BrokerPipeError("PIPE_TIMEOUT")
+                raise _win_error(kernel32)
+
+        transferred = wintypes.DWORD()
+        if not kernel32.GetOverlappedResult(
+            handle, ctypes.byref(overlapped), ctypes.byref(transferred), False
+        ):
+            operation_pending = False  # The completion has been observed.
+            raise _win_error(kernel32)
+        operation_pending = False
+        if time.monotonic() >= deadline:
+            raise BrokerPipeError("PIPE_TIMEOUT")
+        return int(transferred.value)
+    finally:
+        if operation_pending:
+            _cancel_and_reap(kernel32, handle, overlapped)
+        kernel32.CloseHandle(event)
 
 
 def _connect(kernel32: _WinApi, pipe: wintypes.HANDLE, timeout_ms: int) -> None:
@@ -401,31 +417,15 @@ def _read_exact(
 ) -> bytes:
     chunks = bytearray()
     while len(chunks) < size:
-        remaining_ms = int(max(0.0, deadline - time.monotonic()) * 1000)
+        remaining_ms = _remaining_timeout_ms(deadline)
         if remaining_ms <= 0:
             raise BrokerPipeError("PIPE_TIMEOUT")
         wanted = size - len(chunks)
         buffer = ctypes.create_string_buffer(wanted)
-        transferred = wintypes.DWORD()
-        overlapped = _Overlapped()
-        event = kernel32.CreateEventW(None, True, False, None)
-        if not event:
-            raise _win_error(kernel32)
-        overlapped.hEvent = event
-        try:
-            ok = kernel32.ReadFile(
-                handle, buffer, wanted, ctypes.byref(transferred), ctypes.byref(overlapped)
-            )
-            if not ok:
-                error = _last_error_code()
-                if error != _ERROR_IO_PENDING:
-                    raise _win_error(kernel32)
-                transferred.value = _wait_overlapped(kernel32, handle, overlapped, remaining_ms)
-            if transferred.value == 0:
-                raise BrokerPipeError("PIPE_EOF")
-            chunks.extend(buffer.raw[: transferred.value])
-        finally:
-            kernel32.CloseHandle(event)
+        transferred = _overlapped_transfer(kernel32, handle, buffer, wanted, deadline, write=False)
+        if transferred == 0:
+            raise BrokerPipeError("PIPE_EOF")
+        chunks.extend(buffer.raw[:transferred])
     return bytes(chunks)
 
 
@@ -437,35 +437,17 @@ def _write_all(
 ) -> None:
     offset = 0
     while offset < len(payload):
-        remaining_ms = int(max(0.0, deadline - time.monotonic()) * 1000)
+        remaining_ms = _remaining_timeout_ms(deadline)
         if remaining_ms <= 0:
             raise BrokerPipeError("PIPE_TIMEOUT")
         part = payload[offset:]
         buffer = ctypes.create_string_buffer(part)
-        transferred = wintypes.DWORD()
-        overlapped = _Overlapped()
-        event = kernel32.CreateEventW(None, True, False, None)
-        if not event:
-            raise _win_error(kernel32)
-        overlapped.hEvent = event
-        try:
-            ok = kernel32.WriteFile(
-                handle,
-                buffer,
-                len(part),
-                ctypes.byref(transferred),
-                ctypes.byref(overlapped),
-            )
-            if not ok:
-                error = _last_error_code()
-                if error != _ERROR_IO_PENDING:
-                    raise _win_error(kernel32)
-                transferred.value = _wait_overlapped(kernel32, handle, overlapped, remaining_ms)
-            if transferred.value == 0:
-                raise BrokerPipeError("PIPE_WRITE_FAILED")
-            offset += transferred.value
-        finally:
-            kernel32.CloseHandle(event)
+        transferred = _overlapped_transfer(
+            kernel32, handle, buffer, len(part), deadline, write=True
+        )
+        if transferred == 0:
+            raise BrokerPipeError("PIPE_WRITE_FAILED")
+        offset += transferred
 
 
 def serve_one_request(
@@ -489,25 +471,20 @@ def serve_one_request(
     if not 1 <= timeout_ms <= 10_000:
         raise BrokerPipeError("INVALID_TIMEOUT")
     kernel32, advapi32 = _require_windows()
-    sddl = f"D:P(A;;GA;;;SY)(A;;GRGW;;;{allowed_client_sid})"
+    sddl = f"D:P(A;;GA;;;SY)(A;;0x{_CLIENT_PIPE_ACCESS:08X};;;{allowed_client_sid})"
     descriptor = wintypes.LPVOID()
     descriptor_size = wintypes.DWORD()
     if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
         sddl, 1, ctypes.byref(descriptor), ctypes.byref(descriptor_size)
     ):
         raise BrokerPipeError("PIPE_SECURITY_DESCRIPTOR_FAILED")
-    attributes = _SecurityAttributes(
-        ctypes.sizeof(_SecurityAttributes), descriptor, False
-    )
+    attributes = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), descriptor, False)
     pipe = wintypes.HANDLE()
     try:
         pipe = kernel32.CreateNamedPipeW(
             pipe_name,
             _PIPE_ACCESS_DUPLEX | _FILE_FLAG_FIRST_PIPE_INSTANCE | _FILE_FLAG_OVERLAPPED,
-            _PIPE_TYPE_BYTE
-            | _PIPE_READMODE_BYTE
-            | _PIPE_WAIT
-            | _PIPE_REJECT_REMOTE_CLIENTS,
+            _PIPE_TYPE_BYTE | _PIPE_READMODE_BYTE | _PIPE_WAIT | _PIPE_REJECT_REMOTE_CLIENTS,
             1,
             MAX_FRAME_BYTES + 4,
             MAX_FRAME_BYTES + 4,
