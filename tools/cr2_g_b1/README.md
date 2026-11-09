@@ -61,6 +61,34 @@ client token, then validates the token before dispatch. The one-byte transport
 acknowledgment prevents disconnecting the pipe before the client has read the
 complete response. No service is installed or started.
 
+The ordinary client's DACL ACE and `CreateFileW` request use the specific
+access mask `0x00100083`: `FILE_READ_DATA` (`0x1`), `FILE_WRITE_DATA` (`0x2`),
+`FILE_READ_ATTRIBUTES` (`0x80`), and `SYNCHRONIZE` (`0x00100000`). A live
+Windows test reads the security descriptor from the actual pipe handle with
+`GetSecurityInfo(SE_FILE_OBJECT)`, locates the configured client's access
+allowed ACE with `GetAce`, and requires that exact mask. It therefore rejects
+`FILE_CREATE_PIPE_INSTANCE` (`0x4`), `GENERIC_READ`, `GENERIC_WRITE`,
+`GENERIC_ALL`, `WRITE_DAC`, and `WRITE_OWNER` in the client ACE. Real local
+pipe tests also show a permitted current-process SID can exchange a health
+request and a SID absent from the DACL is denied by Windows. A separate live
+mask probe checked all 16 combinations of those four specific rights; only
+`0x00100083` supported the complete duplex exchange on this host. This is
+local API evidence, not a service-identity or protected-storage result.
+
+`request_pipe(timeout_ms=...)` now uses a single monotonic deadline for
+connection retries, frame transmission, response header and body reads, and
+the final acknowledgment. The client handle is opened with
+`FILE_FLAG_OVERLAPPED`; reads and writes loop on short transfers. On timeout,
+the client calls `CancelIoEx` and waits for `GetOverlappedResult` to report
+completion/cancellation before releasing the event, `OVERLAPPED`, buffer, or
+pipe handle. This safe reaping step depends on the local Windows I/O stack
+completing cancellation; it is not a wall-clock guarantee against OS stalls.
+Tests use real disposable local pipe endpoints stalled before the response
+header, during a partial header, and during a partial body, plus absent-server
+and disconnect cases. The earlier synchronous client exceeded its 140 ms
+deadline in each stalled-response case; the overlapped client reports the
+bounded `PIPE_TIMEOUT` result before the test releases the peer.
+
 The focused Windows test exercises a real local named pipe and a real
 Windows-enforced named-pipe DACL denial when the current process SID is not in
 the DACL. This is a test of the local pipe API boundary only. It is not proof
@@ -96,6 +124,11 @@ or host security setting was created or changed.
 ## Platform references
 
 - [CreateNamedPipeW](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-createnamedpipew) documents the pipe name, security attributes, `FILE_FLAG_FIRST_PIPE_INSTANCE`, overlapped I/O, and `PIPE_REJECT_REMOTE_CLIENTS`.
+- [Named-pipe security and access rights](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights) explains why `FILE_GENERIC_WRITE` includes the `FILE_APPEND_DATA`/`FILE_CREATE_PIPE_INSTANCE` bit and recommends individual rights.
+- [Named pipe open modes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-open-modes) documents client access compatibility and `FILE_FLAG_OVERLAPPED`.
+- [ReadFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile) specifies `NULL` for `lpNumberOfBytesRead` on overlapped operations and requires the `OVERLAPPED` and buffer to remain valid until completion.
+- [Canceling pending I/O operations](https://learn.microsoft.com/en-us/windows/win32/fileio/canceling-pending-i-o-operations) documents `CancelIoEx` and waiting for completion before cleanup.
+- [GetSecurityInfo](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo) and [securable objects](https://learn.microsoft.com/en-us/windows/win32/secauthz/securable-objects) document retrieving a named pipe's actual security descriptor from its handle.
 - [Named pipe server using overlapped I/O](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-server-using-overlapped-i-o) and [synchronous and overlapped pipe I/O](https://learn.microsoft.com/en-us/windows/desktop/ipc/synchronous-and-overlapped-input-and-output) document bounded asynchronous connect/read/write patterns.
 - [Named-pipe client impersonation](https://learn.microsoft.com/en-us/windows/win32/ipc/impersonating-a-named-pipe-client) describes using a client token for server-side access checks; a SID is an OS account boundary, not proof of a particular person's intent.
 - [Named-pipe security and access rights](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights) describes pipe DACLs. No service or protected data directory was installed or configured by this slice.
