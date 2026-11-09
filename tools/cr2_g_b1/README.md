@@ -132,3 +132,76 @@ or host security setting was created or changed.
 - [Named pipe server using overlapped I/O](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-server-using-overlapped-i-o) and [synchronous and overlapped pipe I/O](https://learn.microsoft.com/en-us/windows/desktop/ipc/synchronous-and-overlapped-input-and-output) document bounded asynchronous connect/read/write patterns.
 - [Named-pipe client impersonation](https://learn.microsoft.com/en-us/windows/win32/ipc/impersonating-a-named-pipe-client) describes using a client token for server-side access checks; a SID is an OS account boundary, not proof of a particular person's intent.
 - [Named-pipe security and access rights](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights) describes pipe DACLs. No service or protected data directory was installed or configured by this slice.
+
+## CR2-G-B2 ephemeral service-isolation laboratory
+
+CR2-G-B2 adds a standalone SCM-compatible service host and a disposable
+GitHub Actions laboratory. It remains outside the `sentinel` runtime package
+and does not connect to owner proof, policy, proposals, tasks, credentials,
+models, tools, or external effects. The service protocol has only `health`,
+`canary_status`, `enroll` (deny), and `approve` (deny); unknown or malformed
+requests fail closed. The canary remains the fixed B1 synthetic-only SQLite
+record and is opened query-only by the service.
+
+The proposed guest configuration uses `NT AUTHORITY\LocalService` plus
+`SERVICE_SID_TYPE_RESTRICTED` for the fixed service name
+`SentinelCR2GB2Lab`. The service verifies that its process token user is
+LocalService and that its service SID appears in both enabled groups and
+restricted SIDs. SYSTEM owns the disposable root and receives full control;
+Administrators receive full control for lab setup/inspection; the service SID
+receives read/execute only on its binary, configuration, and canary storage.
+The ordinary permitted pipe client receives exactly `0x00100083`
+(`FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE`);
+the protocol has no storage-write operation. A separate disposable standard
+local account is expected to be denied by the pipe DACL and filesystem ACLs.
+The service does not use LocalSystem. These are the intended lab ACLs; they
+are **not yet measured Windows service or storage results**.
+
+The reviewable workflow is
+`.github/workflows/cr2-g-b2-ephemeral-windows-lab.yml`. It is limited to
+`pull_request` targeting `main`, then requires the same repository, exact
+feature branch `feat/cr2-g-b2-windows-ephemeral-lab`, and base `main` both in
+the job condition and in the guest script. It requests only
+`permissions: contents: read`, checks out with credentials not persisted,
+uses immutable SHA-pinned checkout/setup-python actions, has a 45-minute job
+timeout, and does not reference repository secrets, upload artifacts, or publish
+anything. Branch push alone does not start this job. **Do not open the first
+pull request until an independent reviewer has reviewed this workflow and the
+privileged harness.** The workflow executes the reviewed branch's lab code on
+an administrator-capable hosted runner, so review of the exact PR revision is
+part of the safety boundary. The workflow does not disable the hosted runner's
+network; its scripts make no provider/model/credential requests, and there
+are no repository secrets or write-capable token permissions.
+
+The guest script creates two random disposable standard local accounts,
+configures the test service and its restricted service SID, inspects effective
+SCM/token/storage/pipe descriptors, and probes direct read/write/delete/
+rename/replace/ACL/service-configuration denial from an unprivileged process.
+The probe checks actual Win32 error codes and before/after synthetic file
+hashes. It exercises allowed health/canary IPC, a second account's denied
+pipe access, malformed and authority-claim frames, pre-creation, concurrent
+requests, timeouts, stop/restart, in-flight process termination, recovery, and
+guest-only cleanup. The unprivileged probe is staged with a read-only copy of
+the Python runtime and synthetic helper under a random `C:\Users\Public`
+directory. Its DACL is checked as SYSTEM/Admin full control plus `Users`
+read/execute, and the directory is removed in the cleanup block; it contains
+no configuration or canary data. ACL inspection rejects non-allow ACE types, duplicate ACEs,
+unexpected SIDs, or masks other than the exact expected entries. The runner's
+administrator token is used only for service setup and inspection, never as
+evidence of an unprivileged access denial. The two local accounts are separate
+Windows accounts, but the lab does not claim distinct interactive sessions.
+
+**Execution state:** GitHub Actions is enabled for the repository and
+`windows-2025` is a documented hosted-runner label. No lab workflow run has
+been triggered, so actual runner allocation and every service/ACL/token/pipe/
+restart/cleanup result remain **UNVERIFIED**. The development host is Windows
+11 Home; the local guard invocation returned
+`GITHUB_WINDOWS_RUNNER_REQUIRED`, and the guest root did not exist afterward.
+No host service, account, ACL, VM, network setting, credential, or Windows
+security configuration was changed. Pure service-config/lifecycle and ACL
+validation tests are deterministic code tests, not OS isolation evidence.
+Cross-session denial, remote-peer denial, and resistance to a privileged or
+compromised hosted runner also remain **UNVERIFIED**. A later successful job
+would demonstrate only the specific ephemeral Windows service/storage
+behavior that it actually measures—not trusted owner enrollment, trusted
+display, owner intent, approval, or production security.
