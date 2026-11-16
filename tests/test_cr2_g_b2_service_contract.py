@@ -189,20 +189,102 @@ def test_service_host_has_no_external_or_production_authorization_imports() -> N
     assert "owner_verified=True" not in source
 
 
-def test_ephemeral_workflow_is_same_repo_feature_pr_only_and_read_only() -> None:
+def _yaml_entry(text: str, path: tuple[str, ...]) -> tuple[int, int, str, list[str]]:
+    """Read one simple, indentation-based YAML mapping entry and its block."""
+    lines = text.splitlines()
+    search_from = 0
+    parent_indent = -2
+    found: tuple[int, int, str] | None = None
+    for key in path:
+        expected_indent = parent_indent + 2
+        found = None
+        for index in range(search_from, len(lines)):
+            line = lines[index]
+            if not line.strip():
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if indent <= parent_indent:
+                break
+            if indent == expected_indent and line.lstrip().startswith(f"{key}:"):
+                found = (index, indent, line.lstrip().split(":", maxsplit=1)[1].strip())
+                break
+        assert found is not None, f"missing YAML mapping path: {path!r}"
+        search_from = found[0] + 1
+        parent_indent = found[1]
+    assert found is not None
+    block = []
+    for line in lines[found[0] + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip(" ")) <= found[1]:
+            break
+        block.append(line)
+    return found[0], found[1], found[2], block
+
+
+def _yaml_sequence(text: str, path: tuple[str, ...]) -> list[str]:
+    _, indent, value, block = _yaml_entry(text, path)
+    assert value == ""
+    sequence_indent = indent + 2
+    values = []
+    for line in block:
+        if not line.strip():
+            continue
+        line_indent = len(line) - len(line.lstrip(" "))
+        if line_indent == sequence_indent and line.lstrip().startswith("- "):
+            values.append(line.lstrip()[2:].strip())
+        elif line_indent <= indent:
+            break
+        else:
+            raise AssertionError(f"unexpected YAML sequence structure at {path!r}")
+    return values
+
+
+def _yaml_folded_scalar(text: str, path: tuple[str, ...]) -> str:
+    _, indent, marker, block = _yaml_entry(text, path)
+    assert marker in {">", ">-"}
+    return " ".join(line.strip() for line in block if line.strip())
+
+
+def test_ephemeral_workflow_is_same_repo_opened_nondraft_pr_only() -> None:
     workflow = Path(
         ".github/workflows/cr2-g-b2-ephemeral-windows-lab.yml"
     ).read_text(encoding="utf-8")
-    assert "pull_request:" in workflow
+    assert _yaml_sequence(workflow, ("on", "pull_request", "types")) == ["opened"]
+    condition = _yaml_folded_scalar(workflow, ("jobs", "isolated-service-lab", "if"))
+    assert [term.strip() for term in condition.split("&&")] == [
+        "github.event_name == 'pull_request'",
+        "github.event.action == 'opened'",
+        "github.event.pull_request.draft == false",
+        "github.event.pull_request.head.repo.full_name == github.repository",
+        "github.event.pull_request.head.ref == 'feat/cr2-g-b2-windows-ephemeral-lab'",
+        "github.event.pull_request.base.repo.full_name == github.repository",
+        "github.event.pull_request.base.ref == 'main'",
+    ]
     assert "pull_request_target" not in workflow
     assert "workflow_dispatch" not in workflow
+    assert "workflow_run" not in workflow
+    assert "repository_dispatch" not in workflow
     assert "push:" not in workflow
     assert "permissions:\n  contents: read" in workflow
     assert "runs-on: windows-2025" in workflow
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in workflow
-    assert "feat/cr2-g-b2-windows-ephemeral-lab" in workflow
+    assert "timeout-minutes: 45" in workflow
     assert "persist-credentials: false" in workflow
     assert "@11bd71901bbe5b1630ceea73d27597364c9af683" in workflow
     assert "@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
     assert "secrets." not in workflow
     assert "pull_request.head.sha" in workflow
+
+
+def test_lab_script_rejects_non_opened_or_draft_pull_requests() -> None:
+    script = Path("tools/cr2_g_b1/run_ephemeral_lab.ps1").read_text(encoding="utf-8")
+    guard_start = script.index("if (\n        $event.action")
+    guard_end = script.index(
+        "    ) {\n        Stop-WithCode \"PULL_REQUEST_EVENT_NOT_ALLOWLISTED\"",
+        guard_start,
+    )
+    guard = script[guard_start:guard_end]
+    assert '$event.action -ne "opened"' in guard
+    assert "$event.pull_request.draft -ne $false" in guard
+    assert "$event.pull_request.head.repo.full_name -ne $repoName" in guard
+    assert "$event.pull_request.head.ref -ne $requiredBranch" in guard
+    assert "$event.pull_request.base.repo.full_name -ne $repoName" in guard
+    assert '$event.pull_request.base.ref -ne "main"' in guard

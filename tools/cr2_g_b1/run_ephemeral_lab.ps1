@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module -Name (Join-Path $PSScriptRoot "service_cleanup.psm1") -Force -ErrorAction Stop
 $serviceName = "SentinelCR2GB2Lab"
 $serviceRoot = "C:\ProgramData\SentinelCR2GB2"
 $clientRoot = $null
@@ -186,6 +187,62 @@ function Assert-ServiceState([string]$Expected) {
     }
 }
 
+function New-ServiceRemovalOperations {
+    $getState = {
+        param([string]$Name)
+        if ($Name -cne "SentinelCR2GB2Lab") { throw "SERVICE_NAME_INVALID" }
+        try {
+            $rows = @(Get-CimInstance -ClassName Win32_Service -Filter "Name='$Name'" -ErrorAction Stop)
+        }
+        catch {
+            throw "SERVICE_STATE_QUERY_FAILED"
+        }
+        if ($rows.Count -gt 1) { throw "SERVICE_STATE_INVALID" }
+        if ($rows.Count -eq 0) { return "ABSENT" }
+        switch ([string]$rows[0].State) {
+            "Running" { return "RUNNING" }
+            "Start Pending" { return "START_PENDING" }
+            "Stop Pending" { return "STOP_PENDING" }
+            "Stopped" { return "STOPPED" }
+            default { throw "SERVICE_STATE_INVALID" }
+        }
+    }.GetNewClosure()
+    $stop = {
+        param([string]$Name)
+        if ($Name -cne "SentinelCR2GB2Lab") { throw "SERVICE_NAME_INVALID" }
+        & "$env:SystemRoot\System32\sc.exe" stop $Name 2>&1 | Out-Null
+        if ($LASTEXITCODE -notin @(0, 1062)) { throw "SERVICE_STOP_FAILED" }
+    }.GetNewClosure()
+    $delete = {
+        param([string]$Name)
+        if ($Name -cne "SentinelCR2GB2Lab") { throw "SERVICE_NAME_INVALID" }
+        & "$env:SystemRoot\System32\sc.exe" delete $Name 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { return "REQUESTED" }
+        if ($LASTEXITCODE -eq 1072) { return "ALREADY_PENDING" }
+        throw "SERVICE_DELETE_FAILED"
+    }.GetNewClosure()
+    $sleep = {
+        param([int]$Milliseconds)
+        Start-Sleep -Milliseconds $Milliseconds
+    }
+    return @{
+        GetState = $getState
+        Stop = $stop
+        Delete = $delete
+        Sleep = $sleep
+    }
+}
+
+function Remove-LabService {
+    $result = Invoke-LabServiceRemoval `
+        -ServiceName $serviceName `
+        -Operations (New-ServiceRemovalOperations) `
+        -TimeoutMilliseconds 8000 `
+        -PollMilliseconds 100
+    if ($result -ne "REMOVED") { throw "SERVICE_REMOVE_FAILED" }
+    return $result
+}
+
 function Get-CriticalHashes {
     $targets = @{
         service_binary = Join-Path $serviceRoot "app\python\python.exe"
@@ -212,7 +269,8 @@ try {
     }
     $event = Get-Content -LiteralPath $EventPath -Raw | ConvertFrom-Json -AsHashtable
     if (
-        $event.action -notin @("opened", "synchronize", "reopened", "ready_for_review") -or
+        $event.action -ne "opened" -or
+        $event.pull_request.draft -ne $false -or
         $event.pull_request.head.repo.full_name -ne $repoName -or
         $event.pull_request.head.ref -ne $requiredBranch -or
         $event.pull_request.base.repo.full_name -ne $repoName -or
@@ -529,9 +587,8 @@ try {
         Stop-WithCode "CANARY_CHANGED_DURING_LAB"
     }
 
-    Invoke-Sc @("stop", $serviceName) "SERVICE_FINAL_STOP_FAILED" | Out-Null
-    Wait-ServiceStatus "Stopped" 10 | Out-Null
-    Invoke-Sc @("delete", $serviceName) "SERVICE_REMOVE_FAILED" | Out-Null
+    $removeResult = Remove-LabService
+    if ($removeResult -ne "REMOVED") { Stop-WithCode "SERVICE_REMOVE_FAILED" }
     $serviceCreated = $false
 }
 catch {
@@ -553,32 +610,17 @@ finally {
         }
     }
     if ($serviceCreated) {
-        & "$env:SystemRoot\System32\sc.exe" stop $serviceName 2>&1 | Out-Null
-        $stopDeadline = [DateTime]::UtcNow.AddSeconds(8)
-        do {
-            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-            if ($null -eq $service -or $service.Status -eq "Stopped") { break }
-            Start-Sleep -Milliseconds 100
-        } while ([DateTime]::UtcNow -lt $stopDeadline)
-        if ($null -ne $service -and $service.Status -ne "Stopped") {
-            $serviceRow = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
-            if ($null -ne $serviceRow -and [uint32]$serviceRow.ProcessId -gt 0) {
-                Stop-Process -Id ([int]$serviceRow.ProcessId) -Force -ErrorAction SilentlyContinue
+        try {
+            $removeResult = Remove-LabService
+            if ($removeResult -eq "REMOVED") {
+                $serviceCreated = $false
             }
-            $cleanupFailure = $true
+            else {
+                $cleanupFailure = $true
+            }
         }
-        & "$env:SystemRoot\System32\sc.exe" delete $serviceName 2>&1 | Out-Null
-        $deleteDeadline = [DateTime]::UtcNow.AddSeconds(8)
-        do {
-            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-            if ($null -eq $service) { break }
-            Start-Sleep -Milliseconds 100
-        } while ([DateTime]::UtcNow -lt $deleteDeadline)
-        if ($null -ne $service) {
+        catch {
             $cleanupFailure = $true
-        }
-        else {
-            $serviceCreated = $false
         }
     }
     foreach ($name in $createdUsers) {
