@@ -1,11 +1,19 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
     [string]$EventPath
 )
 
 $ErrorActionPreference = "Stop"
-Import-Module -Name (Join-Path $PSScriptRoot "service_cleanup.psm1") -Force -ErrorAction Stop
+$diagnosticsModule = Join-Path $PSScriptRoot "lab_diagnostics.psm1"
+$serviceCleanupModule = Join-Path $PSScriptRoot "service_cleanup.psm1"
+try {
+    Import-Module -Name $diagnosticsModule -Force -ErrorAction Stop
+    Import-Module -Name $serviceCleanupModule -Force -ErrorAction Stop
+}
+catch {
+    [Console]::Error.WriteLine('{"schema_version":"sentinel.cr2-g-b2-run-report.v1","status":"FAILED","scope":"EPHEMERAL_GUEST_ONLY","primary_failure":{"phase":"HOST_PREFLIGHT","code":"DIAGNOSTICS_INITIALIZATION_FAILED","category":"OTHER","line":null},"cleanup":{"status":"NOT_APPLICABLE","steps_attempted":0,"steps_completed":0,"failures":[]},"production_owner_verification":"UNAVAILABLE","authorization_enabled":false,"unverified":["CROSS_SESSION","REMOTE_PEER","HOST_ADMINISTRATOR_OR_SYSTEM_COMPROMISE","PRODUCTION_OWNER_AUTHENTICATION"]}')
+    exit 1
+}
 $serviceName = "SentinelCR2GB2Lab"
 $serviceRoot = "C:\ProgramData\SentinelCR2GB2"
 $clientRoot = $null
@@ -14,18 +22,29 @@ $clientPython = $null
 $clientProbeScript = $null
 $servicePipePrefix = "\\.\pipe\SentinelCR2GB2-"
 $repoName = "Rakshak-D/sentinel"
-$requiredBranch = "feat/cr2-g-b2-windows-ephemeral-lab"
+$requiredBranch = "feat/cr2-g-b2-r2-diagnostics"
 $rootCreated = $false
 $serviceCreated = $false
-$failureCode = $null
-$cleanupFailure = $false
+$currentPhase = "EVENT_GUARD"
+$primaryFailure = $null
+$cleanupResult = $null
+$labChecksPassed = $false
 $createdUsers = [System.Collections.Generic.List[string]]::new()
 $createdUserSids = @{}
 $processes = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 $tempFiles = [System.Collections.Generic.List[string]]::new()
 
 function Stop-WithCode([string]$Code) {
-    throw $Code
+    if ($Code -notmatch '^[A-Z0-9_]{1,64}$') {
+        $Code = "EPHEMERAL_LAB_FAILED"
+    }
+    $exception = [System.InvalidOperationException]::new("Lab operation failed.")
+    $exception.Data["Sentinel.LabErrorCode.v1"] = $Code
+    throw $exception
+}
+
+function Set-LabPhase([string]$Phase) {
+    $script:currentPhase = $Phase
 }
 
 function Invoke-Sc([string[]]$Arguments, [string]$Code) {
@@ -128,7 +147,7 @@ function New-DisposableLocalUser([string]$Prefix) {
     }
     catch {
         $password.Dispose()
-        throw "DISPOSABLE_USER_CREATION_FAILED"
+        Stop-WithCode "DISPOSABLE_USER_CREATION_FAILED"
     }
 }
 
@@ -234,12 +253,17 @@ function New-ServiceRemovalOperations {
 }
 
 function Remove-LabService {
-    $result = Invoke-LabServiceRemoval `
-        -ServiceName $serviceName `
-        -Operations (New-ServiceRemovalOperations) `
-        -TimeoutMilliseconds 8000 `
-        -PollMilliseconds 100
-    if ($result -ne "REMOVED") { throw "SERVICE_REMOVE_FAILED" }
+    try {
+        $result = Invoke-LabServiceRemoval `
+            -ServiceName $serviceName `
+            -Operations (New-ServiceRemovalOperations) `
+            -TimeoutMilliseconds 8000 `
+            -PollMilliseconds 100
+    }
+    catch {
+        Stop-WithCode "SERVICE_REMOVAL_FAILED"
+    }
+    if ($result -ne "REMOVED") { Stop-WithCode "SERVICE_REMOVAL_FAILED" }
     return $result
 }
 
@@ -261,6 +285,12 @@ function Get-CriticalHashes {
 }
 
 try {
+    Set-LabPhase "EVENT_GUARD"
+    if ([string]::IsNullOrWhiteSpace($EventPath) -or
+        -not [IO.Path]::IsPathRooted($EventPath) -or
+        -not (Test-Path -LiteralPath $EventPath -PathType Leaf)) {
+        Stop-WithCode "EVENT_FILE_UNAVAILABLE"
+    }
     if ($env:GITHUB_ACTIONS -ne "true" -or $env:RUNNER_OS -ne "Windows") {
         Stop-WithCode "GITHUB_WINDOWS_RUNNER_REQUIRED"
     }
@@ -278,6 +308,7 @@ try {
     ) {
         Stop-WithCode "PULL_REQUEST_EVENT_NOT_ALLOWLISTED"
     }
+    Set-LabPhase "HOST_PREFLIGHT"
     if (-not [Security.Principal.WindowsPrincipal]::new(
         [Security.Principal.WindowsIdentity]::GetCurrent()
     ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -303,12 +334,14 @@ try {
     }
     $pipeName = $servicePipePrefix + [guid]::NewGuid().ToString("N")
 
+    Set-LabPhase "ACCOUNT_SETUP"
     $allowed = New-DisposableLocalUser "sgb2a"
     $denied = New-DisposableLocalUser "sgb2d"
     if ($allowed.Sid -eq $denied.Sid -or $allowed.Sid -notmatch '^S-1-5-21-' -or $denied.Sid -notmatch '^S-1-5-21-') {
         Stop-WithCode "DISPOSABLE_USER_SID_INVALID"
     }
 
+    Set-LabPhase "CLIENT_STAGING"
     $publicRoot = if ([string]::IsNullOrWhiteSpace($env:PUBLIC)) {
         Join-Path $env:SystemDrive "Users\Public"
     }
@@ -361,6 +394,7 @@ try {
         Stop-WithCode "PUBLIC_CLIENT_ACL_RESULT_INVALID"
     }
 
+    Set-LabPhase "SERVICE_STAGING"
     New-Item -ItemType Directory -Path $serviceRoot | Out-Null
     $rootCreated = $true
     if ((Get-Item -LiteralPath $serviceRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
@@ -401,6 +435,7 @@ try {
         Stop-WithCode "SERVICE_IMAGE_COPY_FAILED"
     }
     $binaryPath = '"' + $serviceImage + '" -I -S -B "' + $serviceScript + '"'
+    Set-LabPhase "SERVICE_INSTALL"
     Invoke-Sc @("create", $serviceName, "type=", "own", "start=", "demand", "obj=", "NT AUTHORITY\LocalService", "binPath=", $binaryPath) "SERVICE_CREATE_FAILED" | Out-Null
     $serviceCreated = $true
     Invoke-Sc @("sidtype", $serviceName, "restricted") "SERVICE_SID_TYPE_CONFIGURATION_FAILED" | Out-Null
@@ -419,6 +454,7 @@ try {
         Invoke-Icacls @($path, "/setowner", "*S-1-5-18", "/T", "/C") "SERVICE_STORAGE_OWNER_FAILED"
     }
     Invoke-Sc @("sdset", $serviceName, "D:(A;;GA;;;SY)(A;;GA;;;BA)") "SERVICE_OBJECT_DACL_FAILED" | Out-Null
+    Set-LabPhase "TOKEN_ACL_CHECKS"
     $storageAcl = & $runnerPython -I -S -B $probeScript storage-acls --service-sid $serviceSid --client-sid $allowed.Sid
     if ($LASTEXITCODE -ne 0) {
         Stop-WithCode "STORAGE_ACL_READBACK_FAILED"
@@ -428,6 +464,7 @@ try {
         Stop-WithCode "STORAGE_ACL_TARGET_SET_INVALID"
     }
 
+    Set-LabPhase "PIPE_PRECREATE"
     # A disposable non-admin account creates the first pipe instance. The SCM
     # host must fail closed because its own CreateNamedPipeW uses FIRST_INSTANCE.
     $precreateOut = Join-Path $env:RUNNER_TEMP ("sgb2-precreate-" + [guid]::NewGuid().ToString("N") + ".out")
@@ -461,6 +498,7 @@ try {
     }
 
     # The service account has read/execute, not write; SYSTEM/Admin own recovery.
+    Set-LabPhase "SERVICE_START"
     & "$env:SystemRoot\System32\sc.exe" start $serviceName 2>&1 | Out-Null
     Wait-ServiceStatus "Running" 15 | Out-Null
     $serviceConfigJson = & $runnerPython -I -S -B $probeScript service-config
@@ -473,6 +511,7 @@ try {
     }
     $servicePid = Get-ServicePid
     # Service-token inspection requires the runner observer, not a denial identity.
+    Set-LabPhase "TOKEN_ACL_CHECKS"
     $tokenJson = & $runnerPython -I -S -B $probeScript service-token --pid $servicePid --service-sid $serviceSid
     if ($LASTEXITCODE -ne 0) {
         Stop-WithCode "SERVICE_TOKEN_VERIFICATION_FAILED"
@@ -483,6 +522,7 @@ try {
     }
 
     $beforeHashes = Get-CriticalHashes
+    Set-LabPhase "IPC_PROBES"
     $allowedFacts = Invoke-ChildAsUser $allowed.Name $allowed.Password @("identity") "identity"
     if ($allowedFacts.identity.user_sid -ne $allowed.Sid -or $allowedFacts.identity.elevated -or $allowedFacts.identity.administrator) {
         Stop-WithCode "ALLOWED_TEST_IDENTITY_NOT_STANDARD"
@@ -519,6 +559,7 @@ try {
     if ($deniedPipe.denial -ne "PIPE_ACCESS_DENIED") {
         Stop-WithCode "DISALLOWED_CLIENT_NOT_DENIED"
     }
+    Set-LabPhase "STORAGE_PROBES"
     $storageProbe = Invoke-ChildAsUser $allowed.Name $allowed.Password @("probe-storage") "storage-access"
     if ($storageProbe.storage_denials -ne "ACCESS_DENIED" -or $storageProbe.service_config_change -ne "ACCESS_DENIED") {
         Stop-WithCode "UNPRIVILEGED_STORAGE_DENIAL_FAILED"
@@ -535,6 +576,7 @@ try {
 
     # Graceful stop/restart, then kill during a bounded incomplete request and
     # verify the synthetic database remains readable after recovery.
+    Set-LabPhase "LIFECYCLE_PROBES"
     Invoke-Sc @("stop", $serviceName) "SERVICE_STOP_FAILED" | Out-Null
     Wait-ServiceStatus "Stopped" 10 | Out-Null
     Invoke-Sc @("start", $serviceName) "SERVICE_RESTART_FAILED" | Out-Null
@@ -587,126 +629,175 @@ try {
         Stop-WithCode "CANARY_CHANGED_DURING_LAB"
     }
 
+    Set-LabPhase "SERVICE_REMOVAL"
     $removeResult = Remove-LabService
     if ($removeResult -ne "REMOVED") { Stop-WithCode "SERVICE_REMOVE_FAILED" }
     $serviceCreated = $false
+    $labChecksPassed = $true
 }
 catch {
-    $message = $_.Exception.Message
-    if ($message -match '^[A-Z0-9_]{1,64}$') {
-        $failureCode = $message
-    }
-    else {
-        $failureCode = "EPHEMERAL_LAB_FAILED"
-    }
+    $primaryFailure = New-LabDiagnosticRecord `
+        -Phase $currentPhase `
+        -ErrorRecord $_ `
+        -FallbackCode "EPHEMERAL_LAB_FAILED" `
+        -ScriptPath $PSCommandPath
 }
 finally {
-    foreach ($process in $processes) {
-        if ($null -ne $process -and -not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            if (-not $process.WaitForExit(5000)) {
-                $cleanupFailure = $true
-            }
-        }
+    Set-LabPhase "FINAL_CLEANUP"
+    $cleanupOperations = [System.Collections.Generic.List[object]]::new()
+    if ($processes.Count -gt 0) {
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "PROCESS_CLEANUP"
+            code = "PROCESS_CLEANUP_FAILED"
+            action = {
+                $failed = $false
+                foreach ($process in $processes) {
+                    try {
+                        if ($null -ne $process -and -not $process.HasExited) {
+                            Stop-Process -Id $process.Id -Force -ErrorAction Stop
+                            if (-not $process.WaitForExit(5000)) { $failed = $true }
+                        }
+                    }
+                    catch { $failed = $true }
+                }
+                if ($failed) { throw "PROCESS_CLEANUP_FAILED" }
+            }.GetNewClosure()
+        })
     }
     if ($serviceCreated) {
-        try {
-            $removeResult = Remove-LabService
-            if ($removeResult -eq "REMOVED") {
-                $serviceCreated = $false
-            }
-            else {
-                $cleanupFailure = $true
-            }
-        }
-        catch {
-            $cleanupFailure = $true
-        }
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "SERVICE_REMOVAL"
+            code = "SERVICE_REMOVAL_FAILED"
+            action = { Remove-LabService | Out-Null }.GetNewClosure()
+        })
     }
-    foreach ($name in $createdUsers) {
-        Remove-LocalUser -Name $name -ErrorAction SilentlyContinue | Out-Null
-        $sid = $createdUserSids[$name]
-        $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$sid'" -ErrorAction SilentlyContinue
-        if ($null -ne $profile) {
-            $expectedProfile = [IO.Path]::GetFullPath((Join-Path $env:SystemDrive "Users\$name")).TrimEnd('\')
-            $actualProfile = [IO.Path]::GetFullPath([string]$profile.LocalPath).TrimEnd('\')
-            if ($profile.Special -or $profile.Loaded -or $actualProfile -ine $expectedProfile) {
-                $cleanupFailure = $true
-            }
-            else {
-                Remove-CimInstance -InputObject $profile -ErrorAction SilentlyContinue
-                if (Test-Path -LiteralPath $actualProfile) {
-                    $cleanupFailure = $true
+    if ($createdUsers.Count -gt 0) {
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "ACCOUNT_CLEANUP"
+            code = "ACCOUNT_CLEANUP_FAILED"
+            action = {
+                $failed = $false
+                foreach ($name in $createdUsers) {
+                    try {
+                        if ($name -notmatch '^sgb2[a-z][0-9a-f]{12}$') { throw "ACCOUNT_NAME_INVALID" }
+                        Remove-LocalUser -Name $name -ErrorAction Stop
+                        $sid = [string]$createdUserSids[$name]
+                        $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$sid'" -ErrorAction Stop
+                        if ($null -ne $profile) {
+                            $expectedProfile = [IO.Path]::GetFullPath((Join-Path $env:SystemDrive "Users\$name")).TrimEnd('\')
+                            $actualProfile = [IO.Path]::GetFullPath([string]$profile.LocalPath).TrimEnd('\')
+                            if ($profile.Special -or $profile.Loaded -or $actualProfile -ine $expectedProfile) {
+                                throw "PROFILE_PATH_INVALID"
+                            }
+                            Remove-CimInstance -InputObject $profile -ErrorAction Stop
+                            if (Test-Path -LiteralPath $actualProfile) { throw "PROFILE_REMAINS" }
+                        }
+                        if (Get-LocalUser -Name $name -ErrorAction SilentlyContinue) { throw "ACCOUNT_REMAINS" }
+                    }
+                    catch { $failed = $true }
                 }
-            }
-        }
-        if (Get-LocalUser -Name $name -ErrorAction SilentlyContinue) {
-            $cleanupFailure = $true
+                if ($failed) { throw "ACCOUNT_CLEANUP_FAILED" }
+            }.GetNewClosure()
+        })
+    }
+    if ($tempFiles.Count -gt 0) {
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "TEMP_FILE_CLEANUP"
+            code = "TEMP_FILE_CLEANUP_FAILED"
+            action = {
+                $runnerTemp = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')
+                $failed = $false
+                foreach ($file in $tempFiles) {
+                    try {
+                        $fullPath = [IO.Path]::GetFullPath($file)
+                        $parent = [IO.Path]::GetDirectoryName($fullPath).TrimEnd('\')
+                        $leaf = [IO.Path]::GetFileName($fullPath)
+                        if ($parent -ine $runnerTemp -or $leaf -notmatch '^sgb2-(?:[0-9a-f]{32}|precreate-[0-9a-f]{32}|crash-[0-9a-f]{32})\.(?:out|err)$') {
+                            throw "TEMP_PATH_INVALID"
+                        }
+                        if (Test-Path -LiteralPath $fullPath) {
+                            Remove-Item -LiteralPath $fullPath -Force -ErrorAction Stop
+                        }
+                        if (Test-Path -LiteralPath $fullPath) { throw "TEMP_FILE_REMAINS" }
+                    }
+                    catch { $failed = $true }
+                }
+                if ($failed) { throw "TEMP_FILE_CLEANUP_FAILED" }
+            }.GetNewClosure()
+        })
+    }
+    if ($clientRootCreated) {
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "CLIENT_ROOT_REMOVAL"
+            code = "CLIENT_ROOT_CLEANUP_FAILED"
+            action = {
+                $expectedParent = [IO.Path]::GetFullPath((Join-Path $env:SystemDrive "Users\Public")).TrimEnd('\')
+                $fullPath = [IO.Path]::GetFullPath($clientRoot)
+                if (-not (Test-Path -LiteralPath $fullPath)) { return }
+                $item = Get-Item -LiteralPath $fullPath -Force -ErrorAction Stop
+                if ([IO.Path]::GetDirectoryName($fullPath).TrimEnd('\') -ine $expectedParent -or
+                    [IO.Path]::GetFileName($fullPath) -notmatch '^SentinelCR2GB2-client-[0-9a-f]{32}$' -or
+                    ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "CLIENT_ROOT_PATH_INVALID" }
+                $links = @(Get-ChildItem -LiteralPath $fullPath -Recurse -Force -ErrorAction Stop | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
+                if ($links.Count -gt 0) { throw "CLIENT_ROOT_REPARSE_POINT" }
+                Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction Stop
+                if (Test-Path -LiteralPath $fullPath) { throw "CLIENT_ROOT_REMAINS" }
+            }.GetNewClosure()
+        })
+    }
+    if ($rootCreated) {
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "SERVICE_ROOT_REMOVAL"
+            code = "SERVICE_ROOT_CLEANUP_FAILED"
+            action = {
+                $serviceOps = New-ServiceRemovalOperations
+                $serviceState = & $serviceOps.GetState $serviceName
+                if ($serviceState -ne "ABSENT") { throw "SERVICE_STILL_REGISTERED" }
+                $expectedPath = "C:\ProgramData\SentinelCR2GB2"
+                $fullPath = [IO.Path]::GetFullPath($serviceRoot)
+                if ($fullPath -ine $expectedPath) { throw "SERVICE_ROOT_PATH_INVALID" }
+                if (-not (Test-Path -LiteralPath $fullPath)) { return }
+                $item = Get-Item -LiteralPath $fullPath -Force -ErrorAction Stop
+                if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "SERVICE_ROOT_REPARSE_POINT" }
+                $links = @(Get-ChildItem -LiteralPath $fullPath -Recurse -Force -ErrorAction Stop | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
+                if ($links.Count -gt 0) { throw "SERVICE_ROOT_REPARSE_POINT" }
+                Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction Stop
+                if (Test-Path -LiteralPath $fullPath) { throw "SERVICE_ROOT_REMAINS" }
+            }.GetNewClosure()
+        })
+    }
+    if ($null -ne $allowed -or $null -ne $denied) {
+        $cleanupOperations.Add([pscustomobject]@{
+            name = "PASSWORD_DISPOSAL"
+            code = "PASSWORD_DISPOSAL_FAILED"
+            action = {
+                if ($null -ne $allowed) { $allowed.Password.Dispose() }
+                if ($null -ne $denied) { $denied.Password.Dispose() }
+            }.GetNewClosure()
+        })
+    }
+    try {
+        $cleanupResult = Invoke-LabCleanupPlan -Operations $cleanupOperations.ToArray()
+    }
+    catch {
+        $cleanupResult = [pscustomobject]@{
+            status = "FAILED"
+            steps_attempted = $cleanupOperations.Count
+            steps_completed = 0
+            failures = @([ordered]@{ operation = "CLEANUP_PLAN"; code = "CLEANUP_PLAN_FAILED"; category = "OTHER" })
         }
     }
-    foreach ($file in $tempFiles) {
-        Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
-        if (Test-Path -LiteralPath $file) {
-            $cleanupFailure = $true
-        }
-    }
-    if ($clientRootCreated -and (Test-Path -LiteralPath $clientRoot)) {
-        $clientItem = Get-Item -LiteralPath $clientRoot -Force -ErrorAction SilentlyContinue
-        $clientHasReparsePoint = $false
-        if ($null -ne $clientItem -and -not ($clientItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-            $clientHasReparsePoint = @(Get-ChildItem -LiteralPath $clientRoot -Recurse -Force -ErrorAction SilentlyContinue |
-                Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -gt 0
-        }
-        if ($null -eq $clientItem -or ($clientItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $clientHasReparsePoint) {
-            $cleanupFailure = $true
-        }
-        else {
-            Remove-Item -LiteralPath $clientRoot -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path -LiteralPath $clientRoot) {
-                $cleanupFailure = $true
-            }
-            else {
-                $clientRootCreated = $false
-            }
-        }
-    }
-    if ($rootCreated -and (Test-Path -LiteralPath $serviceRoot)) {
-        $rootItem = Get-Item -LiteralPath $serviceRoot -Force -ErrorAction SilentlyContinue
-        $hasReparsePoint = $false
-        if ($null -ne $rootItem -and -not ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-            $hasReparsePoint = @(Get-ChildItem -LiteralPath $serviceRoot -Recurse -Force -ErrorAction SilentlyContinue |
-                Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -gt 0
-        }
-        if ($serviceCreated -or $null -eq $rootItem -or ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $hasReparsePoint) {
-            $cleanupFailure = $true
-        }
-        else {
-            Remove-Item -LiteralPath $serviceRoot -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path -LiteralPath $serviceRoot) {
-                $cleanupFailure = $true
-            }
-        }
-    }
-    if ($null -ne $allowed) { $allowed.Password.Dispose() }
-    if ($null -ne $denied) { $denied.Password.Dispose() }
 }
 
-if ($null -ne $failureCode) {
-    [Console]::Error.WriteLine($failureCode)
+$report = New-LabRunReport -PrimaryFailure $primaryFailure -CleanupResult $cleanupResult -LabChecksPassed $labChecksPassed
+$reportJson = ConvertTo-Json -InputObject $report -Depth 6 -Compress
+if ($reportJson.Length -gt 32768) {
+    [Console]::Error.WriteLine('{"schema_version":"sentinel.cr2-g-b2-run-report.v1","status":"FAILED","scope":"EPHEMERAL_GUEST_ONLY","primary_failure":{"phase":"FINAL_CLEANUP","code":"DIAGNOSTIC_OUTPUT_TOO_LARGE","category":"OTHER","line":null},"cleanup":{"status":"FAILED","steps_attempted":0,"steps_completed":0,"failures":[]},"production_owner_verification":"UNAVAILABLE","authorization_enabled":false,"unverified":["CROSS_SESSION","REMOTE_PEER","HOST_ADMINISTRATOR_OR_SYSTEM_COMPROMISE","PRODUCTION_OWNER_AUTHENTICATION"]}')
     exit 1
 }
-if ($cleanupFailure) {
-    [Console]::Error.WriteLine("GUEST_CLEANUP_INCOMPLETE")
-    exit 1
+if ($report.status -eq "PASS") {
+    [Console]::Out.WriteLine($reportJson)
+    exit 0
 }
-Write-Output "GITHUB_WINDOWS_EPHEMERAL_LAB=PASS"
-Write-Output "SERVICE_ACCOUNT=NT AUTHORITY\LocalService"
-Write-Output "SERVICE_SID_TYPE=RESTRICTED"
-Write-Output "SERVICE_SID_ENABLED_AND_RESTRICTING=true"
-Write-Output "PIPE_CLIENT_MASK=0x00100083"
-Write-Output "PIPE_PRECREATE=SERVICE_FAILED_CLOSED_THEN_STARTED"
-Write-Output "UNPRIVILEGED_STORAGE_PROBES=ACCESS_DENIED"
-Write-Output "ALLOWED_AND_DENIED_TEST_IDENTITIES=$($allowed.Sid),$($denied.Sid)"
-Write-Output "CANARY_SHA256_STABLE=true"
-Write-Output "GUEST_SERVICE_USERS_PROFILES_REMOVED=true"
-Write-Output "CROSS_SESSION_AND_REMOTE_PEER=UNVERIFIED"
+[Console]::Error.WriteLine($reportJson)
+exit 1

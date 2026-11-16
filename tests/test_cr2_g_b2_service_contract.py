@@ -255,7 +255,7 @@ def test_ephemeral_workflow_is_same_repo_opened_nondraft_pr_only() -> None:
         "github.event.action == 'opened'",
         "github.event.pull_request.draft == false",
         "github.event.pull_request.head.repo.full_name == github.repository",
-        "github.event.pull_request.head.ref == 'feat/cr2-g-b2-windows-ephemeral-lab'",
+        "github.event.pull_request.head.ref == 'feat/cr2-g-b2-r2-diagnostics'",
         "github.event.pull_request.base.repo.full_name == github.repository",
         "github.event.pull_request.base.ref == 'main'",
     ]
