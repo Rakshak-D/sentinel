@@ -162,21 +162,23 @@ The reviewable workflow is
 the `opened` activity of a same-repository `pull_request` targeting `main`.
 Draft pull requests are rejected. The workflow and guest script both require
 the same repository, exact feature branch
-`feat/cr2-g-b2-windows-ephemeral-lab`, base `main`, and the `opened` action.
+`feat/cr2-g-b2-r2-diagnostics`, base `main`, and the `opened` action. The
+original first-run branch was `feat/cr2-g-b2-windows-ephemeral-lab`; its PR #1
+has already run once and failed before isolation assertions.
 It requests only
 `permissions: contents: read`, checks out with credentials not persisted,
 uses immutable SHA-pinned checkout/setup-python actions, has a 45-minute job
 timeout, and does not reference repository secrets, upload artifacts, or publish
-anything. Branch push alone does not start this job. **Do not open the first
-pull request until an independent reviewer has checked the exact final feature
-SHA and approved the workflow and privileged harness for that first run.
-Changes after that review invalidate the execution authorization; later PR
-updates do not retrigger this workflow. A second run after changes requires a
-new bounded review and a separately authorized run procedure. The workflow
-condition is part of the PR-controlled branch and cannot cryptographically
-prevent a repository writer from changing the workflow itself; the opened-only
-trigger removes automatic unreviewed reruns and establishes a controlled first
-execution gate. The workflow executes reviewed branch code on an
+anything. Branch push alone does not start this job. PR #1's first run is
+recorded below and was not rerun. **Do not open PR #2 until an independent
+reviewer has checked the exact final diagnostics feature SHA and approved the
+workflow and privileged harness for that single execution.** Changes after that
+review invalidate its execution authorization; PR updates do not retrigger
+this workflow. Any later run requires a new bounded review and separately
+authorized procedure. The workflow condition is part of the PR-controlled
+branch and cannot cryptographically prevent a repository writer from changing
+the workflow itself; the opened-only trigger removes automatic unreviewed
+reruns and establishes a controlled execution gate. The workflow executes reviewed branch code on an
 administrator-capable hosted runner. It does not disable the hosted runner's
 network; its scripts make no provider/model/credential requests, and there
 are no repository secrets or write-capable token permissions.
@@ -208,16 +210,92 @@ timeout or query failure retains cleanup responsibility and prevents removal
 of the service root. This follows Microsoft's documented [`DeleteService` lifecycle](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-deleteservice): the SCM entry is removed only after the service is stopped and service handles are closed.
 
 **Execution state:** GitHub Actions is enabled for the repository and
-`windows-2025` is a documented hosted-runner label. No lab workflow run has
-been triggered, so actual runner allocation and every service/ACL/token/pipe/
-restart/cleanup result remain **UNVERIFIED**. The development host is Windows
-11 Home; the local guard invocation returned
-`GITHUB_WINDOWS_RUNNER_REQUIRED`, and the guest root did not exist afterward.
-No host service, account, ACL, VM, network setting, credential, or Windows
-security configuration was changed. Pure service-config/lifecycle and ACL
-validation tests are deterministic code tests, not OS isolation evidence.
-Cross-session denial, remote-peer denial, and resistance to a privileged or
-compromised hosted runner also remain **UNVERIFIED**. A later successful job
-would demonstrate only the specific ephemeral Windows service/storage
-behavior that it actually measures—not trusted owner enrollment, trusted
-display, owner intent, approval, or production security.
+`windows-2025` is a documented hosted-runner label. The first hosted run
+(PR #1, run `43904957589`) failed before producing any service/ACL/token/pipe/
+restart/cleanup assertion; its cause remains **UNKNOWN**. All such isolation
+results remain **UNVERIFIED**. The development host is Windows 11 Home; a local
+guard invocation returned `GITHUB_WINDOWS_RUNNER_REQUIRED`, and the guest root
+did not exist afterward. No host service, account, ACL, VM, network setting,
+credential, or Windows security configuration was changed. Pure
+service-config/lifecycle and ACL validation tests are deterministic code tests,
+not OS isolation evidence. Cross-session denial, remote-peer denial, and
+resistance to a privileged or compromised hosted runner also remain
+**UNVERIFIED**. A later successful job would demonstrate only the specific
+ephemeral Windows service/storage behavior that it actually measures—not
+trusted owner enrollment, trusted display, owner intent, approval, or
+production security.
+
+### First-run diagnostics and second-run review boundary
+
+The first hosted run was PR #1 at reviewed head
+`161472ea7bb1c258b7a236fbb9106f7eb89c7455`, run
+[43904957589](https://github.com/Rakshak-D/sentinel/actions/runs/43904957589),
+job `133431199829`. The available logs establish that checkout and Python
+3.11.9 setup succeeded, the laboratory command started at `16:12:54.048 UTC`,
+and it exited at `16:12:54.689 UTC` after emitting only
+`EPHEMERAL_LAB_FAILED`. No service, ACL, IPC, or cleanup assertion passed in
+that run. Its cause is **UNKNOWN**; the short interval is not evidence of a
+specific failing phase.
+
+Source review confirmed that the old script did not track a current phase,
+reduced the primary failure to one line, and could suppress cleanup failure
+status when a primary error existed. An unhandled exception in the old cleanup
+block could also stop later cleanup attempts. These are confirmed reporting
+and cleanup-observability defects, but they do not establish the first run's
+root cause. No early-runtime hypothesis has been promoted to a confirmed cause.
+
+The diagnostics use schema `sentinel.cr2-g-b2-run-report.v1`. The failure
+record contains only a fixed phase, fixed or fallback code, a bounded error
+category, and a script-relative line number when the PowerShell invocation
+reliably identifies this script. Cleanup is reported separately as
+`NOT_APPLICABLE`, `COMPLETED`, or `FAILED`, with bounded operation/code
+entries. Arbitrary exception messages, environment values, process output,
+credentials, and source/canary contents are omitted. Cleanup operations are
+individually caught so a failed step does not suppress safe independent cleanup;
+the service-owned root is retained unless a fresh SCM query reports the fixed
+service as `ABSENT`. Recursive removal remains limited to fixed roots whose
+canonical parent/name and reparse-point state are checked.
+
+The new review branch is
+`feat/cr2-g-b2-r2-diagnostics`; both the workflow and guest script require
+that exact source branch. The workflow remains restricted to
+`pull_request`/`opened`, same-repository, non-draft PRs targeting `main`, on
+`windows-2025`, with read-only contents permission and no secrets. PR #1 and its
+failed run were not changed or rerun. No PR #2 was opened and no hosted job was
+started for the diagnostics branch. Before any second run, an independent
+review must inspect the exact final branch SHA and workflow/harness. Any code
+change after that SHA-specific review invalidates the run authorization; a
+new bounded review and separately authorized procedure are required. The
+branch-controlled workflow condition is a procedural rerun gate, not a
+cryptographic defense against a repository writer able to change the workflow.
+
+The local PowerShell host-guard check returned a structured
+`EVENT_GUARD`/`GITHUB_WINDOWS_RUNNER_REQUIRED` failure, empty stdout, and
+`cleanup=NOT_APPLICABLE`; it created no lab resources. A second test first
+reproduced that a missing `EventPath` failed in PowerShell's parameter binder
+without a structured record; after moving validation into `EVENT_GUARD`, it
+returns `EVENT_FILE_UNAVAILABLE` without paths or partial stdout. The new
+diagnostic and cleanup tests, existing focused B1/B2 tests, and the separate
+B1 pipe-review regressions passed `76 passed` across the focused commands.
+The final full suite passed `1586 passed, 2 skipped in 517.74s`; the only skips remain final-component
+symlink-creation limitations at `tests/test_bootstrap_init.py:125` and
+`tests/test_storage_writer_lease.py:251`. PowerShell syntax parsing passed for
+the lab script and both cleanup/diagnostic modules. Actionlint 1.7.12 and
+Ruff passed; strict mypy found no issues in 113 source files; `pip check`
+reported no broken requirements.
+
+A fresh wheel build produced
+`sentinel-0.3.0.dev0-py3-none-any.whl`, SHA-256
+`c5eac036d611b7d8f2b040d72166050afd374f7d6cbe8a0f0615cac3105f594f`. ZIP
+integrity passed; metadata reports package `sentinel` version `0.3.0.dev0`,
+and all 122 entries were inspected with zero `tools/` and zero `tests/`
+entries. This final fresh build followed the event-parameter validation
+change; an earlier pre-final build had a different digest and was superseded,
+so byte-for-byte identity is not claimed.
+
+The local host-guard check and deterministic cleanup doubles verify diagnostic
+formatting and safe state transitions only. They provide no new service
+identity, ACL, IPC, cross-user, cross-session, or lifecycle isolation evidence.
+All such hosted Windows claims remain **UNVERIFIED** until a second run is
+separately reviewed and authorized. No PR #2 was opened and no GitHub Actions
+workflow was triggered for this branch.
