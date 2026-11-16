@@ -20,3 +20,4 @@
 - Stop and report blockers rather than inventing solutions.
 - Do not broaden the requested slice without approval.
 - Do not delete or rewrite previous tests merely to obtain passing results.
+- Do not append slice history to README.md. Slice evidence goes in docs/BUILD_LEDGER.md. User-visible changes go in CHANGELOG.md.
