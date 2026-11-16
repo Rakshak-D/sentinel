@@ -159,17 +159,25 @@ are **not yet measured Windows service or storage results**.
 
 The reviewable workflow is
 `.github/workflows/cr2-g-b2-ephemeral-windows-lab.yml`. It is limited to
-`pull_request` targeting `main`, then requires the same repository, exact
-feature branch `feat/cr2-g-b2-windows-ephemeral-lab`, and base `main` both in
-the job condition and in the guest script. It requests only
+the `opened` activity of a same-repository `pull_request` targeting `main`.
+Draft pull requests are rejected. The workflow and guest script both require
+the same repository, exact feature branch
+`feat/cr2-g-b2-windows-ephemeral-lab`, base `main`, and the `opened` action.
+It requests only
 `permissions: contents: read`, checks out with credentials not persisted,
 uses immutable SHA-pinned checkout/setup-python actions, has a 45-minute job
 timeout, and does not reference repository secrets, upload artifacts, or publish
 anything. Branch push alone does not start this job. **Do not open the first
-pull request until an independent reviewer has reviewed this workflow and the
-privileged harness.** The workflow executes the reviewed branch's lab code on
-an administrator-capable hosted runner, so review of the exact PR revision is
-part of the safety boundary. The workflow does not disable the hosted runner's
+pull request until an independent reviewer has checked the exact final feature
+SHA and approved the workflow and privileged harness for that first run.
+Changes after that review invalidate the execution authorization; later PR
+updates do not retrigger this workflow. A second run after changes requires a
+new bounded review and a separately authorized run procedure. The workflow
+condition is part of the PR-controlled branch and cannot cryptographically
+prevent a repository writer from changing the workflow itself; the opened-only
+trigger removes automatic unreviewed reruns and establishes a controlled first
+execution gate. The workflow executes reviewed branch code on an
+administrator-capable hosted runner. It does not disable the hosted runner's
 network; its scripts make no provider/model/credential requests, and there
 are no repository secrets or write-capable token permissions.
 
@@ -190,6 +198,14 @@ unexpected SIDs, or masks other than the exact expected entries. The runner's
 administrator token is used only for service setup and inspection, never as
 evidence of an unprivileged access denial. The two local accounts are separate
 Windows accounts, but the lab does not claim distinct interactive sessions.
+
+Service cleanup uses `service_cleanup.psm1` with injected operations in its
+deterministic tests. The hosted path verifies the service is stopped, requests
+deletion, and polls the SCM/WMI view for actual disappearance before clearing
+the cleanup flag or removing the protected root.
+`ERROR_SERVICE_MARKED_FOR_DELETE` is treated as a pending state, not success;
+timeout or query failure retains cleanup responsibility and prevents removal
+of the service root. This follows Microsoft's documented [`DeleteService` lifecycle](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-deleteservice): the SCM entry is removed only after the service is stopped and service handles are closed.
 
 **Execution state:** GitHub Actions is enabled for the repository and
 `windows-2025` is a documented hosted-runner label. No lab workflow run has
