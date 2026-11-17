@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel
@@ -67,6 +69,18 @@ _SENSITIVITY_ORDER = {
     SensitivityLabel.PRIVATE: 2,
     SensitivityLabel.SECRET: 3,
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _ResolvedPolicyRequest:
+    """Validated registration and source metadata for the ordered evaluator stages."""
+
+    registration: CapabilityRegistration
+    sources: tuple[SourceEnvelope, ...]
+    evidence_ids: tuple[UUID, ...]
+
+
+_BoundedRoute = Literal["public_read", "proposal_preview", "proposal_persistence"]
 
 
 def build_verified_public_read_policy_input(
@@ -350,13 +364,13 @@ def _effective_sensitivity(sources: tuple[SourceEnvelope, ...]) -> SensitivityLa
     return max((source.sensitivity for source in sources), key=_SENSITIVITY_ORDER.__getitem__)
 
 
-def _evaluate_validated(
+def _validate_trusted_policy_inputs(
     request: PolicyRequest,
     validated_registry: CapabilityRegistry,
     context: PolicyContext,
     request_digest: str,
-    evidence_binding: object | None,
-) -> PolicyDecision:
+) -> PolicyDecision | None:
+    """Check pinned runtime, registry, policy, and config identities in P00 order."""
     actual_registry_digest = registry_sha256(validated_registry)
     if validated_registry != BUILTIN_REGISTRY or actual_registry_digest != _BUILTIN_REGISTRY_SHA256:
         return _p00(
@@ -427,7 +441,16 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=(request.request_id,),
         )
+    return None
 
+
+def _resolve_registered_request(
+    request: PolicyRequest,
+    validated_registry: CapabilityRegistry,
+    context: PolicyContext,
+    request_digest: str,
+) -> _ResolvedPolicyRequest | PolicyDecision:
+    """Resolve the exact static registration and request-ordered source set."""
     registration = validated_registry.find_operation(request.operation_id)
     if registration is None:
         return _p00(
@@ -485,10 +508,16 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=(request.request_id, *(source.source_id for source in sources)),
         )
+    return _ResolvedPolicyRequest(
+        registration=registration,
+        sources=sources,
+        evidence_ids=(request.request_id, *(source.source_id for source in sources)),
+    )
 
-    evidence_ids = (request.request_id, *(source.source_id for source in sources))
 
-    # Ordered hard denial rules: P00 preconditions, P01, P02, P03, P17, then P12.
+def _deny_p01_if_applicable(
+    request: PolicyRequest, request_digest: str, evidence_ids: tuple[UUID, ...]
+) -> PolicyDecision | None:
     if request.execution_boundary is ExecutionBoundary.BYPASS_GATEWAY:
         return _deny(
             PolicyRuleId.P01,
@@ -506,7 +535,16 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=evidence_ids,
         )
+    return None
 
+
+def _deny_p02_if_applicable(
+    request: PolicyRequest,
+    registration: CapabilityRegistration,
+    context: PolicyContext,
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+) -> PolicyDecision | None:
     if request.capability in {
         Capability.C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB,
         Capability.C5_SEND_EXTERNAL_EMAIL,
@@ -521,7 +559,16 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=evidence_ids,
         )
+    return None
 
+
+def _deny_p03_if_applicable(
+    request: PolicyRequest,
+    context: PolicyContext,
+    sources: tuple[SourceEnvelope, ...],
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+) -> PolicyDecision | None:
     if request.execution_boundary is ExecutionBoundary.MODEL_GATEWAY:
         source_sensitivity = _effective_sensitivity(sources)
         if request.declared_sensitivity is None or source_sensitivity is None:
@@ -585,7 +632,12 @@ def _evaluate_validated(
                 request_digest=request_digest,
                 evidence_ids=evidence_ids,
             )
+    return None
 
+
+def _deny_p17_if_applicable(
+    request: PolicyRequest, request_digest: str, evidence_ids: tuple[UUID, ...]
+) -> PolicyDecision | None:
     if request.capability is Capability.C6_ACCESS_SECRET:
         return _deny(
             PolicyRuleId.P17,
@@ -593,230 +645,390 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=evidence_ids,
         )
+    return None
 
-    # P09 is deliberately narrow: only fixed C0/P04 and C2/P06 GitHub routes
-    # can use the resolver-created, pinned source binding.
-    public_read_operation = (
+
+def _evaluate_ordered_hard_denials(
+    request: PolicyRequest,
+    registration: CapabilityRegistration,
+    context: PolicyContext,
+    sources: tuple[SourceEnvelope, ...],
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+) -> PolicyDecision | None:
+    """Run the supported hard rules without changing their short-circuit order."""
+    denial = _deny_p01_if_applicable(request, request_digest, evidence_ids)
+    if denial is not None:
+        return denial
+    denial = _deny_p02_if_applicable(request, registration, context, request_digest, evidence_ids)
+    if denial is not None:
+        return denial
+    denial = _deny_p03_if_applicable(request, context, sources, request_digest, evidence_ids)
+    if denial is not None:
+        return denial
+    return _deny_p17_if_applicable(request, request_digest, evidence_ids)
+
+
+def _bounded_route(request: PolicyRequest) -> _BoundedRoute | None:
+    """Identify only the fixed operation/capability pairs with scoped P04/P06 rules."""
+    if (
         request.operation_id == "sentinel.synthetic.read.public"
         and request.capability is Capability.C0_READ_PUBLIC
-    )
-    proposal_preview_operation = (
+    ):
+        return "public_read"
+    if (
         request.operation_id == "sentinel.synthetic.proposal.local"
         and request.capability is Capability.C2_WRITE_LOCAL_PROPOSAL
-    )
-    proposal_persistence_operation = (
+    ):
+        return "proposal_preview"
+    if (
         request.operation_id == "sentinel.synthetic.proposal.persist"
         and request.capability is Capability.C2_WRITE_LOCAL_PROPOSAL
+    ):
+        return "proposal_persistence"
+    return None
+
+
+def _validate_bound_source_set(
+    request: PolicyRequest,
+    context: PolicyContext,
+    evidence_binding: VerifiedGithubPublicRead,
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+) -> PolicyDecision | None:
+    """Check resolver-bound identities, citation set, labels, and fixture pins."""
+    binding = evidence_binding.binding
+    expected_sources = tuple(item.source_id for item in binding.sources)
+    expected_spans = tuple(
+        citation.span_id for item in binding.sources for citation in item.citations
     )
-    if public_read_operation or proposal_preview_operation or proposal_persistence_operation:
-        if request.requested_effect_class is not registration.effect_class:
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.EFFECT_CLASS_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if type(evidence_binding) is not VerifiedGithubPublicRead:
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.EVIDENCE_BINDING_MISSING,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if not validate_verified_github_public_read(evidence_binding):
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.EVIDENCE_BINDING_INVALID,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        binding = evidence_binding.binding
-        expected_sources = tuple(item.source_id for item in binding.sources)
-        expected_spans = tuple(
-            citation.span_id for item in binding.sources for citation in item.citations
+    if (
+        request.source_binding_sha256 != binding.source_set_sha256
+        or context.source_binding_sha256 != binding.source_set_sha256
+        or binding.source_set_sha256 != source_binding_sha256(binding)
+    ):
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.FIXTURE_PIN_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
         )
-        if (
-            request.source_binding_sha256 != binding.source_set_sha256
-            or context.source_binding_sha256 != binding.source_set_sha256
-            or binding.source_set_sha256 != source_binding_sha256(binding)
-        ):
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.FIXTURE_PIN_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if request.source_ids != expected_sources or tuple(
-            source.source_id for source in context.sources
-        ) != expected_sources:
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.SOURCE_SET_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if request.evidence_span_ids != expected_spans:
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.CITATION_SET_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if (
-            tuple(context.sources) != evidence_binding.source_envelopes
-            or any(
-                source.trust is not TrustLabel.T4_EXTERNAL
-                or source.sensitivity is not SensitivityLabel.PUBLIC
-                for source in context.sources
-            )
-        ):
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.SOURCE_SET_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if (
-            binding.fixture_sha256 != evidence_binding.binding.fixture_sha256
-            or binding.manifest_sha256 != evidence_binding.binding.manifest_sha256
-        ):
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.FIXTURE_PIN_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        common_route_invalid = (
-            request.declared_sensitivity is not SensitivityLabel.PUBLIC
-            or request.execution_mode.value != "LIVE"
-            or request.execution_boundary is not ExecutionBoundary.CORE
-            or context.implementation_state != "bounded_public_read_foundation"
-            or context.model_route is not ModelRouteState.UNVERIFIED
-            or context.enabled_capabilities
-        )
-        public_read_invalid = public_read_operation and (
-            request.requested_effect_class is not EffectClass.READ_ONLY
-            or request.arguments != (("resource_id", "github.fixture"),)
-        )
-        preview_route_invalid = proposal_preview_operation and (
-            request.requested_effect_class is not EffectClass.LOCAL_PROPOSAL
-            or registration.state is not RegistrationState.POLICY_ONLY
-            or registration.required_authorization_class is not AuthorizationClass.NONE
-        )
-        persistence_route_invalid = proposal_persistence_operation and (
-            request.requested_effect_class is not EffectClass.LOCAL_PROPOSAL
-            or registration.state is not RegistrationState.POLICY_ONLY
-            or registration.required_authorization_class is not AuthorizationClass.NONE
-        )
-        if (
-            common_route_invalid
-            or public_read_invalid
-            or preview_route_invalid
-            or persistence_route_invalid
-        ):
-            return _deny(
-                PolicyRuleId.P09,
-                (
-                    PolicyReasonCode.PROPOSAL_PERSISTENCE_SCOPE_MISMATCH
-                    if proposal_persistence_operation
-                    else PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH
-                    if proposal_preview_operation
-                    else PolicyReasonCode.PUBLIC_READ_SCOPE_MISMATCH
-                ),
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if not all(
-            source.trust is TrustLabel.T4_EXTERNAL
-            and source.sensitivity is SensitivityLabel.PUBLIC
-            for source in context.sources
-        ):
-            return _deny(
-                PolicyRuleId.P09,
-                PolicyReasonCode.SOURCE_SET_MISMATCH,
-                request_digest=request_digest,
-                evidence_ids=evidence_ids,
-            )
-        if public_read_operation:
-            return PolicyDecision(
-                outcome=PolicyOutcome.ALLOW,
-                rule_id=PolicyRuleId.P04,
-                reason_code=PolicyReasonCode.PUBLIC_READ_ALLOWED,
-                policy_sha256=_BUILTIN_POLICY_SHA256,
-                registry_sha256=_BUILTIN_REGISTRY_SHA256,
-                request_sha256=request_digest,
-                evidence_binding_sha256=binding.source_set_sha256,
-                evidence_ids=evidence_ids[:8],
-                executable=False,
-            )
-        if proposal_preview_operation:
-            selected_source = _selected_preview_source(request, binding.sources)
-            if selected_source is None:
-                return _deny(
-                    PolicyRuleId.P09,
-                    PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH,
-                    request_digest=request_digest,
-                    evidence_ids=evidence_ids,
-                )
-            expected_request_id = uuid5(
-                NAMESPACE_URL,
-                "sentinel.policy.github-proposal-preview.v1:"
-                + binding.source_set_sha256
-                + ":"
-                + str(selected_source.item_id),
-            )
-            if request.request_id != expected_request_id:
-                return _deny(
-                    PolicyRuleId.P09,
-                    PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH,
-                    request_digest=request_digest,
-                    evidence_ids=evidence_ids,
-                )
-            return PolicyDecision(
-                outcome=PolicyOutcome.ALLOW,
-                rule_id=PolicyRuleId.P06,
-                reason_code=PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED,
-                policy_sha256=_BUILTIN_POLICY_SHA256,
-                registry_sha256=_BUILTIN_REGISTRY_SHA256,
-                request_sha256=request_digest,
-                evidence_binding_sha256=binding.source_set_sha256,
-                evidence_ids=(
-                    request.request_id,
-                    selected_source.source_id,
-                    *(citation.span_id for citation in selected_source.citations),
-                ),
-                executable=False,
-            )
-        if proposal_persistence_operation:
-            selected_source = _selected_persistence_source(request, binding.sources)
-            if selected_source is None:
-                return _deny(
-                    PolicyRuleId.P09,
-                    PolicyReasonCode.PROPOSAL_PERSISTENCE_SCOPE_MISMATCH,
-                    request_digest=request_digest,
-                    evidence_ids=evidence_ids,
-                )
-            return PolicyDecision(
-                outcome=PolicyOutcome.ALLOW,
-                rule_id=PolicyRuleId.P06,
-                reason_code=PolicyReasonCode.PROPOSAL_PERSISTENCE_ALLOWED,
-                policy_sha256=_BUILTIN_POLICY_SHA256,
-                registry_sha256=_BUILTIN_REGISTRY_SHA256,
-                request_sha256=request_digest,
-                evidence_binding_sha256=binding.source_set_sha256,
-                evidence_ids=(
-                    request.request_id,
-                    selected_source.source_id,
-                    *(citation.span_id for citation in selected_source.citations),
-                ),
-                executable=False,
-            )
+    if (
+        request.source_ids != expected_sources
+        or tuple(source.source_id for source in context.sources) != expected_sources
+    ):
         return _deny(
             PolicyRuleId.P09,
             PolicyReasonCode.SOURCE_SET_MISMATCH,
             request_digest=request_digest,
             evidence_ids=evidence_ids,
         )
+    if request.evidence_span_ids != expected_spans:
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.CITATION_SET_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    if tuple(context.sources) != evidence_binding.source_envelopes or any(
+        source.trust is not TrustLabel.T4_EXTERNAL
+        or source.sensitivity is not SensitivityLabel.PUBLIC
+        for source in context.sources
+    ):
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.SOURCE_SET_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    if (
+        binding.fixture_sha256 != evidence_binding.binding.fixture_sha256
+        or binding.manifest_sha256 != evidence_binding.binding.manifest_sha256
+    ):
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.FIXTURE_PIN_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    return None
+
+
+def _validate_bounded_route_scope(
+    request: PolicyRequest,
+    registration: CapabilityRegistration,
+    context: PolicyContext,
+    route: _BoundedRoute,
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+) -> PolicyDecision | None:
+    """Apply the fixed P04/P06 request, context, registration, and label contract."""
+    common_route_invalid = (
+        request.declared_sensitivity is not SensitivityLabel.PUBLIC
+        or request.execution_mode.value != "LIVE"
+        or request.execution_boundary is not ExecutionBoundary.CORE
+        or context.implementation_state != "bounded_public_read_foundation"
+        or context.model_route is not ModelRouteState.UNVERIFIED
+        or context.enabled_capabilities
+    )
+    public_read_invalid = route == "public_read" and (
+        request.requested_effect_class is not EffectClass.READ_ONLY
+        or request.arguments != (("resource_id", "github.fixture"),)
+    )
+    preview_route_invalid = route == "proposal_preview" and (
+        request.requested_effect_class is not EffectClass.LOCAL_PROPOSAL
+        or registration.state is not RegistrationState.POLICY_ONLY
+        or registration.required_authorization_class is not AuthorizationClass.NONE
+    )
+    persistence_route_invalid = route == "proposal_persistence" and (
+        request.requested_effect_class is not EffectClass.LOCAL_PROPOSAL
+        or registration.state is not RegistrationState.POLICY_ONLY
+        or registration.required_authorization_class is not AuthorizationClass.NONE
+    )
+    if (
+        common_route_invalid
+        or public_read_invalid
+        or preview_route_invalid
+        or persistence_route_invalid
+    ):
+        return _deny(
+            PolicyRuleId.P09,
+            (
+                PolicyReasonCode.PROPOSAL_PERSISTENCE_SCOPE_MISMATCH
+                if route == "proposal_persistence"
+                else PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH
+                if route == "proposal_preview"
+                else PolicyReasonCode.PUBLIC_READ_SCOPE_MISMATCH
+            ),
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    if not all(
+        source.trust is TrustLabel.T4_EXTERNAL and source.sensitivity is SensitivityLabel.PUBLIC
+        for source in context.sources
+    ):
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.SOURCE_SET_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    return None
+
+
+def _deny_if_bound_route_invalid(
+    request: PolicyRequest,
+    registration: CapabilityRegistration,
+    context: PolicyContext,
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+    evidence_binding: object | None,
+    route: _BoundedRoute,
+) -> PolicyDecision | None:
+    """Validate evidence and scope in the original P09 precedence."""
+    if request.requested_effect_class is not registration.effect_class:
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.EFFECT_CLASS_MISMATCH,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    if type(evidence_binding) is not VerifiedGithubPublicRead:
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.EVIDENCE_BINDING_MISSING,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    if not validate_verified_github_public_read(evidence_binding):
+        return _deny(
+            PolicyRuleId.P09,
+            PolicyReasonCode.EVIDENCE_BINDING_INVALID,
+            request_digest=request_digest,
+            evidence_ids=evidence_ids,
+        )
+    denial = _validate_bound_source_set(
+        request,
+        context,
+        evidence_binding,
+        request_digest,
+        evidence_ids,
+    )
+    if denial is not None:
+        return denial
+    return _validate_bounded_route_scope(
+        request,
+        registration,
+        context,
+        route,
+        request_digest,
+        evidence_ids,
+    )
+
+
+def _allow_bounded_route(
+    request: PolicyRequest,
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+    binding: VerifiedPublicSourceSet,
+    route: str,
+) -> PolicyDecision:
+    """Return only the existing evidence-bound P04/P06 metadata decisions."""
+    if route == "public_read":
+        return PolicyDecision(
+            outcome=PolicyOutcome.ALLOW,
+            rule_id=PolicyRuleId.P04,
+            reason_code=PolicyReasonCode.PUBLIC_READ_ALLOWED,
+            policy_sha256=_BUILTIN_POLICY_SHA256,
+            registry_sha256=_BUILTIN_REGISTRY_SHA256,
+            request_sha256=request_digest,
+            evidence_binding_sha256=binding.source_set_sha256,
+            evidence_ids=evidence_ids[:8],
+            executable=False,
+        )
+    if route == "proposal_preview":
+        selected_source = _selected_preview_source(request, binding.sources)
+        if selected_source is None:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        expected_request_id = uuid5(
+            NAMESPACE_URL,
+            "sentinel.policy.github-proposal-preview.v1:"
+            + binding.source_set_sha256
+            + ":"
+            + str(selected_source.item_id),
+        )
+        if request.request_id != expected_request_id:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.PROPOSAL_PREVIEW_SCOPE_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        return PolicyDecision(
+            outcome=PolicyOutcome.ALLOW,
+            rule_id=PolicyRuleId.P06,
+            reason_code=PolicyReasonCode.PROPOSAL_PREVIEW_ALLOWED,
+            policy_sha256=_BUILTIN_POLICY_SHA256,
+            registry_sha256=_BUILTIN_REGISTRY_SHA256,
+            request_sha256=request_digest,
+            evidence_binding_sha256=binding.source_set_sha256,
+            evidence_ids=(
+                request.request_id,
+                selected_source.source_id,
+                *(citation.span_id for citation in selected_source.citations),
+            ),
+            executable=False,
+        )
+    if route == "proposal_persistence":
+        selected_source = _selected_persistence_source(request, binding.sources)
+        if selected_source is None:
+            return _deny(
+                PolicyRuleId.P09,
+                PolicyReasonCode.PROPOSAL_PERSISTENCE_SCOPE_MISMATCH,
+                request_digest=request_digest,
+                evidence_ids=evidence_ids,
+            )
+        return PolicyDecision(
+            outcome=PolicyOutcome.ALLOW,
+            rule_id=PolicyRuleId.P06,
+            reason_code=PolicyReasonCode.PROPOSAL_PERSISTENCE_ALLOWED,
+            policy_sha256=_BUILTIN_POLICY_SHA256,
+            registry_sha256=_BUILTIN_REGISTRY_SHA256,
+            request_sha256=request_digest,
+            evidence_binding_sha256=binding.source_set_sha256,
+            evidence_ids=(
+                request.request_id,
+                selected_source.source_id,
+                *(citation.span_id for citation in selected_source.citations),
+            ),
+            executable=False,
+        )
+    return _deny(
+        PolicyRuleId.P09,
+        PolicyReasonCode.SOURCE_SET_MISMATCH,
+        request_digest=request_digest,
+        evidence_ids=evidence_ids,
+    )
+
+
+def _evaluate_bounded_route(
+    request: PolicyRequest,
+    registration: CapabilityRegistration,
+    context: PolicyContext,
+    request_digest: str,
+    evidence_ids: tuple[UUID, ...],
+    evidence_binding: object | None,
+) -> PolicyDecision | None:
+    route = _bounded_route(request)
+    if route is None:
+        return None
+    denial = _deny_if_bound_route_invalid(
+        request,
+        registration,
+        context,
+        request_digest,
+        evidence_ids,
+        evidence_binding,
+        route,
+    )
+    if denial is not None:
+        return denial
+    # The exact type and resolver validation were established above.
+    assert type(evidence_binding) is VerifiedGithubPublicRead
+    return _allow_bounded_route(
+        request,
+        request_digest,
+        evidence_ids,
+        evidence_binding.binding,
+        route,
+    )
+
+
+def _evaluate_validated(
+    request: PolicyRequest,
+    validated_registry: CapabilityRegistry,
+    context: PolicyContext,
+    request_digest: str,
+    evidence_binding: object | None,
+) -> PolicyDecision:
+    """Orchestrate fixed P00, P01/P02/P03/P17, P09/P04/P06, and P12 stages."""
+    denial = _validate_trusted_policy_inputs(request, validated_registry, context, request_digest)
+    if denial is not None:
+        return denial
+
+    resolved = _resolve_registered_request(request, validated_registry, context, request_digest)
+    if isinstance(resolved, PolicyDecision):
+        return resolved
+    registration = resolved.registration
+    sources = resolved.sources
+    evidence_ids = resolved.evidence_ids
+
+    denial = _evaluate_ordered_hard_denials(
+        request,
+        registration,
+        context,
+        sources,
+        request_digest,
+        evidence_ids,
+    )
+    if denial is not None:
+        return denial
+
+    bounded_decision = _evaluate_bounded_route(
+        request,
+        registration,
+        context,
+        request_digest,
+        evidence_ids,
+        evidence_binding,
+    )
+    if bounded_decision is not None:
+        return bounded_decision
 
     if registration.required_authorization_class is not AuthorizationClass.NONE:
         return _p00(
@@ -824,7 +1036,6 @@ def _evaluate_validated(
             request_digest=request_digest,
             evidence_ids=evidence_ids,
         )
-
     return _deny(
         PolicyRuleId.P12,
         PolicyReasonCode.UNSUPPORTED_POLICY,
