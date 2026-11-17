@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
+from typer import rich_utils
 from typer.main import get_command
 from typer.testing import CliRunner
 
@@ -79,6 +81,79 @@ def _snapshot() -> dict[str, object]:
     return json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
 
 
+_RICH_FRAME_CHARS = frozenset("─━│┃┌┐└┘├┤┬┴┼╭╮╰╯")
+_RICH_VERTICAL_CHARS = frozenset("│┃")
+_RICH_TOP_LEFT_CHARS = frozenset("┌╭")
+
+
+def _command_for_path(command: object, path: tuple[str, ...]) -> object:
+    for name in path:
+        command = command.commands[name]  # type: ignore[attr-defined]
+    return command
+
+
+def _registered_option_names(command: object) -> tuple[str, ...]:
+    names: list[str] = []
+    for parameter in command.params:  # type: ignore[attr-defined]
+        names.extend(parameter.opts)
+        names.extend(parameter.secondary_opts)
+    return tuple(names)
+
+
+def _normalize_rich_geometry(
+    value: str,
+    *,
+    option_names: tuple[str, ...] = (),
+) -> str:
+    """Ignore Rich frame width and wrapping while retaining ordered text."""
+    semantic_lines: list[str] = []
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if all(character in _RICH_FRAME_CHARS for character in line):
+            continue
+        if line[0] in _RICH_TOP_LEFT_CHARS:
+            line = re.sub(r"^[┌╭][─━]+\s*", "", line)
+            line = re.sub(r"[─━]+[┐╮]$", "", line)
+        if line[0] in _RICH_VERTICAL_CHARS:
+            line = line[1:]
+        if line[-1:] in _RICH_VERTICAL_CHARS:
+            line = line[:-1]
+        semantic_line = re.sub(r"\s+", " ", line).strip()
+        if semantic_line:
+            semantic_lines.append(semantic_line)
+    semantic_text = " ".join(semantic_lines)
+
+    def expand_rendered_option(match: re.Match[str]) -> str:
+        rendered = match.group(0)
+        prefix = rendered[:-1]
+        matches = [name for name in option_names if name.startswith(prefix)]
+        return matches[0] if len(matches) == 1 else rendered
+
+    return re.sub(
+        r"(?<!\S)--[A-Za-z0-9][A-Za-z0-9-]*…",
+        expand_rendered_option,
+        semantic_text,
+    )
+
+
+def _rich_result_contract(
+    result: dict[str, object],
+    *,
+    option_names: tuple[str, ...] = (),
+) -> dict[str, object]:
+    stdout = result["stdout"]
+    stderr = result["stderr"]
+    assert isinstance(stdout, str)
+    assert isinstance(stderr, str)
+    return {
+        "exit_code": result["exit_code"],
+        "stdout": _normalize_rich_geometry(stdout, option_names=option_names),
+        "stderr": _normalize_rich_geometry(stderr, option_names=option_names),
+    }
+
+
 def test_complete_command_tree_and_help_match_original_snapshot() -> None:
     expected = _snapshot()
     root = get_command(cli.app)
@@ -91,6 +166,7 @@ def test_complete_command_tree_and_help_match_original_snapshot() -> None:
 
     for path in actual_paths:
         key = " ".join(path)
+        option_names = _registered_option_names(_command_for_path(root, path))
         result = runner.invoke(
             cli.app,
             [*path, "--help"],
@@ -98,11 +174,14 @@ def test_complete_command_tree_and_help_match_original_snapshot() -> None:
             terminal_width=100,
             color=False,
         )
-        assert {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-        } == expected_help[key]
+        assert _rich_result_contract(
+            {
+                "exit_code": result.exit_code,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            },
+            option_names=option_names,
+        ) == _rich_result_contract(expected_help[key], option_names=option_names)
 
 
 def test_representative_outputs_and_validation_errors_match_original_snapshot(
@@ -110,6 +189,7 @@ def test_representative_outputs_and_validation_errors_match_original_snapshot(
 ) -> None:
     expected_outputs = _snapshot()["outputs"]
     assert isinstance(expected_outputs, dict)
+    root = get_command(cli.app)
     scenarios = {
         "version": ["version"],
         "demo": ["demo"],
@@ -141,11 +221,25 @@ def test_representative_outputs_and_validation_errors_match_original_snapshot(
             terminal_width=100,
             color=False,
         )
-        assert {
+        actual_contract = {
             "exit_code": result.exit_code,
             "stdout": result.stdout,
             "stderr": result.stderr,
-        } == expected_outputs[name]
+        }
+        if name == "missing_source_required_args":
+            assert result.stdout == ""
+            option_names = _registered_option_names(
+                _command_for_path(root, ("source", "parse-job-alert"))
+            )
+            assert _rich_result_contract(
+                actual_contract,
+                option_names=option_names,
+            ) == _rich_result_contract(
+                expected_outputs[name],
+                option_names=option_names,
+            )
+        else:
+            assert actual_contract == expected_outputs[name]
 
     database = tmp_path / "auth-status.sqlite3"
     initialize_storage(database, create=True)
@@ -162,6 +256,112 @@ def test_representative_outputs_and_validation_errors_match_original_snapshot(
             "stdout": result.stdout,
             "stderr": result.stderr,
         } == expected_outputs[f"auth_status_{output_format}"]
+
+
+def test_rich_geometry_is_ignored_but_help_and_error_text_is_not(monkeypatch) -> None:
+    snapshot = _snapshot()
+    help_text = snapshot["help"][""]["stdout"]
+    assert isinstance(help_text, str)
+    option_names = _registered_option_names(get_command(cli.app))
+
+    # GitHub Actions makes Typer force Rich terminal rendering. This produces
+    # the same one-column geometry difference seen in CI without changing the
+    # captured pre-refactor snapshot.
+    monkeypatch.setattr(rich_utils, "FORCE_TERMINAL", True)
+    result = runner.invoke(
+        cli.app,
+        ["--help"],
+        env=HELP_ENV,
+        terminal_width=100,
+        color=False,
+    )
+    assert result.exit_code == 0
+    assert result.stdout != help_text
+    assert _normalize_rich_geometry(
+        result.stdout,
+        option_names=option_names,
+    ) == _normalize_rich_geometry(
+        help_text,
+        option_names=option_names,
+    )
+
+    advance_path = ("fixture-sync", "advance")
+    advance_options = _registered_option_names(
+        _command_for_path(get_command(cli.app), advance_path)
+    )
+    expected_advance = snapshot["help"][" ".join(advance_path)]["stdout"]
+    advance_result = runner.invoke(
+        cli.app,
+        [*advance_path, "--help"],
+        env=HELP_ENV,
+        terminal_width=100,
+        color=False,
+    )
+    assert isinstance(expected_advance, str)
+    assert advance_result.stdout != expected_advance
+    assert _normalize_rich_geometry(
+        advance_result.stdout,
+        option_names=advance_options,
+    ) == _normalize_rich_geometry(
+        expected_advance,
+        option_names=advance_options,
+    )
+
+    mutations = (
+        help_text.replace("Usage: root", "Usage: renamed-root", 1),
+        help_text.replace("version            ", "version-renamed    ", 1),
+        help_text.replace("--show-completion", "--show-options", 1),
+        help_text.replace(
+            "Print the installed Sentinel package version.",
+            "Print a different package description.",
+            1,
+        ),
+    )
+    for changed_help in mutations:
+        assert changed_help != help_text
+        assert _normalize_rich_geometry(
+            changed_help,
+            option_names=option_names,
+        ) != _normalize_rich_geometry(
+            help_text,
+            option_names=option_names,
+        )
+
+    error_text = snapshot["outputs"]["missing_source_required_args"]["stderr"]
+    assert isinstance(error_text, str)
+    changed_error = error_text.replace("--allow-root", "--allow-other", 1)
+    error_option_names = _registered_option_names(
+        _command_for_path(get_command(cli.app), ("source", "parse-job-alert"))
+    )
+    assert _normalize_rich_geometry(
+        changed_error,
+        option_names=error_option_names,
+    ) != _normalize_rich_geometry(
+        error_text,
+        option_names=error_option_names,
+    )
+    changed_reason = error_text.replace("Missing option", "Unexpected option", 1)
+    assert _normalize_rich_geometry(
+        changed_reason,
+        option_names=error_option_names,
+    ) != _normalize_rich_geometry(
+        error_text,
+        option_names=error_option_names,
+    )
+    expected_error_contract = _rich_result_contract(
+        {"exit_code": 2, "stdout": "", "stderr": error_text},
+        option_names=error_option_names,
+    )
+    changed_exit_code = _rich_result_contract(
+        {"exit_code": 1, "stdout": "", "stderr": error_text},
+        option_names=error_option_names,
+    )
+    assert changed_exit_code != expected_error_contract
+    changed_channel = _rich_result_contract(
+        {"exit_code": 2, "stdout": error_text, "stderr": ""},
+        option_names=error_option_names,
+    )
+    assert changed_channel != expected_error_contract
 
 
 def test_cli_dispatch_keeps_run_demo_module_global_patchable(monkeypatch) -> None:
