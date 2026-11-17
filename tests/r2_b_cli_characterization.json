@@ -1,0 +1,2163 @@
+{
+  "command_tree": {
+    "commands": [
+      {
+        "help": "Print the installed Sentinel package version.",
+        "kind": "command",
+        "name": "version",
+        "params": []
+      },
+      {
+        "help": "Initialize one new database at the explicitly selected path.",
+        "kind": "command",
+        "name": "init",
+        "params": [
+          {
+            "annotation": "pathlib.Path",
+            "default": null,
+            "help": "Absolute path for a new database; existing paths are refused.",
+            "is_bool_flag": false,
+            "is_flag": false,
+            "kind": "option",
+            "max": null,
+            "min": null,
+            "multiple": false,
+            "name": "database",
+            "nargs": 1,
+            "opts": [
+              "--database"
+            ],
+            "required": true,
+            "secondary_opts": []
+          }
+        ]
+      },
+      {
+        "help": "Run read-only diagnostics on one explicitly selected existing database.",
+        "kind": "command",
+        "name": "doctor",
+        "params": [
+          {
+            "annotation": "pathlib.Path",
+            "default": null,
+            "help": "Absolute path to an existing Sentinel database; never created or modified.",
+            "is_bool_flag": false,
+            "is_flag": false,
+            "kind": "option",
+            "max": null,
+            "min": null,
+            "multiple": false,
+            "name": "database",
+            "nargs": 1,
+            "opts": [
+              "--database"
+            ],
+            "required": true,
+            "secondary_opts": []
+          }
+        ]
+      },
+      {
+        "help": "Run the deterministic credential-free synthetic DEMO flow.",
+        "kind": "command",
+        "name": "demo",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Display verified evidence from the fixed synthetic GitHub fixture.",
+            "kind": "command",
+            "name": "github-fixture",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Initialized PUBLIC blob store.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Show verified local tasks, synthetic evidence, and replay status for one selected day.",
+            "kind": "command",
+            "name": "local-overview",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Initialized PUBLIC blob store.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "ISO-8601 timestamp with an explicit UTC offset.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "as_of",
+                "nargs": 1,
+                "opts": [
+                  "--as-of"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Read verified, source-cited evidence.",
+        "kind": "group",
+        "name": "brief",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Inspect metadata or one explicitly selected verified byte excerpt.",
+            "kind": "command",
+            "name": "inspect-file",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit absolute allowlisted directory on a local Windows fixed volume.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "allow_root",
+                "nargs": 1,
+                "opts": [
+                  "--allow-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "One existing .txt or .md file beneath --allow-root.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "file",
+                "nargs": 1,
+                "opts": [
+                  "--file"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Optional first byte of one citation range.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "start_byte",
+                "nargs": 1,
+                "opts": [
+                  "--start-byte"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Optional exclusive end byte of one citation range.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "end_byte",
+                "nargs": 1,
+                "opts": [
+                  "--end-byte"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Search only the explicitly selected local files for a literal phrase.",
+            "kind": "command",
+            "name": "search-files",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit absolute allowlisted directory on a local Windows fixed volume.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "allow_root",
+                "nargs": 1,
+                "opts": [
+                  "--allow-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "list[pathlib.Path]",
+                "default": null,
+                "help": "One explicitly selected .txt or .md file; repeat up to eight.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": true,
+                "name": "files",
+                "nargs": 1,
+                "opts": [
+                  "--file"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "One literal case-sensitive UTF-8 query (not logged).",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "query",
+                "nargs": 1,
+                "opts": [
+                  "--query"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.bool",
+                "default": false,
+                "help": "Explicitly disclose bounded verified context in terminal/JSON output.",
+                "is_bool_flag": true,
+                "is_flag": true,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "show_snippets",
+                "nargs": 1,
+                "opts": [
+                  "--show-snippets"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Extract only explicitly labeled fields from one selected local message body.",
+            "kind": "command",
+            "name": "parse-job-alert",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit absolute allowlisted directory on a local Windows fixed volume.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "allow_root",
+                "nargs": 1,
+                "opts": [
+                  "--allow-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "One explicitly selected .txt or .md message body.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "file",
+                "nargs": 1,
+                "opts": [
+                  "--file"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.bool",
+                "default": false,
+                "help": "Explicitly disclose accepted cited field values.",
+                "is_bool_flag": true,
+                "is_flag": true,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "show_fields",
+                "nargs": 1,
+                "opts": [
+                  "--show-fields"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Inspect the pinned fictional Calendar fixture without provider access.",
+            "kind": "command",
+            "name": "calendar-fixture",
+            "params": [
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.bool",
+                "default": false,
+                "help": "Explicitly display fictional PRIVATE fixture details.",
+                "is_bool_flag": true,
+                "is_flag": true,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "show_details",
+                "nargs": 1,
+                "opts": [
+                  "--show-details"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Report validated fixture, explicit local, live, terms and credential capabilities.",
+            "kind": "command",
+            "name": "status",
+            "params": [
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Review a bounded set of explicitly selected local job-alert files.",
+            "kind": "command",
+            "name": "review-job-alerts",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit absolute allowlisted directory on a supported local Windows volume.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "allow_root",
+                "nargs": 1,
+                "opts": [
+                  "--allow-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "list[pathlib.Path]",
+                "default": null,
+                "help": "One explicit .txt or .md alert file; repeat up to eight.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": true,
+                "name": "files",
+                "nargs": 1,
+                "opts": [
+                  "--file"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.bool",
+                "default": false,
+                "help": "Explicitly disclose verified field values.",
+                "is_bool_flag": true,
+                "is_flag": true,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "show_fields",
+                "nargs": 1,
+                "opts": [
+                  "--show-fields"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Project selected private job-alert fields into deterministic cited signals.",
+            "kind": "command",
+            "name": "triage-job-alerts",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit allowlisted local directory on a supported Windows volume.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "allow_root",
+                "nargs": 1,
+                "opts": [
+                  "--allow-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "list[pathlib.Path]",
+                "default": null,
+                "help": "One explicit .txt or .md alert file; repeat up to eight.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": true,
+                "name": "files",
+                "nargs": 1,
+                "opts": [
+                  "--file"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.bool",
+                "default": false,
+                "help": "Explicitly disclose verified cited field values.",
+                "is_bool_flag": true,
+                "is_flag": true,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "show_fields",
+                "nargs": 1,
+                "opts": [
+                  "--show-fields"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "commands": [
+              {
+                "help": "Emit registry metadata for explicitly selected notes; save it yourself.",
+                "kind": "command",
+                "name": "build",
+                "params": [
+                  {
+                    "annotation": "pathlib.Path",
+                    "default": null,
+                    "help": "Explicit absolute allowlisted local directory.",
+                    "is_bool_flag": false,
+                    "is_flag": false,
+                    "kind": "option",
+                    "max": null,
+                    "min": null,
+                    "multiple": false,
+                    "name": "allow_root",
+                    "nargs": 1,
+                    "opts": [
+                      "--allow-root"
+                    ],
+                    "required": true,
+                    "secondary_opts": []
+                  },
+                  {
+                    "annotation": "list[pathlib.Path]",
+                    "default": null,
+                    "help": "One explicit .txt or .md note; repeat up to eight.",
+                    "is_bool_flag": false,
+                    "is_flag": false,
+                    "kind": "option",
+                    "max": null,
+                    "min": null,
+                    "multiple": true,
+                    "name": "files",
+                    "nargs": 1,
+                    "opts": [
+                      "--file"
+                    ],
+                    "required": true,
+                    "secondary_opts": []
+                  }
+                ]
+              },
+              {
+                "help": "Compare registered notes with their explicitly saved metadata baseline.",
+                "kind": "command",
+                "name": "verify",
+                "params": [
+                  {
+                    "annotation": "pathlib.Path",
+                    "default": null,
+                    "help": "Explicit absolute allowlisted local directory.",
+                    "is_bool_flag": false,
+                    "is_flag": false,
+                    "kind": "option",
+                    "max": null,
+                    "min": null,
+                    "multiple": false,
+                    "name": "allow_root",
+                    "nargs": 1,
+                    "opts": [
+                      "--allow-root"
+                    ],
+                    "required": true,
+                    "secondary_opts": []
+                  },
+                  {
+                    "annotation": "pathlib.Path",
+                    "default": null,
+                    "help": "Explicit .txt registry file beneath --allow-root.",
+                    "is_bool_flag": false,
+                    "is_flag": false,
+                    "kind": "option",
+                    "max": null,
+                    "min": null,
+                    "multiple": false,
+                    "name": "registry",
+                    "nargs": 1,
+                    "opts": [
+                      "--registry"
+                    ],
+                    "required": true,
+                    "secondary_opts": []
+                  },
+                  {
+                    "annotation": "builtins.str",
+                    "default": null,
+                    "help": "Output format: text or json.",
+                    "is_bool_flag": false,
+                    "is_flag": false,
+                    "kind": "option",
+                    "max": null,
+                    "min": null,
+                    "multiple": false,
+                    "name": "output_format",
+                    "nargs": 1,
+                    "opts": [
+                      "--format"
+                    ],
+                    "required": true,
+                    "secondary_opts": []
+                  }
+                ]
+              }
+            ],
+            "help": "Build or verify a metadata-only baseline for explicitly selected local notes.",
+            "kind": "group",
+            "name": "notes-registry",
+            "params": []
+          }
+        ],
+        "help": "Inspect, search, and register explicitly allowlisted local text files.",
+        "kind": "group",
+        "name": "source",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Initialize the dedicated unauthenticated local task operator.",
+            "kind": "command",
+            "name": "setup",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Add one manually entered local task.",
+            "kind": "command",
+            "name": "add",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Non-sensitive manual task title.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "title",
+                "nargs": 1,
+                "opts": [
+                  "--title"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Optional ISO-8601 timestamp with an explicit UTC offset.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "due_at",
+                "nargs": 1,
+                "opts": [
+                  "--due-at"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Optional UUID for an explicitly identified create request.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "request_id",
+                "nargs": 1,
+                "opts": [
+                  "--request-id"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "List local tasks in deterministic due/creation/ID order.",
+            "kind": "command",
+            "name": "list",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['OPEN', 'COMPLETED']",
+                "default": null,
+                "help": "Optional task status filter.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "status",
+                "nargs": 1,
+                "opts": [
+                  "--status"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Edit the title and/or due date with an expected revision.",
+            "kind": "command",
+            "name": "edit",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Task UUID from task list/add.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "task_id",
+                "nargs": 1,
+                "opts": [
+                  "--task-id"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.int",
+                "default": null,
+                "help": null,
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": 1,
+                "multiple": false,
+                "name": "expected_revision",
+                "nargs": 1,
+                "opts": [
+                  "--expected-revision"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Replacement non-sensitive title.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "title",
+                "nargs": 1,
+                "opts": [
+                  "--title"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Replacement ISO-8601 timestamp with explicit offset.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "due_at",
+                "nargs": 1,
+                "opts": [
+                  "--due-at"
+                ],
+                "required": false,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.bool",
+                "default": false,
+                "help": "Clear the current due date.",
+                "is_bool_flag": true,
+                "is_flag": true,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "clear_due_at",
+                "nargs": 1,
+                "opts": [
+                  "--clear-due-at"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Complete one OPEN task at the expected revision.",
+            "kind": "command",
+            "name": "complete",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Task UUID from task list/add.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "task_id",
+                "nargs": 1,
+                "opts": [
+                  "--task-id"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.int",
+                "default": null,
+                "help": null,
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": 1,
+                "multiple": false,
+                "name": "expected_revision",
+                "nargs": 1,
+                "opts": [
+                  "--expected-revision"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Reopen one COMPLETED task at the expected revision.",
+            "kind": "command",
+            "name": "reopen",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Task UUID from task list/add.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "task_id",
+                "nargs": 1,
+                "opts": [
+                  "--task-id"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.int",
+                "default": null,
+                "help": null,
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": 1,
+                "multiple": false,
+                "name": "expected_revision",
+                "nargs": 1,
+                "opts": [
+                  "--expected-revision"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Manage manually entered local tasks.",
+        "kind": "group",
+        "name": "task",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Register the isolated synthetic incremental source and generation-zero cursor.",
+            "kind": "command",
+            "name": "setup",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Initialized PUBLIC blob store.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Atomically apply at most the next fixed synthetic issue page.",
+            "kind": "command",
+            "name": "advance",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Initialized PUBLIC blob store.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.int",
+                "default": null,
+                "help": "Generation observed before this call.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": 3,
+                "min": 0,
+                "multiple": false,
+                "name": "expected_generation",
+                "nargs": 1,
+                "opts": [
+                  "--expected-generation"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Read and fully verify the synthetic cursor, items, spans and blobs.",
+            "kind": "command",
+            "name": "status",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Initialized PUBLIC blob store.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Replay the fixed synthetic GitHub issue fixture one page at a time.",
+        "kind": "group",
+        "name": "fixture-sync",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Prepare only the fixed offline synthetic workspace components.",
+            "kind": "command",
+            "name": "prepare",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit PUBLIC fixture-store root.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Verify the selected workspace without initializing or repairing it.",
+            "kind": "command",
+            "name": "verify",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit PUBLIC fixture-store root.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Prepare or verify the bounded offline synthetic workspace.",
+        "kind": "group",
+        "name": "fixture-workspace",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Display static policy metadata without evaluating or authorizing actions.",
+            "kind": "command",
+            "name": "status",
+            "params": [
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Inspect bounded deterministic policy status.",
+        "kind": "group",
+        "name": "policy",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Report authentication backend availability; production owner proof stays unavailable.",
+            "kind": "command",
+            "name": "status",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing Sentinel database to inspect read-only.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Inspect the read-only synthetic WebAuthn verification foundation.",
+        "kind": "group",
+        "name": "auth",
+        "params": []
+      },
+      {
+        "commands": [
+          {
+            "help": "Build one body-free P06 review preview from a verified synthetic issue.",
+            "kind": "command",
+            "name": "preview-github-fixture",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing prepared Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit PUBLIC fixture-store root.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.int",
+                "default": null,
+                "help": "Explicit fixture issue number: 101, 102 or 103.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "issue_number",
+                "nargs": 1,
+                "opts": [
+                  "--issue"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Persist one source-verified proposal in PENDING_REVIEW state.",
+            "kind": "command",
+            "name": "save-github-fixture",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit verified PUBLIC fixture-store root.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.int",
+                "default": null,
+                "help": "Explicit fixture issue number: 101, 102 or 103.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "issue_number",
+                "nargs": 1,
+                "opts": [
+                  "--issue"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Read and validate every stored bounded pending proposal.",
+            "kind": "command",
+            "name": "list",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          },
+          {
+            "help": "Check stored proposal lineage, current source evidence and expiry read-only.",
+            "kind": "command",
+            "name": "check",
+            "params": [
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Existing current Sentinel database.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "database",
+                "nargs": 1,
+                "opts": [
+                  "--database"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "pathlib.Path",
+                "default": null,
+                "help": "Explicit verified PUBLIC fixture-store root.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "store_root",
+                "nargs": 1,
+                "opts": [
+                  "--store-root"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "builtins.str",
+                "default": null,
+                "help": "Explicit pending proposal SHA-256 identity.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "proposal_id",
+                "nargs": 1,
+                "opts": [
+                  "--id"
+                ],
+                "required": true,
+                "secondary_opts": []
+              },
+              {
+                "annotation": "typing.Literal['text', 'json']",
+                "default": "text",
+                "help": "Output format: text or json.",
+                "is_bool_flag": false,
+                "is_flag": false,
+                "kind": "option",
+                "max": null,
+                "min": null,
+                "multiple": false,
+                "name": "output_format",
+                "nargs": 1,
+                "opts": [
+                  "--format"
+                ],
+                "required": false,
+                "secondary_opts": []
+              }
+            ]
+          }
+        ],
+        "help": "Preview, save, inspect, and check bounded synthetic proposals.",
+        "kind": "group",
+        "name": "proposal",
+        "params": []
+      }
+    ],
+    "help": "Sentinel local-first automation CLI.",
+    "kind": "group",
+    "name": "",
+    "params": [
+      {
+        "annotation": "builtins.bool",
+        "default": null,
+        "help": "Install completion for the current shell.",
+        "is_bool_flag": true,
+        "is_flag": true,
+        "kind": "option",
+        "max": null,
+        "min": null,
+        "multiple": false,
+        "name": "install_completion",
+        "nargs": 1,
+        "opts": [
+          "--install-completion"
+        ],
+        "required": false,
+        "secondary_opts": []
+      },
+      {
+        "annotation": "builtins.bool",
+        "default": null,
+        "help": "Show completion for the current shell, to copy it or customize the installation.",
+        "is_bool_flag": true,
+        "is_flag": true,
+        "kind": "option",
+        "max": null,
+        "min": null,
+        "multiple": false,
+        "name": "show_completion",
+        "nargs": 1,
+        "opts": [
+          "--show-completion"
+        ],
+        "required": false,
+        "secondary_opts": []
+      }
+    ]
+  },
+  "help": {
+    "": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root [OPTIONS] COMMAND [ARGS]...                                       \n                                                                               \n Sentinel local-first automation CLI.                                          \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --install-completion        <bool>  Install completion for the current      │\n│                                     shell.                                  │\n│ --show-completion           <bool>  Show completion for the current shell,  │\n│                                     to copy it or customize the             │\n│                                     installation.                           │\n│ --help                      <bool>  Show this message and exit.             │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ version            Print the installed Sentinel package version.            │\n│ init               Initialize one new database at the explicitly selected   │\n│                    path.                                                    │\n│ doctor             Run read-only diagnostics on one explicitly selected     │\n│                    existing database.                                       │\n│ demo               Run the deterministic credential-free synthetic DEMO     │\n│                    flow.                                                    │\n│ brief              Read verified, source-cited evidence.                    │\n│ source             Inspect, search, and register explicitly allowlisted     │\n│                    local text files.                                        │\n│ task               Manage manually entered local tasks.                     │\n│ fixture-sync       Replay the fixed synthetic GitHub issue fixture one page │\n│                    at a time.                                               │\n│ fixture-workspace  Prepare or verify the bounded offline synthetic          │\n│                    workspace.                                               │\n│ policy             Inspect bounded deterministic policy status.             │\n│ auth               Inspect the read-only synthetic WebAuthn verification    │\n│                    foundation.                                              │\n│ proposal           Preview, save, inspect, and check bounded synthetic      │\n│                    proposals.                                               │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "auth": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root auth [OPTIONS] COMMAND [ARGS]...                                  \n                                                                               \n Inspect the read-only synthetic WebAuthn verification foundation.             \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ status  Report authentication backend availability; production owner proof  │\n│         stays unavailable.                                                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "auth status": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root auth status [OPTIONS]                                             \n                                                                               \n Report authentication backend availability; production owner proof stays      \n unavailable.                                                                  \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database        <path>       Existing Sentinel database to inspect     │\n│                                   read-only.                                │\n│                                   [required]                                │\n│    --format          <text|json>  Output format: text or json.              │\n│                                   [default: text]                           │\n│    --help            <bool>       Show this message and exit.               │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "brief": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root brief [OPTIONS] COMMAND [ARGS]...                                 \n                                                                               \n Read verified, source-cited evidence.                                         \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ github-fixture  Display verified evidence from the fixed synthetic GitHub   │\n│                 fixture.                                                    │\n│ local-overview  Show verified local tasks, synthetic evidence, and replay   │\n│                 status for one selected day.                                │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "brief github-fixture": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root brief github-fixture [OPTIONS]                                    \n                                                                               \n Display verified evidence from the fixed synthetic GitHub fixture.            \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>       Existing current Sentinel database.     │\n│                                     [required]                              │\n│ *  --store-root        <path>       Initialized PUBLIC blob store.          │\n│                                     [required]                              │\n│    --format            <text|json>  Output format: text or json.            │\n│                                     [default: text]                         │\n│    --help              <bool>       Show this message and exit.             │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "brief local-overview": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root brief local-overview [OPTIONS]                                    \n                                                                               \n Show verified local tasks, synthetic evidence, and replay status for one      \n selected day.                                                                 \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>       Existing current Sentinel database.     │\n│                                     [required]                              │\n│ *  --store-root        <path>       Initialized PUBLIC blob store.          │\n│                                     [required]                              │\n│ *  --as-of             <str>        ISO-8601 timestamp with an explicit UTC │\n│                                     offset.                                 │\n│                                     [required]                              │\n│    --format            <text|json>  Output format: text or json.            │\n│                                     [default: text]                         │\n│    --help              <bool>       Show this message and exit.             │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "demo": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root demo [OPTIONS]                                                    \n                                                                               \n Run the deterministic credential-free synthetic DEMO flow.                    \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "doctor": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root doctor [OPTIONS]                                                  \n                                                                               \n Run read-only diagnostics on one explicitly selected existing database.       \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database        <path>  Absolute path to an existing Sentinel          │\n│                              database; never created or modified.           │\n│                              [required]                                     │\n│    --help            <bool>  Show this message and exit.                    │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-sync": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-sync [OPTIONS] COMMAND [ARGS]...                          \n                                                                               \n Replay the fixed synthetic GitHub issue fixture one page at a time.           \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ setup    Register the isolated synthetic incremental source and             │\n│          generation-zero cursor.                                            │\n│ advance  Atomically apply at most the next fixed synthetic issue page.      │\n│ status   Read and fully verify the synthetic cursor, items, spans and       │\n│          blobs.                                                             │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-sync advance": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-sync advance [OPTIONS]                                    \n                                                                               \n Atomically apply at most the next fixed synthetic issue page.                 \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database                  <path>                 Existing current      │\n│                                                       Sentinel database.    │\n│                                                       [required]            │\n│ *  --store-root                <path>                 Initialized PUBLIC    │\n│                                                       blob store.           │\n│                                                       [required]            │\n│ *  --expected-generati…        <int range> [0<=x<=3]  Generation observed   │\n│                                                       before this call.     │\n│                                                       [required]            │\n│    --help                      <bool>                 Show this message and │\n│                                                       exit.                 │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-sync setup": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-sync setup [OPTIONS]                                      \n                                                                               \n Register the isolated synthetic incremental source and generation-zero        \n cursor.                                                                       \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>  Existing current Sentinel database.          │\n│                                [required]                                   │\n│ *  --store-root        <path>  Initialized PUBLIC blob store. [required]    │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-sync status": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-sync status [OPTIONS]                                     \n                                                                               \n Read and fully verify the synthetic cursor, items, spans and blobs.           \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>  Existing current Sentinel database.          │\n│                                [required]                                   │\n│ *  --store-root        <path>  Initialized PUBLIC blob store. [required]    │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-workspace": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-workspace [OPTIONS] COMMAND [ARGS]...                     \n                                                                               \n Prepare or verify the bounded offline synthetic workspace.                    \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ prepare  Prepare only the fixed offline synthetic workspace components.     │\n│ verify   Verify the selected workspace without initializing or repairing    │\n│          it.                                                                │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-workspace prepare": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-workspace prepare [OPTIONS]                               \n                                                                               \n Prepare only the fixed offline synthetic workspace components.                \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>  Existing current Sentinel database.          │\n│                                [required]                                   │\n│ *  --store-root        <path>  Explicit PUBLIC fixture-store root.          │\n│                                [required]                                   │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "fixture-workspace verify": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root fixture-workspace verify [OPTIONS]                                \n                                                                               \n Verify the selected workspace without initializing or repairing it.           \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>  Existing current Sentinel database.          │\n│                                [required]                                   │\n│ *  --store-root        <path>  Explicit PUBLIC fixture-store root.          │\n│                                [required]                                   │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "init": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root init [OPTIONS]                                                    \n                                                                               \n Initialize one new database at the explicitly selected path.                  \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database        <path>  Absolute path for a new database; existing     │\n│                              paths are refused.                             │\n│                              [required]                                     │\n│    --help            <bool>  Show this message and exit.                    │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "policy": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root policy [OPTIONS] COMMAND [ARGS]...                                \n                                                                               \n Inspect bounded deterministic policy status.                                  \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ status  Display static policy metadata without evaluating or authorizing    │\n│         actions.                                                            │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "policy status": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root policy status [OPTIONS]                                           \n                                                                               \n Display static policy metadata without evaluating or authorizing actions.     \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --format        <text|json>  Output format: text or json. [default: text]   │\n│ --help          <bool>       Show this message and exit.                    │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "proposal": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root proposal [OPTIONS] COMMAND [ARGS]...                              \n                                                                               \n Preview, save, inspect, and check bounded synthetic proposals.                \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ preview-github-fixture  Build one body-free P06 review preview from a       │\n│                         verified synthetic issue.                           │\n│ save-github-fixture     Persist one source-verified proposal in             │\n│                         PENDING_REVIEW state.                               │\n│ list                    Read and validate every stored bounded pending      │\n│                         proposal.                                           │\n│ check                   Check stored proposal lineage, current source       │\n│                         evidence and expiry read-only.                      │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "proposal check": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root proposal check [OPTIONS]                                          \n                                                                               \n Check stored proposal lineage, current source evidence and expiry read-only.  \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>       Existing current Sentinel database.     │\n│                                     [required]                              │\n│ *  --store-root        <path>       Explicit verified PUBLIC fixture-store  │\n│                                     root.                                   │\n│                                     [required]                              │\n│ *  --id                <str>        Explicit pending proposal SHA-256       │\n│                                     identity.                               │\n│                                     [required]                              │\n│    --format            <text|json>  Output format: text or json.            │\n│                                     [default: text]                         │\n│    --help              <bool>       Show this message and exit.             │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "proposal list": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root proposal list [OPTIONS]                                           \n                                                                               \n Read and validate every stored bounded pending proposal.                      \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database        <path>       Existing current Sentinel database.       │\n│                                   [required]                                │\n│    --format          <text|json>  Output format: text or json.              │\n│                                   [default: text]                           │\n│    --help            <bool>       Show this message and exit.               │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "proposal preview-github-fixture": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root proposal preview-github-fixture [OPTIONS]                         \n                                                                               \n Build one body-free P06 review preview from a verified synthetic issue.       \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>       Existing prepared Sentinel database.    │\n│                                     [required]                              │\n│ *  --store-root        <path>       Explicit PUBLIC fixture-store root.     │\n│                                     [required]                              │\n│ *  --issue             <int>        Explicit fixture issue number: 101, 102 │\n│                                     or 103.                                 │\n│                                     [required]                              │\n│    --format            <text|json>  Output format: text or json.            │\n│                                     [default: text]                         │\n│    --help              <bool>       Show this message and exit.             │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "proposal save-github-fixture": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root proposal save-github-fixture [OPTIONS]                            \n                                                                               \n Persist one source-verified proposal in PENDING_REVIEW state.                 \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>       Existing current Sentinel database.     │\n│                                     [required]                              │\n│ *  --store-root        <path>       Explicit verified PUBLIC fixture-store  │\n│                                     root.                                   │\n│                                     [required]                              │\n│ *  --issue             <int>        Explicit fixture issue number: 101, 102 │\n│                                     or 103.                                 │\n│                                     [required]                              │\n│    --format            <text|json>  Output format: text or json.            │\n│                                     [default: text]                         │\n│    --help              <bool>       Show this message and exit.             │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source [OPTIONS] COMMAND [ARGS]...                                \n                                                                               \n Inspect, search, and register explicitly allowlisted local text files.        \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ inspect-file       Inspect metadata or one explicitly selected verified     │\n│                    byte excerpt.                                            │\n│ search-files       Search only the explicitly selected local files for a    │\n│                    literal phrase.                                          │\n│ parse-job-alert    Extract only explicitly labeled fields from one selected │\n│                    local message body.                                      │\n│ calendar-fixture   Inspect the pinned fictional Calendar fixture without    │\n│                    provider access.                                         │\n│ status             Report validated fixture, explicit local, live, terms    │\n│                    and credential capabilities.                             │\n│ review-job-alerts  Review a bounded set of explicitly selected local        │\n│                    job-alert files.                                         │\n│ triage-job-alerts  Project selected private job-alert fields into           │\n│                    deterministic cited signals.                             │\n│ notes-registry     Build or verify a metadata-only baseline for explicitly  │\n│                    selected local notes.                                    │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source calendar-fixture": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source calendar-fixture [OPTIONS]                                 \n                                                                               \n Inspect the pinned fictional Calendar fixture without provider access.        \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --format              <str>   Output format: text or json. [default: text]  │\n│ --show-details        <bool>  Explicitly display fictional PRIVATE fixture  │\n│                               details.                                      │\n│ --help                <bool>  Show this message and exit.                   │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source inspect-file": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source inspect-file [OPTIONS]                                     \n                                                                               \n Inspect metadata or one explicitly selected verified byte excerpt.            \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root        <path>  Explicit absolute allowlisted directory on a │\n│                                local Windows fixed volume.                  │\n│                                [required]                                   │\n│ *  --file              <path>  One existing .txt or .md file beneath        │\n│                                --allow-root.                                │\n│                                [required]                                   │\n│    --format            <str>   Output format: text or json. [default: text] │\n│    --start-byte        <str>   Optional first byte of one citation range.   │\n│    --end-byte          <str>   Optional exclusive end byte of one citation  │\n│                                range.                                       │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source notes-registry": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source notes-registry [OPTIONS] COMMAND [ARGS]...                 \n                                                                               \n Build or verify a metadata-only baseline for explicitly selected local notes. \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ build   Emit registry metadata for explicitly selected notes; save it       │\n│         yourself.                                                           │\n│ verify  Compare registered notes with their explicitly saved metadata       │\n│         baseline.                                                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source notes-registry build": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source notes-registry build [OPTIONS]                             \n                                                                               \n Emit registry metadata for explicitly selected notes; save it yourself.       \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root        <path>        Explicit absolute allowlisted local    │\n│                                      directory.                             │\n│                                      [required]                             │\n│ *  --file              <list[Path]>  One explicit .txt or .md note; repeat  │\n│                                      up to eight.                           │\n│                                      [required]                             │\n│    --help              <bool>        Show this message and exit.            │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source notes-registry verify": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source notes-registry verify [OPTIONS]                            \n                                                                               \n Compare registered notes with their explicitly saved metadata baseline.       \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root        <path>  Explicit absolute allowlisted local          │\n│                                directory.                                   │\n│                                [required]                                   │\n│ *  --registry          <path>  Explicit .txt registry file beneath          │\n│                                --allow-root.                                │\n│                                [required]                                   │\n│ *  --format            <str>   Output format: text or json. [required]      │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source parse-job-alert": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source parse-job-alert [OPTIONS]                                  \n                                                                               \n Extract only explicitly labeled fields from one selected local message body.  \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root         <path>  Explicit absolute allowlisted directory on  │\n│                                 a local Windows fixed volume.               │\n│                                 [required]                                  │\n│ *  --file               <path>  One explicitly selected .txt or .md message │\n│                                 body.                                       │\n│                                 [required]                                  │\n│    --show-fields        <bool>  Explicitly disclose accepted cited field    │\n│                                 values.                                     │\n│    --format             <str>   Output format: text or json.                │\n│                                 [default: text]                             │\n│    --help               <bool>  Show this message and exit.                 │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source review-job-alerts": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source review-job-alerts [OPTIONS]                                \n                                                                               \n Review a bounded set of explicitly selected local job-alert files.            \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root         <path>        Explicit absolute allowlisted         │\n│                                       directory on a supported local        │\n│                                       Windows volume.                       │\n│                                       [required]                            │\n│ *  --file               <list[Path]>  One explicit .txt or .md alert file;  │\n│                                       repeat up to eight.                   │\n│                                       [required]                            │\n│    --show-fields        <bool>        Explicitly disclose verified field    │\n│                                       values.                               │\n│    --format             <str>         Output format: text or json.          │\n│                                       [default: text]                       │\n│    --help               <bool>        Show this message and exit.           │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source search-files": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source search-files [OPTIONS]                                     \n                                                                               \n Search only the explicitly selected local files for a literal phrase.         \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root           <path>        Explicit absolute allowlisted       │\n│                                         directory on a local Windows fixed  │\n│                                         volume.                             │\n│                                         [required]                          │\n│ *  --file                 <list[Path]>  One explicitly selected .txt or .md │\n│                                         file; repeat up to eight.           │\n│                                         [required]                          │\n│ *  --query                <str>         One literal case-sensitive UTF-8    │\n│                                         query (not logged).                 │\n│                                         [required]                          │\n│    --show-snippets        <bool>        Explicitly disclose bounded         │\n│                                         verified context in terminal/JSON   │\n│                                         output.                             │\n│    --format               <str>         Output format: text or json.        │\n│                                         [default: text]                     │\n│    --help                 <bool>        Show this message and exit.         │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source status": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source status [OPTIONS]                                           \n                                                                               \n Report validated fixture, explicit local, live, terms and credential          \n capabilities.                                                                 \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --format        <str>   Output format: text or json. [default: text]        │\n│ --help          <bool>  Show this message and exit.                         │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "source triage-job-alerts": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root source triage-job-alerts [OPTIONS]                                \n                                                                               \n Project selected private job-alert fields into deterministic cited signals.   \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --allow-root         <path>        Explicit allowlisted local directory  │\n│                                       on a supported Windows volume.        │\n│                                       [required]                            │\n│ *  --file               <list[Path]>  One explicit .txt or .md alert file;  │\n│                                       repeat up to eight.                   │\n│                                       [required]                            │\n│    --show-fields        <bool>        Explicitly disclose verified cited    │\n│                                       field values.                         │\n│    --format             <str>         Output format: text or json.          │\n│                                       [default: text]                       │\n│    --help               <bool>        Show this message and exit.           │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task [OPTIONS] COMMAND [ARGS]...                                  \n                                                                               \n Manage manually entered local tasks.                                          \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Commands ──────────────────────────────────────────────────────────────────┐\n│ setup     Initialize the dedicated unauthenticated local task operator.     │\n│ add       Add one manually entered local task.                              │\n│ list      List local tasks in deterministic due/creation/ID order.          │\n│ edit      Edit the title and/or due date with an expected revision.         │\n│ complete  Complete one OPEN task at the expected revision.                  │\n│ reopen    Reopen one COMPLETED task at the expected revision.               │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task add": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task add [OPTIONS]                                                \n                                                                               \n Add one manually entered local task.                                          \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database          <path>  Existing current Sentinel database.          │\n│                                [required]                                   │\n│ *  --title             <str>   Non-sensitive manual task title. [required]  │\n│    --due-at            <str>   Optional ISO-8601 timestamp with an explicit │\n│                                UTC offset.                                  │\n│    --request-id        <str>   Optional UUID for an explicitly identified   │\n│                                create request.                              │\n│    --help              <bool>  Show this message and exit.                  │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task complete": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task complete [OPTIONS]                                           \n                                                                               \n Complete one OPEN task at the expected revision.                              \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database                 <path>              Existing current Sentinel │\n│                                                   database.                 │\n│                                                   [required]                │\n│ *  --task-id                  <str>               Task UUID from task       │\n│                                                   list/add.                 │\n│                                                   [required]                │\n│ *  --expected-revision        <int range> [x>=1]  [required]                │\n│    --help                     <bool>              Show this message and     │\n│                                                   exit.                     │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task edit": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task edit [OPTIONS]                                               \n                                                                               \n Edit the title and/or due date with an expected revision.                     \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database                 <path>              Existing current Sentinel │\n│                                                   database.                 │\n│                                                   [required]                │\n│ *  --task-id                  <str>               Task UUID from task       │\n│                                                   list/add.                 │\n│                                                   [required]                │\n│ *  --expected-revision        <int range> [x>=1]  [required]                │\n│    --title                    <str>               Replacement non-sensitive │\n│                                                   title.                    │\n│    --due-at                   <str>               Replacement ISO-8601      │\n│                                                   timestamp with explicit   │\n│                                                   offset.                   │\n│    --clear-due-at             <bool>              Clear the current due     │\n│                                                   date.                     │\n│    --help                     <bool>              Show this message and     │\n│                                                   exit.                     │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task list": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task list [OPTIONS]                                               \n                                                                               \n List local tasks in deterministic due/creation/ID order.                      \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database        <path>            Existing current Sentinel database.  │\n│                                        [required]                           │\n│    --status          <OPEN|COMPLETED>  Optional task status filter.         │\n│    --help            <bool>            Show this message and exit.          │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task reopen": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task reopen [OPTIONS]                                             \n                                                                               \n Reopen one COMPLETED task at the expected revision.                           \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database                 <path>              Existing current Sentinel │\n│                                                   database.                 │\n│                                                   [required]                │\n│ *  --task-id                  <str>               Task UUID from task       │\n│                                                   list/add.                 │\n│                                                   [required]                │\n│ *  --expected-revision        <int range> [x>=1]  [required]                │\n│    --help                     <bool>              Show this message and     │\n│                                                   exit.                     │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "task setup": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root task setup [OPTIONS]                                              \n                                                                               \n Initialize the dedicated unauthenticated local task operator.                 \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ *  --database        <path>  Existing current Sentinel database. [required] │\n│    --help            <bool>  Show this message and exit.                    │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    },
+    "version": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "                                                                               \n Usage: root version [OPTIONS]                                                 \n                                                                               \n Print the installed Sentinel package version.                                 \n                                                                               \n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --help        <bool>  Show this message and exit.                           │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n"
+    }
+  },
+  "outputs": {
+    "auth_status_json": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"backend_state\":\"AVAILABLE\",\"credential_state\":\"NO_PROTECTED_ENROLLMENT\",\"executable\":false,\"owner_verified\":false,\"production_owner_verification\":\"UNAVAILABLE\",\"schema_state\":\"CURRENT\",\"schema_version\":\"sentinel.owner-proof-status.v1\",\"synthetic_test_credentials\":0}\n"
+    },
+    "auth_status_text": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Sentinel owner-proof verification\nWebAuthn verifier: AVAILABLE\nAuthentication schema: CURRENT\nSynthetic test credentials: 0\nProduction owner verification: UNAVAILABLE\nAuthorization and execution: unavailable\n"
+    },
+    "calendar_fixture_json": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"calendar_alias\":\"sentinel-fictional-calendar-v1\",\"details_included\":false,\"disclaimer\":\"Fictional packaged Calendar fixture only; not the user's actual Calendar. Fixture metadata is not authenticated provider data.\",\"event_count\":4,\"events\":[{\"citation_count\":4,\"description_byte_length\":66,\"description_sha256\":\"4d510bc73ea9a16ff68f04fa4364dfb05222bea033748c8fd6813eee790ad514\",\"event_id\":\"synthetic-event-utc-001\",\"event_kind\":\"timed\",\"sensitivity\":\"PRIVATE\",\"source_id\":\"0e018e8e-49b1-545e-a9d4-2059e3cfd843\",\"status\":\"confirmed\",\"trust\":\"T4 EXTERNAL\"},{\"citation_count\":3,\"description_byte_length\":52,\"description_sha256\":\"455a28185751980c2848b2552651b5e4ee174764cfd40d9d8e142e319f87c212\",\"event_id\":\"synthetic-event-offset-002\",\"event_kind\":\"timed\",\"sensitivity\":\"PRIVATE\",\"source_id\":\"efe8089d-37c3-5b00-8efe-c694bf012229\",\"status\":\"confirmed\",\"trust\":\"T4 EXTERNAL\"},{\"citation_count\":2,\"description_byte_length\":55,\"description_sha256\":\"f7546c0acb0873d05b0b6f4264ce7dbb69d73344d11293b9996e7559a30fd9ab\",\"event_id\":\"synthetic-event-allday-003\",\"event_kind\":\"all_day\",\"sensitivity\":\"PRIVATE\",\"source_id\":\"892ff8e0-7c22-5e29-8696-57c7140ca6d9\",\"status\":\"confirmed\",\"trust\":\"T4 EXTERNAL\"},{\"citation_count\":2,\"description_byte_length\":115,\"description_sha256\":\"4853e47ff2c97703534c310a143372e1cea365e788502360421d2fa6048caa8e\",\"event_id\":\"synthetic-event-cancelled-004\",\"event_kind\":\"timed\",\"sensitivity\":\"PRIVATE\",\"source_id\":\"30284112-c55e-5b16-b36c-7bdc3ef73ef2\",\"status\":\"cancelled\",\"trust\":\"T4 EXTERNAL\"}],\"fixture_sha256\":\"e879838ea32430497160bacbdedde1c4ffd98b1906bcdddc1c77c776f756575a\",\"fixture_version\":\"sentinel.calendar-events-fixture.v1\",\"schema_version\":\"sentinel.calendar-fixture-inspection.v1\",\"sensitivity\":\"PRIVATE\",\"status_counts\":{\"cancelled\":1,\"confirmed\":3},\"synthetic_data\":true,\"trust\":\"T4 EXTERNAL\"}\n"
+    },
+    "calendar_fixture_text": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Sentinel - Synthetic Calendar fixture\nData: fictional packaged fixture; not the user's actual Calendar\nFixture: sentinel.calendar-events-fixture.v1 | SHA-256 e879838ea32430497160bacbdedde1c4ffd98b1906bcdddc1c77c776f756575a\nCalendar alias: sentinel-fictional-calendar-v1\nEvents: 4 | Confirmed: 3 | Cancelled: 1\nTrust: T4 EXTERNAL | Sensitivity: PRIVATE\nEvent metadata is synthetic and not authenticated provider data.\nDetails included: no\n\nEvent: synthetic-event-utc-001 | confirmed | timed\n  Source UUID: 0e018e8e-49b1-545e-a9d4-2059e3cfd843\n  Description SHA-256: 4d510bc73ea9a16ff68f04fa4364dfb05222bea033748c8fd6813eee790ad514 (66 bytes)\n  Verified description citations: 4\n\nEvent: synthetic-event-offset-002 | confirmed | timed\n  Source UUID: efe8089d-37c3-5b00-8efe-c694bf012229\n  Description SHA-256: 455a28185751980c2848b2552651b5e4ee174764cfd40d9d8e142e319f87c212 (52 bytes)\n  Verified description citations: 3\n\nEvent: synthetic-event-allday-003 | confirmed | all_day\n  Source UUID: 892ff8e0-7c22-5e29-8696-57c7140ca6d9\n  Description SHA-256: f7546c0acb0873d05b0b6f4264ce7dbb69d73344d11293b9996e7559a30fd9ab (55 bytes)\n  Verified description citations: 2\n\nEvent: synthetic-event-cancelled-004 | cancelled | timed\n  Source UUID: 30284112-c55e-5b16-b36c-7bdc3ef73ef2\n  Description SHA-256: 4853e47ff2c97703534c310a143372e1cea365e788502360421d2fa6048caa8e (115 bytes)\n  Verified description citations: 2\n"
+    },
+    "demo": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"config_sha256\":\"9ba0e71e6026ecc93149cfe2052d75082528732a82c2556ce10de893e97c4256\",\"credentials_used\":false,\"execution_mode\":\"DEMO\",\"external_effects\":false,\"fixture_sha256\":\"365c9f02f1375c3e784138b7cdb3c2fd3ed1a0f4cf64cfec6fdef2fe5d9ecbb8\",\"fixture_version\":\"sentinel.demo-fixture.v1\",\"model\":{\"request_sha256\":\"e2fc9fc18fa242c3352399a7f896d22ad08edcfcf98756ba87c7f6549ed82c2e\",\"response_sha256\":\"42fa19a1ee558e9cc6c6d983db3ab0f4366fc255f0a0d621435ce0ad1b7f1667\",\"status\":\"SUCCESS\"},\"negative_probes\":{\"approval_tool\":\"DENIED\",\"external_write_tool\":\"DENIED\",\"private_model\":\"DENIED\",\"secret_model\":\"DENIED\",\"unknown_model\":\"DENIED\",\"unknown_tool\":\"DENIED\"},\"production_readiness\":false,\"profile\":\"local-only\",\"schema_version\":\"sentinel.demo.v1\",\"tool\":{\"request_sha256\":\"c79832341a39653868ef4d9356091fd76cb3d04417e3b35cde9d54d20293ed00\",\"response_sha256\":\"06ba4f94d418f201177452ffb6ae0e861a013f2dbc0548c56fa8316054f344f3\",\"status\":\"SUCCESS\"}}\n"
+    },
+    "invalid_due_timestamp": {
+      "exit_code": 1,
+      "stderr": "Task operation failed: due-at must be an ISO-8601 timestamp with an offset.\n",
+      "stdout": ""
+    },
+    "missing_source_required_args": {
+      "exit_code": 2,
+      "stderr": "Usage: root source parse-job-alert [OPTIONS]\nTry 'root source parse-job-alert --help' for help.\n┌─ Error ─────────────────────────────────────────────────────────────────────┐\n│ Missing option '--allow-root'.                                              │\n└─────────────────────────────────────────────────────────────────────────────┘\n",
+      "stdout": ""
+    },
+    "policy_status_json": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"active_rules\":[{\"outcome\":\"DENY\",\"priority\":0,\"rule_id\":\"P00\"},{\"outcome\":\"DENY\",\"priority\":1,\"rule_id\":\"P01\"},{\"outcome\":\"DENY\",\"priority\":2,\"rule_id\":\"P02\"},{\"outcome\":\"DENY\",\"priority\":3,\"rule_id\":\"P03\"},{\"outcome\":\"DENY\",\"priority\":4,\"rule_id\":\"P17\"},{\"outcome\":\"DENY\",\"priority\":5,\"rule_id\":\"P09\"},{\"outcome\":\"ALLOW\",\"priority\":6,\"rule_id\":\"P04\"},{\"outcome\":\"ALLOW\",\"priority\":7,\"rule_id\":\"P06\"},{\"outcome\":\"DENY\",\"priority\":8,\"rule_id\":\"P12\"}],\"approval_verifier\":\"UNAVAILABLE\",\"bounded_proposal_persistence_operation\":\"sentinel.synthetic.proposal.persist\",\"bounded_proposal_persistence_state\":\"PENDING_REVIEW_ONLY\",\"bounded_proposal_preview_operation\":\"sentinel.synthetic.proposal.local\",\"bounded_proposal_preview_state\":\"IN_MEMORY_PREVIEW_ONLY\",\"bounded_public_read_operation\":\"sentinel.synthetic.read.public\",\"bounded_public_read_state\":\"IMPLEMENTED\",\"capabilities\":[{\"capability_id\":\"C0_READ_PUBLIC\",\"effect_class\":\"READ_ONLY\",\"execution_available\":false,\"registration_state\":\"POLICY_ONLY\"},{\"capability_id\":\"C1_READ_PRIVATE\",\"effect_class\":\"READ_ONLY\",\"execution_available\":false,\"registration_state\":\"POLICY_ONLY\"},{\"capability_id\":\"C2_WRITE_LOCAL_PROPOSAL\",\"effect_class\":\"LOCAL_PROPOSAL\",\"execution_available\":false,\"registration_state\":\"POLICY_ONLY\"},{\"capability_id\":\"C3_WRITE_LOCAL_ACCEPTED\",\"effect_class\":\"LOCAL_ACCEPTED\",\"execution_available\":false,\"registration_state\":\"POLICY_ONLY\"},{\"capability_id\":\"C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB\",\"effect_class\":\"EXTERNAL_DRAFT_OR_GITHUB\",\"execution_available\":false,\"registration_state\":\"OFF\"},{\"capability_id\":\"C5_SEND_EXTERNAL_EMAIL\",\"effect_class\":\"EXTERNAL_SEND\",\"execution_available\":false,\"registration_state\":\"OFF\"},{\"capability_id\":\"C6_ACCESS_SECRET\",\"effect_class\":\"SECRET_ACCESS\",\"execution_available\":false,\"registration_state\":\"OFF\"}],\"default_outcome\":\"DENY\",\"disabled_capabilities\":[\"C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB\",\"C5_SEND_EXTERNAL_EMAIL\",\"C6_ACCESS_SECRET\"],\"enforcement_integration\":\"INCOMPLETE\",\"inactive_capabilities\":[\"C1_READ_PRIVATE\",\"C3_WRITE_LOCAL_ACCEPTED\"],\"live_effect_execution\":\"UNAVAILABLE\",\"pending_human_decisions\":\"UNAVAILABLE\",\"policy_id\":\"sentinel.cr2.bounded-public-read-policy\",\"policy_sha256\":\"743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df\",\"policy_version\":\"v4\",\"registry_id\":\"sentinel.cr2.synthetic-capabilities\",\"registry_sha256\":\"15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27\",\"registry_version\":\"v2\",\"schema_version\":\"sentinel.policy-status.v4\",\"unimplemented_rules\":[\"P05\",\"P07\",\"P08\",\"P10\",\"P11\",\"P13\",\"P14\",\"P15\",\"P16\"]}\n"
+    },
+    "policy_status_text": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Sentinel policy status\nSchema: sentinel.policy-status.v4\nPolicy: sentinel.cr2.bounded-public-read-policy (v4)\nPolicy SHA-256: 743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df\nRegistry: sentinel.cr2.synthetic-capabilities (v2)\nRegistry SHA-256: 15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27\nCapabilities:\n  C0_READ_PUBLIC  Read public  POLICY_ONLY\n  C1_READ_PRIVATE  Read private  POLICY_ONLY\n  C2_WRITE_LOCAL_PROPOSAL  Write local proposal  POLICY_ONLY\n  C3_WRITE_LOCAL_ACCEPTED  Write local accepted  POLICY_ONLY\n  C4_WRITE_EXTERNAL_DRAFT_OR_GITHUB  Write external draft/GitHub  OFF\n  C5_SEND_EXTERNAL_EMAIL  Send external email  OFF\n  C6_ACCESS_SECRET  Access secret  OFF\nRule order: P00:DENY -> P01:DENY -> P02:DENY -> P03:DENY -> P17:DENY -> P09:DENY -> P04:ALLOW -> P06:ALLOW -> P12:DENY\nBounded PUBLIC read route: IMPLEMENTED (sentinel.synthetic.read.public)\nC1/C3: NOT ACTIVE\nC2: bounded pending-review proposal metadata only; no task or execution\nBounded C2 preview route: IN_MEMORY_PREVIEW_ONLY (sentinel.synthetic.proposal.local)\nBounded C2 persistence route: PENDING_REVIEW_ONLY (sentinel.synthetic.proposal.persist)\nC4/C5/C6: OFF\nDefault decision: DENY\nPENDING_HUMAN: UNAVAILABLE\nApproval verifier: UNAVAILABLE\nLive effect execution: UNAVAILABLE\nEnforcement integration: INCOMPLETE\nPolicy decisions are metadata only and never authorize execution.\n"
+    },
+    "source_status_json": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "{\"capabilities\":[{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"FIXTURE_ONLY\",\"capability_id\":\"gmail.fixture\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Pinned synthetic Gmail fixture validated offline.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"FIXTURE_READY\",\"source_kind\":\"PACKAGED_FIXTURE\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"FIXTURE_ONLY\",\"capability_id\":\"github.fixture\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Pinned synthetic GitHub fixture validated offline.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"FIXTURE_READY\",\"source_kind\":\"PACKAGED_FIXTURE\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"FIXTURE_ONLY\",\"capability_id\":\"calendar.fixture\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Pinned synthetic Calendar fixture validated offline.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"FIXTURE_READY\",\"source_kind\":\"PACKAGED_FIXTURE\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"EXPLICIT_INVOCATION_ONLY\",\"capability_id\":\"local.text_file\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Explicit allowlisted local text selection; no discovery or persistence.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"EXPLICIT_LOCAL_ONLY\",\"source_kind\":\"EXPLICIT_LOCAL\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"EXPLICIT_INVOCATION_ONLY\",\"capability_id\":\"local.literal_search\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Explicit selected-file literal search; no scanning or indexing.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"EXPLICIT_LOCAL_ONLY\",\"source_kind\":\"EXPLICIT_LOCAL\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"EXPLICIT_INVOCATION_ONLY\",\"capability_id\":\"local.job_alert_extraction\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Explicit local parsing; no mailbox access or automatic tasks.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"EXPLICIT_LOCAL_ONLY\",\"source_kind\":\"EXPLICIT_LOCAL\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"EXPLICIT_INVOCATION_ONLY\",\"capability_id\":\"local.job_alert_batch_review\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Explicit local-file review; source text remains untrusted.\",\"implementation_state\":\"IMPLEMENTED\",\"readiness\":\"EXPLICIT_LOCAL_ONLY\",\"source_kind\":\"EXPLICIT_LOCAL\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_CHECKED\",\"activation_state\":\"DISABLED\",\"capability_id\":\"gmail.live_read\",\"credential_backend_state\":\"UNAVAILABLE\",\"credential_check_state\":\"NOT_CHECKED\",\"explanation\":\"No live provider adapter; account state was not checked.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"NOT_IMPLEMENTED\",\"source_kind\":\"LIVE_PROVIDER\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_CHECKED\",\"activation_state\":\"DISABLED\",\"capability_id\":\"github.live_repository_read\",\"credential_backend_state\":\"UNAVAILABLE\",\"credential_check_state\":\"NOT_CHECKED\",\"explanation\":\"No live provider adapter; account state was not checked.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"NOT_IMPLEMENTED\",\"source_kind\":\"LIVE_PROVIDER\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_CHECKED\",\"activation_state\":\"DISABLED\",\"capability_id\":\"calendar.live_read\",\"credential_backend_state\":\"UNAVAILABLE\",\"credential_check_state\":\"NOT_CHECKED\",\"explanation\":\"No live provider adapter; account state was not checked.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"NOT_IMPLEMENTED\",\"source_kind\":\"LIVE_PROVIDER\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"TERMS_GATED\",\"capability_id\":\"jobs.greenhouse_public_feed\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"No feed reader; source-specific terms review is required and incomplete.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"TERMS_REVIEW_REQUIRED\",\"source_kind\":\"PUBLIC_FEED\",\"source_review_state\":\"NOT_ASSESSED\",\"terms_review_state\":\"REQUIRED_NOT_COMPLETED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"TERMS_GATED\",\"capability_id\":\"jobs.lever_public_feed\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"No feed reader; source-specific terms review is required and incomplete.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"TERMS_REVIEW_REQUIRED\",\"source_kind\":\"PUBLIC_FEED\",\"source_review_state\":\"NOT_ASSESSED\",\"terms_review_state\":\"REQUIRED_NOT_COMPLETED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"SOURCE_REVIEW_GATED\",\"capability_id\":\"linkedin.owner_export_import\",\"credential_backend_state\":\"NOT_REQUIRED\",\"credential_check_state\":\"NOT_REQUIRED\",\"explanation\":\"Owner-export import is absent; source review remains required.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"NOT_IMPLEMENTED\",\"source_kind\":\"OWNER_EXPORT\",\"source_review_state\":\"REQUIRED_NOT_COMPLETED\",\"terms_review_state\":\"NOT_ASSESSED\"},{\"account_check_state\":\"NOT_APPLICABLE\",\"activation_state\":\"DISABLED\",\"capability_id\":\"credentials.production_backend\",\"credential_backend_state\":\"UNAVAILABLE\",\"credential_check_state\":\"NOT_CHECKED\",\"explanation\":\"No verified production credential backend; real credentials were not inspected.\",\"implementation_state\":\"NOT_IMPLEMENTED\",\"readiness\":\"CREDENTIAL_BACKEND_UNAVAILABLE\",\"source_kind\":\"CREDENTIAL_BACKEND\",\"source_review_state\":\"NOT_REQUIRED\",\"terms_review_state\":\"NOT_REQUIRED\"}],\"external_writes_enabled\":false,\"live_sources_enabled\":false,\"safe_defaults_state\":\"VERIFIED\",\"schema_version\":\"sentinel.source-capability-status.v1\",\"validation\":\"VALID\"}\n"
+    },
+    "source_status_text": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "Sentinel - Source capabilities\nValidation: PASS\nBundled defaults: VERIFIED (no live sources or external writes enabled)\nSynthetic fixtures do not indicate a linked real provider account.\nOffline fixtures\n  Gmail fixture          FIXTURE READY\n  GitHub fixture         FIXTURE READY\n  Calendar fixture       FIXTURE READY\nLocal access requires explicit paths; there is no discovery, background scan, or PRIVATE persistence.\nExplicit local workflows\n  Text files             EXPLICIT LOCAL ONLY\n  Literal search         EXPLICIT LOCAL ONLY\n  Job-alert extraction   EXPLICIT LOCAL ONLY\n  Job-alert review       EXPLICIT LOCAL ONLY\nLive integrations\n  Gmail read-only        NOT IMPLEMENTED; credential backend UNAVAILABLE; account NOT_CHECKED; activation DISABLED\n  GitHub repository      NOT IMPLEMENTED; credential backend UNAVAILABLE; account NOT_CHECKED; activation DISABLED\n  Calendar read-only     NOT IMPLEMENTED; credential backend UNAVAILABLE; account NOT_CHECKED; activation DISABLED\nPublic job feeds\n  Greenhouse             TERMS REVIEW REQUIRED; source-specific terms review not completed\n  Lever                  TERMS REVIEW REQUIRED; source-specific terms review not completed\nLinkedIn owner export\n  NOT IMPLEMENTED; source review not completed\nCredential broker\n  Production backend  UNAVAILABLE\n  Real account credentials NOT_CHECKED\nNo account was connected or probed. This is not a production-readiness result.\n"
+    },
+    "version": {
+      "exit_code": 0,
+      "stderr": "",
+      "stdout": "0.3.0.dev0\n"
+    }
+  }
+}
