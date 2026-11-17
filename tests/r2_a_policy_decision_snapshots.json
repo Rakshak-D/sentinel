@@ -1,0 +1,626 @@
+{
+  "p00_arguments_invalid": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "ARGUMENTS_INVALID",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "202e1751a61fa2635a83fb03d8c66c6f9ffb39995db68a1fbf34d42d4c563a02",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_capability_mismatch": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "CAPABILITY_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "e17b49c325edb2dc8addaad0a18e419e733dad6a59a077a526cf75a5d70c6f7b",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_context_config": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "CONFIG_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_context_malformed": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "IMPLEMENTATION_STATE_INVALID",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_context_policy": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "POLICY_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_context_registry": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "REGISTRY_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_internal_failure": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "INTERNAL_FAILURE",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_operation_unknown": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "OPERATION_UNREGISTERED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "a3995af61b37ac7e296d30e21eb50b0f933b881aa187bd7328989f8e7bfc5412",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_principal": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "PRINCIPAL_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_registry_untrusted": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "REGISTRY_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_request_config": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "CONFIG_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "2cfd6c012243b5f6d2638e3247a94420b8f90799dd52744685e0dd9b40a3fcdf",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_request_invalid": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "REQUEST_INVALID",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_request_policy": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "POLICY_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "25cbb82337ca91a22363c8e385f934d2ca95481db0ad104f2d30f577d50cf003",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_request_registry": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "REGISTRY_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "efe9875f77a8d976a9a2c0d5461036c7879571c66ab91cf98fd132624157766c",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_required_source_trust": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_PROVENANCE_UNKNOWN",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_source_missing": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_MISSING",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "bc0fdda9f22fe7a5c1ca7c55d0ffede18ccc3fcc6f932a9f118ee40bb2afcb0e",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_source_t1": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_PROVENANCE_UNKNOWN",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_source_t5": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_PROVENANCE_UNKNOWN",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "4e5ecae025e9b9a94d226b4352eb50ad15e51752d7639de2517fb9ab0e6899a7",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p00_source_unresolved": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_MISSING",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "60c6330fc9ccfa996c13f15d8e1a76b176b79f87841d325f59eb8371ee464383",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p01_bypass": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "GATEWAY_BYPASS",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "7fc3a3e9368ba2f4433c309d25c6582b0b16ef8b740c5c2fa6baadd96cff15f7",
+    "rule_id": "P01",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p01_replay": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "REPLAY_LIVE_EFFECT",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "f9fd50bc9bcd29c240f93a3c549bd83f5650c27623d43caf9ef61bb3344e18b1",
+    "rule_id": "P01",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p02_c4": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "EXTERNAL_CAPABILITY_OFF",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "676f5d94c8f4e89bdf494ab6b3030c606e45d22213b188deab061cec1414fdbd",
+    "rule_id": "P02",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p02_c5": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "EXTERNAL_CAPABILITY_OFF",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "0f26aafa70648680172bb032985172c6c1fbc7cdb9a3984a3ad751ec7b7cdcba",
+    "rule_id": "P02",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p03_private_cloud": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "PRIVATE_MODEL_ROUTE_UNVERIFIED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "d87cfced6091540f3a31ad4e280135396f3359bde67509c7b78b9a08c558ec4d",
+    "rule_id": "P03",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p03_secret": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SECRET_MODEL_ROUTE",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "5218a56eb833dd9e97f612521b10e6e4fec987547feee07da686c2e2400625c6",
+    "rule_id": "P03",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p03_sensitivity_downgrade": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SENSITIVITY_DOWNGRADE",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "9c8a9e3fde8b237a325a31bcd01be591340ade35e9aaf52f85dd8d1ee835aea5",
+    "rule_id": "P03",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p03_unknown_sensitivity": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "UNKNOWN_MODEL_SENSITIVITY",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "be678a86953064c07e6d7e7140a655587ddd839a931b42043e76717fe6a9bc3c",
+    "rule_id": "P03",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p04_public_read_allow": {
+    "evidence_binding_sha256": "603c7bdf5a58702292b2b0966f9d67cf90f06c8a671d9ef76831fc43d8ccf69f",
+    "evidence_ids": [
+      "2c17dd6e-98fc-5155-a820-42cb9c891ed9",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee",
+      "6bfb1b55-3221-5950-bce9-d05b9848d3a5"
+    ],
+    "executable": false,
+    "outcome": "ALLOW",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "PUBLIC_READ_ALLOWED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "a7bf20189be4cd3661d74b439b33d3b5a37b8ef433f5372090ab17a9a80e356c",
+    "rule_id": "P04",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p06_persistence_allow": {
+    "evidence_binding_sha256": "603c7bdf5a58702292b2b0966f9d67cf90f06c8a671d9ef76831fc43d8ccf69f",
+    "evidence_ids": [
+      "e843011c-5039-5dde-a318-192396d156aa",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "6831d403-30b9-5eff-9bf3-1369f764bab2",
+      "1642a959-c379-52ab-9755-273fe16247a9",
+      "d5db02e7-6cab-5074-95e3-f562c05072b2"
+    ],
+    "executable": false,
+    "outcome": "ALLOW",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "PROPOSAL_PERSISTENCE_ALLOWED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "7be9b6ac6b0df865d664a7b139b89041a32aac67be04e86543f62908774ace4a",
+    "rule_id": "P06",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p06_preview_allow": {
+    "evidence_binding_sha256": "603c7bdf5a58702292b2b0966f9d67cf90f06c8a671d9ef76831fc43d8ccf69f",
+    "evidence_ids": [
+      "4c81b7d0-3b4e-593e-afc0-df204cc1bdf6",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "6831d403-30b9-5eff-9bf3-1369f764bab2",
+      "1642a959-c379-52ab-9755-273fe16247a9",
+      "d5db02e7-6cab-5074-95e3-f562c05072b2"
+    ],
+    "executable": false,
+    "outcome": "ALLOW",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "PROPOSAL_PREVIEW_ALLOWED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "846041e9fb79f3869c032ca0870f553d84668f4ee7affe272ca3a0dd5f2b1deb",
+    "rule_id": "P06",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_binding_missing": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "EVIDENCE_BINDING_MISSING",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "407167de41798e6805cf76fb0af43cf104484a6a2d8e1ab4301778979df605e5",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_preview_selection_mismatch": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "4c81b7d0-3b4e-593e-afc0-df204cc1bdf6",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee",
+      "6bfb1b55-3221-5950-bce9-d05b9848d3a5"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "PROPOSAL_PREVIEW_SCOPE_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "3086eca5d63c4b9eaefffc6e0282d77607a28b52be7c2957cd155940b58f11dc",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_wrong_binding_digest": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "2c17dd6e-98fc-5155-a820-42cb9c891ed9",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee",
+      "6bfb1b55-3221-5950-bce9-d05b9848d3a5"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "FIXTURE_PIN_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "36358bda8913e52a9d08b44f9307a06a71575231f6ebde5054a339d7d7572742",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_wrong_citation_set": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "2c17dd6e-98fc-5155-a820-42cb9c891ed9",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee",
+      "6bfb1b55-3221-5950-bce9-d05b9848d3a5"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "CITATION_SET_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "248f706176703a7d4ac8b9ac28ce16f3f25ab1946dabab7a69425ad39bec3e23",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_wrong_context_labels": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "2c17dd6e-98fc-5155-a820-42cb9c891ed9",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee",
+      "6bfb1b55-3221-5950-bce9-d05b9848d3a5"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_SET_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "a7bf20189be4cd3661d74b439b33d3b5a37b8ef433f5372090ab17a9a80e356c",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_wrong_effect": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "2c17dd6e-98fc-5155-a820-42cb9c891ed9",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee",
+      "6bfb1b55-3221-5950-bce9-d05b9848d3a5"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "EFFECT_CLASS_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "b1e010a6c075be5650bfaba71f4e40596d44b59cc8e46f7410a531621c7bc887",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p09_wrong_source_set": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "2c17dd6e-98fc-5155-a820-42cb9c891ed9",
+      "73f3a57e-43c9-5aa3-b792-310a0b9a1e5c",
+      "58c40621-9c97-5e18-ba79-fa66c26052ee"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SOURCE_SET_MISMATCH",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "b89b1545bc038c14ceb8603e2a2bb6000794dfacf42b8fca2e9ca435db6cbde8",
+    "rule_id": "P09",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p12_unsupported": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "UNSUPPORTED_POLICY",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "97bd7da4ed4cf00a368a251cc066470fbb8fcd185c3578bf04d6c1e7b454bb5c",
+    "rule_id": "P12",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "p17_c6": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SECRET_ACCESS_DENIED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "1f23b16fa6d07bd8e84156d3e71497dbc6c5e20606af631d34512dd60c0f3fd1",
+    "rule_id": "P17",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "priority_p00_before_p01": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "REGISTRY_UNTRUSTED",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "cfbb027581e975032240333e5dc79c3822d04ac52dddf86ece9a42ce01ec90d9",
+    "rule_id": "P00",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "priority_p01_before_p02": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "GATEWAY_BYPASS",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "2b7ba46550590f42b7e28807b954b6258e9bdf5f56ed9a523119a5ad104156a5",
+    "rule_id": "P01",
+    "schema_version": "sentinel.policy-decision.v4"
+  },
+  "priority_p03_before_p17": {
+    "evidence_binding_sha256": null,
+    "evidence_ids": [
+      "00000000-0000-0000-0000-0000000000ca",
+      "00000000-0000-0000-0000-000000000065"
+    ],
+    "executable": false,
+    "outcome": "DENY",
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "reason_code": "SECRET_MODEL_ROUTE",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "request_sha256": "979c82c192877c99fd3a1e52caf5cfe39bc017888b97cfae7725a78ae7a4dc3c",
+    "rule_id": "P03",
+    "schema_version": "sentinel.policy-decision.v4"
+  }
+}
