@@ -11,12 +11,13 @@
     "fixture_sha256": "7a28c6434ad25f06f6c24a9fa912e94c44796c9e3d4d8676642b37c554a13bc1",
     "manifest_version": "sentinel.github-fixture-persistence-manifest.v1",
     "manifest_sha256": "645aecaedd14d8e6c6071b9d8c32a5d91f664c715799191303eac315d6f9c08f",
+    "source_set_sha256": "603c7bdf5a58702292b2b0966f9d67cf90f06c8a671d9ef76831fc43d8ccf69f",
     "source_count": 3,
     "citation_count": 9
   },
   "decision_oracle": {
     "oracle_id": "r2-a-pre-refactor-policy-decision-snapshots.v1",
-    "sha256": "8cd02318482d926ee32c047129f0368ddfd5b435e5c20a60cf682fa5c9719b29"
+    "sha256": "1e78c28b2e39f274e785865afb6028e9258ef738898be9322ac79704f2e9b18a"
   },
   "scenarios": [
     {
