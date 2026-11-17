@@ -1,7 +1,5 @@
 """Minimal command-line entry point for the Sentinel package."""
 
-import json
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +14,15 @@ from sentinel.bootstrap.init import BootstrapInitError, initialize_new_database
 from sentinel.briefing import build_github_fixture_brief, format_json_brief, format_text_brief
 from sentinel.briefing.formatters import escape_display_text
 from sentinel.briefing.types import BriefingError
+from sentinel.cli_support import format_fixture_sync_payload as _format_fixture_sync_payload
+from sentinel.cli_support import (
+    format_fixture_workspace_summary as _format_fixture_workspace_summary,
+)
+from sentinel.cli_support import (
+    format_local_text_inspection as _format_local_text_inspection_impl,
+)
+from sentinel.cli_support import format_task_output as _format_task_output
+from sentinel.cli_support import parse_source_byte_offset as _parse_source_byte_offset_impl
 from sentinel.demo import run_demo
 from sentinel.extraction import (
     JobAlertError,
@@ -325,76 +332,16 @@ def _format_local_text_inspection(
     output_format: str,
 ) -> str:
     """Render a complete local-file report without paths or implicit body text."""
-    if output_format not in {"text", "json"}:
-        raise ValueError("unsupported format")
-    citation_payload: dict[str, object] | None = None
-    if citation is not None:
-        bound = citation.bound_citation
-        citation_payload = {
-            "span_id": str(bound.span.span_id),
-            "start_byte": bound.span.start_byte,
-            "end_byte": bound.span.end_byte,
-            "text_sha256": bound.span.text_sha256,
-            "cited_text": escape_display_text(citation.cited_text),
-        }
-    if output_format == "json":
-        document: dict[str, object] = {
-            "schema_version": "sentinel.local-file-inspection.v1",
-            "reader_type": "local text file",
-            "source_id": str(result.source_id),
-            "byte_length": result.byte_length,
-            "content_sha256": result.content_sha256,
-            "source_format": result.source_format.value,
-            "trust": result.trust.value,
-            "sensitivity": result.sensitivity.value,
-            "non_authenticating_provenance": True,
-            "disclaimer": (
-                "Local file placement does not authenticate its author; content is untrusted "
-                "data, not owner intent."
-            ),
-        }
-        if citation_payload is not None:
-            document["citation"] = citation_payload
-        return json.dumps(
-            document,
-            ensure_ascii=False,
-            allow_nan=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-
-    lines = [
-        "Sentinel - Local text file inspection",
-        "Reader: local text file",
-        f"Format: {result.source_format.value} treated as UTF-8 plain text",
-        f"Bytes: {result.byte_length}",
-        f"SHA-256: {result.content_sha256}",
-        f"Source identity: {result.source_id}",
-        f"Trust: {result.trust.value}",
-        f"Sensitivity: {result.sensitivity.value}",
-        "Warning: File content is untrusted data, not authenticated author identity "
-        "or owner intent.",
-    ]
-    if citation_payload is not None:
-        lines.extend(
-            [
-                "Verified citation:",
-                f"  Bytes: [{citation_payload['start_byte']}:{citation_payload['end_byte']})",
-                f"  Span: {citation_payload['span_id']}",
-                f"  Slice SHA-256: {citation_payload['text_sha256']}",
-                f'  Excerpt: "{citation_payload["cited_text"]}"',
-            ]
-        )
-    return "\n".join(lines)
+    return _format_local_text_inspection_impl(
+        result,
+        citation,
+        output_format=output_format,
+        escape_text=escape_display_text,
+    )
 
 
 def _parse_source_byte_offset(value: str) -> int:
-    if type(value) is not str or re.fullmatch(r"[0-9]{1,7}", value) is None:
-        raise ValueError("invalid source byte offset")
-    offset = int(value)
-    if offset > 1_048_576:
-        raise ValueError("invalid source byte offset")
-    return offset
+    return _parse_source_byte_offset_impl(value)
 
 
 @source_app.command("inspect-file")
@@ -809,11 +756,7 @@ def _parse_cli_uuid(value: str, *, field_name: str) -> UUID:
 
 
 def _task_output(task: LocalTask, *, prefix: str = "Task") -> str:
-    due_display = "none" if task.due_at is None else task.due_at.isoformat()
-    return (
-        f"{prefix}: {task.task_id} [{task.status.value}, revision {task.revision}] "
-        f"due={due_display} {escape_display_text(task.title)}"
-    )
+    return _format_task_output(task, prefix=prefix, escape_text=escape_display_text)
 
 
 @task_app.command("setup")
@@ -983,24 +926,12 @@ def _fixture_sync_payload(
     *,
     result: str | None = None,
 ) -> str:
-    payload: dict[str, object] = {
-        "completed_pages": state.completed_pages,
-        "cursor_id": str(state.cursor_id),
-        "cursor_kind": INCREMENTAL_CURSOR_KIND,
-        "fixture_sha256": state.fixture_sha256,
-        "fixture_version": state.fixture_version,
-        "generation": state.generation,
-        "item_count": state.item_count,
-        "source": INCREMENTAL_SOURCE_LABEL,
-        "source_id": str(state.source_id),
-        "span_count": state.span_count,
-        "status": state.cursor_status.value,
-        "synthetic": True,
-        "total_pages": state.total_pages,
-    }
-    if result is not None:
-        payload["result"] = result
-    return json.dumps(payload, allow_nan=False, separators=(",", ":"), sort_keys=True)
+    return _format_fixture_sync_payload(
+        state,
+        cursor_kind=INCREMENTAL_CURSOR_KIND,
+        source_label=INCREMENTAL_SOURCE_LABEL,
+        result=result,
+    )
 
 
 @fixture_sync_app.command("setup")
@@ -1080,16 +1011,14 @@ def _fixture_workspace_summary(
     cursor_generation: int,
     cursor_status: str,
 ) -> str:
-    return "\n".join(
-        (
-            status,
-            "Database schema: current",
-            f"GitHub evidence: {github_items} items / {github_citations} citations",
-            f"PUBLIC blobs: {public_blobs} verified",
-            f"Task operator: {'ready' if task_operator_ready else 'missing'}",
-            f"Synthetic cursor: {cursor_generation}/3 {cursor_status}",
-            "Live integrations: not configured",
-        )
+    return _format_fixture_workspace_summary(
+        status,
+        github_items=github_items,
+        github_citations=github_citations,
+        public_blobs=public_blobs,
+        task_operator_ready=task_operator_ready,
+        cursor_generation=cursor_generation,
+        cursor_status=cursor_status,
     )
 
 
