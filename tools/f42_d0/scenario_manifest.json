@@ -1,0 +1,103 @@
+{
+  "schema_version": "sentinel.f42-d0-scenario-manifest.v1",
+  "manifest_version": "f42-d0.1",
+  "baseline": {
+    "policy_sha256": "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df",
+    "registry_sha256": "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27",
+    "config_sha256": "9ba0e71e6026ecc93149cfe2052d75082528732a82c2556ce10de893e97c4256"
+  },
+  "fixture": {
+    "fixture_id": "example-owner/fixture-project",
+    "fixture_sha256": "7a28c6434ad25f06f6c24a9fa912e94c44796c9e3d4d8676642b37c554a13bc1",
+    "manifest_version": "sentinel.github-fixture-persistence-manifest.v1",
+    "manifest_sha256": "645aecaedd14d8e6c6071b9d8c32a5d91f664c715799191303eac315d6f9c08f",
+    "source_count": 3,
+    "citation_count": 9
+  },
+  "decision_oracle": {
+    "oracle_id": "r2-a-pre-refactor-policy-decision-snapshots.v1",
+    "sha256": "8cd02318482d926ee32c047129f0368ddfd5b435e5c20a60cf682fa5c9719b29"
+  },
+  "scenarios": [
+    {
+      "id": "p00-unknown-operation",
+      "oracle_case": "p00_operation_unknown",
+      "expected": {"outcome": "DENY", "rule_id": "P00", "reason_code": "OPERATION_UNREGISTERED", "executable": false}
+    },
+    {
+      "id": "p00-capability-mismatch",
+      "oracle_case": "p00_capability_mismatch",
+      "expected": {"outcome": "DENY", "rule_id": "P00", "reason_code": "CAPABILITY_MISMATCH", "executable": false}
+    },
+    {
+      "id": "p00-unknown-source-trust",
+      "oracle_case": "p00_source_t5",
+      "expected": {"outcome": "DENY", "rule_id": "P00", "reason_code": "SOURCE_PROVENANCE_UNKNOWN", "executable": false}
+    },
+    {
+      "id": "p01-replay-denial",
+      "oracle_case": "p01_replay",
+      "expected": {"outcome": "DENY", "rule_id": "P01", "reason_code": "REPLAY_LIVE_EFFECT", "executable": false}
+    },
+    {
+      "id": "priority-p00-before-p01",
+      "oracle_case": "priority_p00_before_p01",
+      "expected": {"outcome": "DENY", "rule_id": "P00", "reason_code": "REGISTRY_UNTRUSTED", "executable": false}
+    },
+    {
+      "id": "priority-p01-before-p02",
+      "oracle_case": "priority_p01_before_p02",
+      "expected": {"outcome": "DENY", "rule_id": "P01", "reason_code": "GATEWAY_BYPASS", "executable": false}
+    },
+    {
+      "id": "p02-external-capability-off",
+      "oracle_case": "p02_c4",
+      "expected": {"outcome": "DENY", "rule_id": "P02", "reason_code": "EXTERNAL_CAPABILITY_OFF", "executable": false}
+    },
+    {
+      "id": "p03-secret-model-route-denial",
+      "oracle_case": "p03_secret",
+      "expected": {"outcome": "DENY", "rule_id": "P03", "reason_code": "SECRET_MODEL_ROUTE", "executable": false}
+    },
+    {
+      "id": "priority-p03-before-p17",
+      "oracle_case": "priority_p03_before_p17",
+      "expected": {"outcome": "DENY", "rule_id": "P03", "reason_code": "SECRET_MODEL_ROUTE", "executable": false}
+    },
+    {
+      "id": "p17-secret-access-denial",
+      "oracle_case": "p17_c6",
+      "expected": {"outcome": "DENY", "rule_id": "P17", "reason_code": "SECRET_ACCESS_DENIED", "executable": false}
+    },
+    {
+      "id": "p09-missing-resolver-binding",
+      "oracle_case": "p09_binding_missing",
+      "expected": {"outcome": "DENY", "rule_id": "P09", "reason_code": "EVIDENCE_BINDING_MISSING", "executable": false}
+    },
+    {
+      "id": "p09-binding-digest-mismatch",
+      "oracle_case": "p09_wrong_binding_digest",
+      "expected": {"outcome": "DENY", "rule_id": "P09", "reason_code": "FIXTURE_PIN_MISMATCH", "executable": false}
+    },
+    {
+      "id": "p09-citation-set-mismatch",
+      "oracle_case": "p09_wrong_citation_set",
+      "expected": {"outcome": "DENY", "rule_id": "P09", "reason_code": "CITATION_SET_MISMATCH", "executable": false}
+    },
+    {
+      "id": "p04-verified-public-read-allow",
+      "oracle_case": "p04_public_read_allow",
+      "expected": {"outcome": "ALLOW", "rule_id": "P04", "reason_code": "PUBLIC_READ_ALLOWED", "executable": false}
+    },
+    {
+      "id": "p06-preview-allow",
+      "oracle_case": "p06_preview_allow",
+      "expected": {"outcome": "ALLOW", "rule_id": "P06", "reason_code": "PROPOSAL_PREVIEW_ALLOWED", "executable": false}
+    },
+    {
+      "id": "p06-pending-persistence-allow",
+      "oracle_case": "p06_persistence_allow",
+      "expected": {"outcome": "ALLOW", "rule_id": "P06", "reason_code": "PROPOSAL_PERSISTENCE_ALLOWED", "executable": false}
+    }
+  ]
+}
