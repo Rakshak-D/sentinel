@@ -14,8 +14,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 45
     env:
-      FORCE_COLOR: ""
-      NO_COLOR: "1"
+      TERM: dumb
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -31,32 +30,126 @@ jobs:
         shell: pwsh
         run: python -m venv .venv-ci
 
-      - name: Verify Python base and virtual environment
-        shell: pwsh
-        run: |
-          $python = ".\.venv-ci\Scripts\python.exe"
-          & $python -c "from pathlib import Path; import struct, sys; assert sys.version_info[:3] == (3, 11, 7), sys.version; assert sys.prefix != sys.base_prefix, 'expected a virtual environment'; assert (Path(sys.base_prefix) / 'python.exe').is_file(), 'base interpreter path is missing'; assert struct.calcsize('P') * 8 == 64, 'expected 64-bit Python'; print(f'venv={sys.executable}'); print(f'base={sys.base_prefix}'); print(f'version={sys.version.split()[0]}')"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Install project and development dependencies
         shell: pwsh
         run: .\.venv-ci\Scripts\python.exe -m pip install -e ".[dev]"
 
-      - name: Verify installed CLI location and version
+      - name: Verify Python base and installed CLI
         shell: pwsh
         run: |
           $python = ".\.venv-ci\Scripts\python.exe"
-          $cli = ".\.venv-ci\Scripts\sentinel.exe"
-          & $python -c "from pathlib import Path; import sys; script = Path(sys.executable).with_name('sentinel.exe'); assert script.is_file(), 'Sentinel console script is missing beside the virtual-environment interpreter'; print(f'console_script={script}')"
+          $identity = @'
+          from pathlib import Path
+          import struct
+          import sys
+
+          assert sys.version_info[:3] == (3, 11, 7), sys.version
+          assert sys.prefix != sys.base_prefix, "expected a virtual environment"
+          assert (Path(sys.base_prefix) / "python.exe").is_file(), "base interpreter path is missing"
+          assert struct.calcsize("P") * 8 == 64, "expected 64-bit Python"
+          print(f"venv={sys.executable}")
+          print(f"base={sys.base_prefix}")
+          print(f"version={sys.version.split()[0]}")
+          '@
+          $identity | & $python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $cli = ".\.venv-ci\Scripts\sentinel.exe"
           if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) { throw 'Sentinel console script is missing beside the virtual-environment interpreter' }
           $version = (& $cli version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $version -ne "0.3.0.dev0") { throw 'Sentinel CLI version did not match 0.3.0.dev0' }
           Write-Output "Sentinel CLI version: $version"
 
-      - name: Check installed dependencies
+      - name: Verify byte-pinned resources
         shell: pwsh
-        run: .\.venv-ci\Scripts\python.exe -m pip check
+        run: |
+          $verification = @'
+          import hashlib
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          from sentinel.demo.runner import FIXTURE_SHA256
+          from tests.cr1_u_corpus import CORPUS_SHA256, EXPECTED_LABELS_SHA256
+
+          resources = (
+              ("src/sentinel/demo/fixtures/demo-v1.json", FIXTURE_SHA256),
+              ("tests/fixtures/cr1_u/development-v1.json", CORPUS_SHA256["development"]),
+              ("tests/fixtures/cr1_u/holdout-v1.json", CORPUS_SHA256["holdout"]),
+              ("tests/fixtures/cr1_u/expected-labels-v1.json", EXPECTED_LABELS_SHA256),
+          )
+          failed = False
+          for relative_path, expected_sha256 in resources:
+              try:
+                  checkout_bytes = Path(relative_path).read_bytes()
+                  blob_result = subprocess.run(
+                      ["git", "cat-file", "blob", f"HEAD:{relative_path}"],
+                      check=False,
+                      capture_output=True,
+                  )
+              except OSError:
+                  print(
+                      f"BYTE_PIN path={relative_path} checkout_bytes=unavailable "
+                      "checkout_sha256=unavailable blob_bytes=unavailable "
+                      "blob_sha256=unavailable status=FAIL"
+                  )
+                  sys.exit(1)
+
+              if blob_result.returncode != 0:
+                  print(
+                      f"BYTE_PIN path={relative_path} checkout_bytes={len(checkout_bytes)} "
+                      f"checkout_sha256={hashlib.sha256(checkout_bytes).hexdigest()} "
+                      "blob_bytes=unavailable blob_sha256=unavailable status=FAIL"
+                  )
+                  sys.exit(1)
+
+              blob_bytes = blob_result.stdout
+              checkout_sha256 = hashlib.sha256(checkout_bytes).hexdigest()
+              blob_sha256 = hashlib.sha256(blob_bytes).hexdigest()
+              status = (
+                  "PASS"
+                  if checkout_bytes == blob_bytes
+                  and checkout_sha256 == expected_sha256
+                  and blob_sha256 == expected_sha256
+                  else "FAIL"
+              )
+              print(
+                  f"BYTE_PIN path={relative_path} checkout_bytes={len(checkout_bytes)} "
+                  f"checkout_sha256={checkout_sha256} blob_bytes={len(blob_bytes)} "
+                  f"blob_sha256={blob_sha256} expected_sha256={expected_sha256} status={status}"
+              )
+              failed = failed or status != "PASS"
+
+          if failed:
+              sys.exit(1)
+          '@
+          $verification | & .\.venv-ci\Scripts\python.exe -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify CLI help rendering
+        shell: pwsh
+        run: |
+          $verification = @'
+          import os
+          import sys
+
+          from typer.testing import CliRunner
+          from sentinel.cli import app
+
+          result = CliRunner().invoke(app, ["doctor", "--help"])
+          has_option = "--database" in result.output
+          has_escape = "\x1b" in result.output
+          force_color_absent = "FORCE_COLOR" not in os.environ
+          status = "PASS" if result.exit_code == 0 and has_option and not has_escape and force_color_absent else "FAIL"
+          print(
+              f"CLI_HELP_PREFLIGHT exit={result.exit_code} option_database={has_option} "
+              f"ansi_escape={has_escape} force_color_absent={force_color_absent} status={status}"
+          )
+          if status != "PASS":
+              sys.exit(1)
+          '@
+          $verification | & .\.venv-ci\Scripts\python.exe -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Ruff
         shell: pwsh
@@ -66,6 +159,34 @@ jobs:
         shell: pwsh
         run: .\.venv-ci\Scripts\python.exe -m mypy src/sentinel
 
-      - name: Run tests
+      - name: Check installed dependencies
+        shell: pwsh
+        run: .\.venv-ci\Scripts\python.exe -m pip check
+
+      - name: Recheck previously failing tests
+        shell: pwsh
+        run: |
+          $python = ".\.venv-ci\Scripts\python.exe"
+          $tests = @(
+            "tests/test_cli_doctor.py::test_doctor_is_listed_and_help_requires_database",
+            "tests/test_cli_doctor.py::test_missing_database_option_fails_without_creating_files",
+            "tests/test_cli_init.py::test_init_help_describes_required_database_option",
+            "tests/test_cli_init.py::test_missing_database_option_fails_without_creating_files",
+            "tests/test_cr1_i_cli.py::test_nested_cli_help_and_existing_commands_are_preserved",
+            "tests/test_cr1_l_overview.py::test_local_overview_is_registered_under_existing_cli_groups",
+            "tests/test_cr1_m_cli.py::test_source_inspect_file_is_nested_and_existing_commands_remain",
+            "tests/test_cr1_n_cli.py::test_search_command_is_nested_and_preserves_inspect_file",
+            "tests/test_cr1_o_cli.py::test_nested_cli_command_is_available_and_existing_commands_remain",
+            "tests/test_cr1_p_cli.py::test_nested_command_is_available_and_existing_source_commands_remain",
+            "tests/test_cr1_q_cli.py::test_calendar_fixture_command_is_nested_and_existing_cli_groups_remain",
+            "tests/test_cr1_s_cli.py::test_source_status_is_nested_and_preserves_existing_commands",
+            "tests/test_cr1_t_cli.py::test_notes_registry_commands_are_nested_under_source",
+            "tests/test_cr1_u_cli.py::test_triage_command_is_nested_under_source_and_shows_safe_summary",
+            "tests/test_cr1_u_evaluation.py::test_fixed_development_and_holdout_evaluation_uses_actual_triage"
+          )
+          & $python -m pytest -q $tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run full test suite
         shell: pwsh
         run: .\.venv-ci\Scripts\python.exe -m pytest -q
