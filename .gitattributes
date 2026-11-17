@@ -1,0 +1,2 @@
+/src/sentinel/demo/fixtures/demo-v1.json -text
+/tests/fixtures/cr1_u/expected-labels-v1.json -text
