@@ -7,6 +7,7 @@
 - [ADR-0003: CR1-F schema scope](adr/0003-cr1-f-schema-scope.md)
 - [ADR-0004: CR1-J task request receipts](adr/0004-cr1-j-task-request-receipts.md)
 - [ADR-0005: CR2-G-A owner-authentication trust root](adr/0005-cr2-g-a-owner-authentication-trust-root.md)
+- [ADR-0006: R3 public GitHub read decision](adr/0006-r3-public-github-read-decision.md) — proposed; owner approval required.
 
 ## Blueprint
 
