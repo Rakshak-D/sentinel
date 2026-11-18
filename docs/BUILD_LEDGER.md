@@ -785,3 +785,13 @@ CR0-J behavior: `sentinel demo` loads one pinned package resource, validates bun
 
 - **Scope and base:** Prepared `.github/workflows/cr2-g-b2-path-observation.yml` on `test/cr2-g-b2-path-observation` from `e0dd21d957ad95fccbd104e45f89ee9c7793ac27`. It is `workflow_dispatch`-only and observes the fixed historical `HOST_PREFLIGHT` path predicate without checkout, third-party actions, service-lab code, or filesystem-mutating commands.
 - **Evidence boundary:** This workflow has **never been executed or dispatched**. The hosted service-isolation laboratory remains parked; its `HOST_PREFLIGHT` I/O failure root cause remains unresolved. Static preparation does not establish service isolation. Production owner verification remains unavailable; P11, F23, and CR2 remain incomplete.
+
+## SENTINEL-G-B2-PATH-D1 — actual hosted observation (2026-11-18)
+
+- **Recorded execution:** Manually dispatched once on `main` at `367e799b70857bfb52a156882271ee514693550a`: https://github.com/Rakshak-D/sentinel/actions/runs/44332024762. The Actions job succeeded; the JSON determination was `REPRODUCED`, **not** a service-isolation pass. The earlier D1 section's "never dispatched" statement described the preparation-time state and is superseded by this observation.
+- **Operation evidence:** Fixed root, GetFullPath, normalization, Split-Path, and parent existence passed. `Get-Item -LiteralPath` without `-Force` and the original compound expression reported `System.IO.IOException`, HRESULT `0x80131620`, error ID `ItemNotFound,Microsoft.PowerShell.Commands.GetItemCommand`. Parent attributes were not reached. The path visibility mechanism is a hypothesis, not yet a confirmed cause.
+
+## SENTINEL-G-B2-PATH-D2 — hidden-parent differential (prepared, not executed)
+
+- **Scope:** On `test/cr2-g-b2-hidden-path-d2`, revise only the manually triggered, read-only hosted workflow to preserve D1 observation and compare `Get-Item -LiteralPath` against `Get-Item -LiteralPath -Force` on the same fixed parent. Report bounded hidden/system/directory/reparse attribute flags and `differential_determination`; version the JSON schema to v2.
+- **Evidence boundary:** This D2 revision has not been dispatched or runtime-tested. A green ordinary Windows CI run is not proof of diagnostic execution. Neither `-Force` nor the differential classification authorizes bypassing a reparse guard or any service security control. The service-isolation lab remains parked; production owner verification UNAVAILABLE; F23 isolation UNVERIFIED; P11 NOT_STARTED; CR2 IN_PROGRESS; external effects OFF.
