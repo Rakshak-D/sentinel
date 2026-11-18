@@ -318,7 +318,7 @@ try {
         Stop-WithCode "LAB_ROOT_ALREADY_EXISTS"
     }
     $resolvedRoot = [IO.Path]::GetFullPath($serviceRoot)
-    if ($resolvedRoot -ne $serviceRoot -or (Get-Item -LiteralPath (Split-Path $serviceRoot -Parent)).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    if ($resolvedRoot -ne $serviceRoot -or (Get-Item -LiteralPath (Split-Path $serviceRoot -Parent) -Force -ErrorAction Stop).Attributes -band [IO.FileAttributes]::ReparsePoint) {
         Stop-WithCode "LAB_ROOT_PATH_INVALID"
     }
     $runnerPython = (Get-Command python -ErrorAction Stop).Source
