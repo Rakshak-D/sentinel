@@ -39,7 +39,9 @@ jobs:
             "System.Management.Automation.PSArgumentException" = "ARGUMENT"
           }
           $script:resolvedRoot = $null
+          $script:normalizedMatches = $null
           $script:parentPath = $null
+          $script:parentExists = $null
           $script:parentItem = $null
           $script:attributes = [ordered]@{ directory = $null; reparse_point = $null }
           $script:compoundGuardTriggered = $null
@@ -91,7 +93,7 @@ jobs:
           }
 
           try {
-            $script:literalMatches = [string]::Equals($script:serviceRoot, "C:\ProgramData\SentinelCR2GB2", [StringComparison]::Ordinal)
+            $script:literalMatches = [string]::Equals($script:serviceRoot, "C:\ProgramData\SentinelCR2GB2", [System.StringComparison]::Ordinal)
             Invoke-Probe -Id "ROOT_LITERAL_VALIDATION" -Action { $script:literalMatches } | Out-Null
 
             if ($script:statuses["ROOT_LITERAL_VALIDATION"] -eq "PASS") {
@@ -102,7 +104,8 @@ jobs:
 
               if ($script:statuses["GET_FULL_PATH"] -eq "PASS") {
                 Invoke-Probe -Id "NORMALIZED_PATH_COMPARISON" -Action {
-                  [string]::Equals($script:resolvedRoot, $script:serviceRoot, [StringComparison]::Ordinal)
+                  $script:normalizedMatches = [string]::Equals($script:resolvedRoot, $script:serviceRoot, [System.StringComparison]::Ordinal)
+                  $script:normalizedMatches
                 } | Out-Null
               }
 
@@ -113,7 +116,8 @@ jobs:
 
               if ($script:statuses["SPLIT_PATH_PARENT"] -eq "PASS") {
                 Invoke-Probe -Id "PARENT_EXISTS" -Action {
-                  [bool](Test-Path -LiteralPath $script:parentPath -PathType Container)
+                  $script:parentExists = [bool](Test-Path -LiteralPath $script:parentPath -PathType Container)
+                  $script:parentExists
                 } | Out-Null
 
                 Invoke-Probe -Id "GET_ITEM_LITERAL_NO_FORCE" -Action {
@@ -163,6 +167,13 @@ jobs:
               }
               operations = @($script:observations.ToArray())
               not_run_operation_ids = $notRun
+              observed_flags = [ordered]@{
+                normalized_matches_literal = $script:normalizedMatches
+                parent_exists = $script:parentExists
+                parent_is_directory = $script:attributes.directory
+                parent_is_reparse_point = $script:attributes.reparse_point
+                compound_guard_triggered = $script:compoundGuardTriggered
+              }
               final_determination = $determination
               service_isolation = "NOT_ASSESSED"
             }
@@ -174,6 +185,13 @@ jobs:
               historical_source_line = $script:historicalSourceLine
               operations = @($script:observations.ToArray())
               not_run_operation_ids = @($script:operationIds | Where-Object { -not $script:statuses.ContainsKey($_) })
+              observed_flags = [ordered]@{
+                normalized_matches_literal = $script:normalizedMatches
+                parent_exists = $script:parentExists
+                parent_is_directory = $script:attributes.directory
+                parent_is_reparse_point = $script:attributes.reparse_point
+                compound_guard_triggered = $script:compoundGuardTriggered
+              }
               final_determination = "INCONCLUSIVE"
               report_error = Get-SafeErrorDetail -Record $_
               service_isolation = "NOT_ASSESSED"
