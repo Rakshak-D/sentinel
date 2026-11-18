@@ -8,9 +8,15 @@ import pytest
 from sentinel.config import (
     ConfigValidationError,
     SentinelConfig,
+    config_sha256,
     load_bundled_defaults,
     validate_bundled_config,
 )
+from sentinel.policy import builtin_registry_sha256, policy_sha256
+
+_AB_T1_BASELINE_CONFIG_SHA256 = "9ba0e71e6026ecc93149cfe2052d75082528732a82c2556ce10de893e97c4256"
+_AB_T1_BASELINE_POLICY_SHA256 = "743d6f9c314d63b449bfa58952494204edaa6c24eecca78c4f6ef1a1c93ef1df"
+_AB_T1_BASELINE_REGISTRY_SHA256 = "15477ccd03a75ad05a05fe5e346e58f1c2946c892d721b187d4f8e71062eab27"
 
 
 def _document() -> dict[str, Any]:
@@ -29,6 +35,43 @@ def test_valid_bundled_document_revalidates_to_the_config_type() -> None:
 
     assert isinstance(result, SentinelConfig)
     assert result == load_bundled_defaults()
+
+
+def test_ab15_valid_bundled_config_preserves_pinned_security_fingerprints() -> None:
+    defaults = load_bundled_defaults()
+    result = validate_bundled_config(_document())
+
+    assert result == defaults
+    assert config_sha256(result) == _AB_T1_BASELINE_CONFIG_SHA256
+    assert policy_sha256() == _AB_T1_BASELINE_POLICY_SHA256
+    assert builtin_registry_sha256() == _AB_T1_BASELINE_REGISTRY_SHA256
+
+
+@pytest.mark.parametrize("location", ["top_level_policy", "nested_security"])
+@pytest.mark.parametrize("rule_id", ["P00", "P01", "P02"])
+def test_ab15_unsupported_hard_rule_overrides_fail_closed_without_mutation(
+    location: str,
+    rule_id: str,
+) -> None:
+    document = _document()
+    original_defaults = load_bundled_defaults()
+
+    if location == "top_level_policy":
+        document["policy"] = {"unsafe_overrides": {rule_id: True}}
+    else:
+        document["security"]["unsafe_overrides"] = {rule_id: True}
+    submitted_document = deepcopy(document)
+
+    with pytest.raises(ConfigValidationError) as exc_info:
+        validate_bundled_config(document)
+
+    assert str(exc_info.value) == "Configuration is invalid."
+    assert rule_id not in str(exc_info.value)
+    assert document == submitted_document
+    assert load_bundled_defaults() == original_defaults
+    assert config_sha256(load_bundled_defaults()) == _AB_T1_BASELINE_CONFIG_SHA256
+    assert policy_sha256() == _AB_T1_BASELINE_POLICY_SHA256
+    assert builtin_registry_sha256() == _AB_T1_BASELINE_REGISTRY_SHA256
 
 
 @pytest.mark.parametrize(
